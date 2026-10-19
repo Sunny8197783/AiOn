@@ -1,0 +1,19 @@
+# Ruflo local secrets and runtime data
+.env
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+
+# Dependencies and generated files (npm install re-creates dist/vendor via prepare)
+node_modules/
+safe-route/dist/vendor/
+
+# Local AI-tooling runtime state
+.swarm/
+.claude-flow/metrics/
+.claude-flow/security/
+.claude-flow/mods/session.json
+.claude/settings.local.json
+*.bak-*
