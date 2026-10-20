@@ -69,6 +69,8 @@ const ctx = createRuntime({ engine, hud, ui, audio, settings, persist, getG: () 
 ctx.setPlayer = (preset) => engine.setPlayerPreset?.(preset);
 
 applySettings();
+// ?debug exposes the game for automated play-throughs (teleport to a point, read state).
+if (new URLSearchParams(location.search).has('debug')) window.__game = { ctx, engine, hud, get G() { return G; } };
 
 // Global keys while roaming.
 let flashOn = false, flashT = 0;

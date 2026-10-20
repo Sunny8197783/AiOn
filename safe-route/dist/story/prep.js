@@ -62,9 +62,9 @@ async function openPlanner(ctx, slot) {
   const left = G.slots.total - G.slots.used;
   const done = new Set(G.slots.done.map(d => (typeof d === 'string' ? d : d.id)));
   const actions = ACTIONS.map(a => ({ ...a, done: done.has(a.id) && a.id !== 'rest',
-    disabled: a.cost > left || (done.has(a.id) && a.id !== 'rest'),
-    reason: a.cost > left ? `남은 칸이 ${left}칸이라 할 수 없습니다.` : done.has(a.id) ? '이미 했습니다.' : '' }));
-  const hint = slot === 0 ? '오늘 저녁은 한 칸뿐입니다. 마트는 두 칸이 들어서 내일로 미뤄야 합니다.'
+    disabled: a.cost > left || (done.has(a.id) && a.id !== 'rest') || (slot === 0 && a.cost > 1),
+    reason: slot === 0 && a.cost > 1 ? '마트는 곧 문을 닫습니다. 내일 하세요.' : a.cost > left ? `남은 칸이 ${left}칸이라 할 수 없습니다.` : done.has(a.id) ? '이미 했습니다.' : '' }));
+  const hint = slot === 0 ? '오늘 저녁은 한 칸뿐입니다. 마트는 두 칸이 드는 데다 곧 문을 닫습니다.'
     : !usable(G, 'flashlight') && !G.items.batteries_aa?.home ? '손전등은 있지만 건전지가 없습니다. 있다는 것과 쓸 수 있다는 것은 다릅니다.' : '';
   return ctx.ui.planner({ day: SLOT_LABEL[slot], slots: { total: G.slots.total, used: G.slots.used }, actions, hint });
 }
