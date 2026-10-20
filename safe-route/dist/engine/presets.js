@@ -80,6 +80,18 @@ export const PRESETS = {
     grade: { saturation: 1.04, contrast: 1.04, exposure: 0, vignette: 0.25, grain: 0.03, tint: [1, 0.95, 0.88], tintAmount: 0.2 },
     lit: { indoor: 1, shops: 1, signs: 1, emergency: 1, street: 0, windows: 0 },
   },
+  interiorNight: { // extra (not in spec 4.2): indoor lights on at night, lit city outside the windows
+    outdoor: false, env: 'room', shadowBox: 24,
+    sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.15,
+    hemi: ['#3a342e', '#16130f', 0.22], envI: 0.38,
+    fog: ['#141821', 0.006], exposure: 1.1, bloom: [0.5, 0.5, 0.8],
+    sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
+    night: { amount: 1, zenith: '#04070f', horizon: '#1a1c28', glow: 0.55, glowColor: '#ff9a55', stars: 0.15, moon: 1 },
+    clouds: { cover: 0.35, opacity: 0.9, lit: '#6b5a52', shade: '#1a1c26', gain: 0.12 },
+    hills: '#0b0d14',
+    grade: { saturation: 1.0, contrast: 1.06, exposure: 0.05, vignette: 0.3, grain: 0.04, tint: [1, 0.93, 0.84], tintAmount: 0.18 },
+    lit: { indoor: 1, windows: 1, street: 1, shops: 1, signs: 1, emergency: 1 },
+  },
   interiorDark: { // indoor lights off, cold moonlight through the windows
     outdoor: false, env: 'room', shadowBox: 24,
     sun: [270, -25], key: MOON, keyColor: '#9fb6ea', keyI: 0.5,
