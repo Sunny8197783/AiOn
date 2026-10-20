@@ -56,6 +56,9 @@ export const SOURCES = [
   { id: 'koddi_card', publisher: '한국장애인개발원', title: '재난 대비 카드', url: 'https://www.koddi.or.kr/webzine/didimdol/vol304/page01-03.html' },
   { id: 'etiquette', publisher: '금천구', title: '장애인 에티켓', url: 'https://www.geumcheon.go.kr/portal/contents.do?key=787' },
   { id: 'unhcr_disability', publisher: 'UNHCR', title: '장애인 보호 지침', url: 'https://emergency.unhcr.org/protection/persons-risk/persons-disabilities' },
+  { id: 'press_code', publisher: '한국기자협회', title: '재난보도준칙', url: 'https://www.journalist.or.kr/news/section4.html?p_num=10' },
+  { id: 'sms_list', publisher: '국민안전24', title: '재난문자 목록', url: 'https://safekorea.go.kr/safekorea-kor/ctim/cmsg/calamitySms.do?menuSn=34&firstYn=Y' },
+  { id: 'sms_area', publisher: '행정안전부', title: '재난문자방송 기준 및 운영규정', url: 'https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2100000274384&chrClsCd=010201' },
   { id: 'seoul_2023', publisher: '서울신문', title: '2023년 5월 31일 경계경보 문자', url: 'https://m.seoul.co.kr/news/2023/06/01/20230601002003' },
 ].map(s => ({ ...s, checkedAt: '2026-10-20' }));
 
@@ -152,6 +155,8 @@ export const FACTS = [
   { id: 'info_misfire', topic: 'info', sourceId: 'seoul_2023', text: '2023년 5월 31일 서울시 경계경보 문자에는 발령 이유와 대피 장소가 없었고, 이후 오발령 논란이 있었습니다.' },
   { id: 'info_suspect', topic: 'info', sourceId: 'incheon_terror', text: '폭발물로 의심되는 물건은 절대 손대지 말고 빨리 떨어진 뒤 경찰에 신고합니다.' },
   { id: 'info_appearance', topic: 'info', sourceId: 'dhs_signs', text: '인종, 민족, 성별, 출신 국가, 종교, 장애는 그 자체로 수상한 것이 아닙니다. 판단 근거는 행동입니다. (미국 국토안보부)' },
+  { id: 'info_scope', topic: 'info', sourceId: 'press_code', text: '재난보도준칙은 전체 상황을 모를 때 단편적인 정보를 전한다면, 부족하거나 더 확인할 부분을 함께 밝히도록 정합니다.' },
+  { id: 'info_area', topic: 'info', sourceId: 'sms_area', text: '재난문자는 영향 범위에 따라 읍·면·동 단위까지 지역을 좁혀 보냅니다. 내가 받은 안내는 내가 있던 곳 기준입니다.' },
   // 사람
   { id: 'people_order', topic: 'people', sourceId: 'mois_four', text: '비상시 꼭 기억할 네 번째는 질서 유지와 상호 배려입니다.' },
   { id: 'people_ask', topic: 'people', sourceId: 'etiquette', text: '장애인을 도울 때는 그 사람이 무엇을 원하는지 잘 듣고, 요청이 있을 때 돕습니다. 혼자 판단해서 하는 행동은 친절이 아닙니다.' },
