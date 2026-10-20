@@ -1,157 +1,159 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SOURCES, createRun, recordEvent, makeHandover, buildDebrief } from '../dist/learning.js';
+import {
+  SOURCES, ENTRANCES, STORY, MAX_NOTE, createRun, recordEvent, noteContext, composeNote, parseNote, noteKind,
+  makeHandover, buildPins, closingLines, readClaims, buildDebrief,
+} from '../dist/learning.js';
 
-test('run and events are serializable, independent, and ordered', () => {
+function playedRun(route = 'stairs', via = 'sign') {
   const run = createRun();
-  const other = createRun();
-  const details = { chapter: 0, location: { x: 12, z: 2 } };
+  recordEvent(run, 'gate_observed', { chapter: 0, via, time: STORY.gateSeenAt });
+  recordEvent(run, 'route_attempt', { chapter: 0, route });
+  return run;
+}
+
+// Every combination of chips the compose screen allows.
+function* allChips() {
+  for (const what of ['gate_closed', 'all_closed'])
+    for (const time of [false, true]) for (const route of [false, true]) for (const unknowns of [false, true])
+      for (const advice of [null, 'follow_me', 'direction', 'check_notice']) yield { what, time, route, unknowns, advice };
+}
+
+test('events are serializable, independent, and ordered', () => {
+  const run = createRun();
+  const details = { chapter: 0, location: { x: 12 } };
   const first = recordEvent(run, 'gate_observed', details);
   details.location.x = -99;
-  const second = recordEvent(run, 'notice_read', { chapter: 1 });
-  assert.equal(run.version, 1);
-  assert.equal(run.chapter, 0);
-  assert.equal(other.events.length, 0);
-  assert.equal(first.seq, 1);
-  assert.equal(second.seq, 2);
   assert.equal(first.details.location.x, 12);
-  assert.ok(Number.isFinite(Date.parse(first.at)));
+  assert.equal(recordEvent(run, 'notice_read', { chapter: 1 }).seq, 2);
   assert.deepEqual(JSON.parse(JSON.stringify(run)), run);
-});
-
-test('handover preserves the actual choice and appends its evidence once', () => {
-  for (const kind of ['precise', 'generalized']) {
-    const run = createRun();
-    const note = makeHandover(run, kind);
-    assert.equal(run.handover, note);
-    assert.equal(note.kind, kind);
-    assert.equal(note.time, '14:10');
-    assert.equal(run.events.length, 1);
-    assert.deepEqual(run.events[0].details, { kind });
-  }
-  const run = createRun();
-  assert.throws(() => makeHandover(run, 'invented'), RangeError);
-  assert.equal(run.handover, null);
-  assert.equal(run.events.length, 0);
-});
-
-test('accurate scope earns feedback only when there is an observation', () => {
-  const run = createRun();
-  makeHandover(run, 'precise');
-  assert.equal(buildDebrief(run).strengths.length, 0);
-  recordEvent(run, 'gate_observed');
-  assert.match(buildDebrief(run).strengths.join(' '), /미확인/);
-});
-
-test('precise handover includes the actual A arrival and preserves its information source', () => {
-  for (const [route, label, source] of [
-    ['stairs', '계단', '현장 출입 통제 표지'],
-    ['ramp', '경사로', '대피 후 현장 안내문'],
-  ]) {
-    const run = createRun();
-    recordEvent(run, 'gate_observed', { chapter: 0, source, time: '14:10' });
-    recordEvent(run, 'route_attempt', { chapter: 0, route });
-    const note = makeHandover(run, 'precise');
-    assert.equal(note.source, source);
-    assert.match(note.text, new RegExp(`${label} 입구로 대피시설에 도착`));
-    assert.match(note.text, /보장은 없으며/);
-    assert.match(note.text, /나머지 입구는 미확인/);
-    assert.doesNotMatch(note.text, /다른 출입구는 확인하지 못/);
-    assert.doesNotMatch(buildDebrief(run).strengths.join(' '), /동쪽 출입구에서/);
-  }
-});
-
-test('handover uses A latest route only and never invents a direct observation source', () => {
-  const run = createRun();
-  assert.equal(makeHandover(run, 'precise').source, '주민 A의 전달');
-  recordEvent(run, 'route_attempt', { chapter: 0, route: 'stairs' });
-  recordEvent(run, 'chapter_complete', { chapter: 0, route: 'ramp' });
-  recordEvent(run, 'route_attempt', { chapter: 1, route: 'stairs' });
-  recordEvent(run, 'gate_observed', { chapter: 1, source: '두 번째 주민 안내', time: '14:16' });
-  const note = makeHandover(run, 'precise');
-  assert.match(note.text, /경사로 입구로 대피시설에 도착/);
-  assert.equal(note.time, '14:10');
-  assert.equal(note.source, '주민 A의 전달');
-});
-
-test('overbroad handover takes practice priority over route and freshness', () => {
-  const run = createRun();
-  makeHandover(run, 'generalized');
-  recordEvent(run, 'route_attempt', { chapter: 1, route: 'stairs' });
-  const debrief = buildDebrief(run);
-  assert.equal(debrief.practice.id, 'scope');
-  assert.match(debrief.improvements.join(' '), /전체/);
-  assert.equal(debrief.improvements.length, 3);
-});
-
-test('only B stair attempts trigger access practice; successful replanning is retained', () => {
-  const run = createRun();
-  recordEvent(run, 'route_attempt', { chapter: 0, route: 'stairs' });
-  recordEvent(run, 'chapter_complete', { chapter: 0, route: 'stairs' });
-  assert.equal(buildDebrief(run).practice.id, 'communication');
-  recordEvent(run, 'route_attempt', { chapter: 1, route: 'stairs' });
-  recordEvent(run, 'notice_read', { chapter: 1 });
-  recordEvent(run, 'chapter_complete', { chapter: 1, route: 'ramp' });
-  const debrief = buildDebrief(run);
-  assert.equal(debrief.practice.id, 'access');
-  assert.match(debrief.strengths.join(' '), /수정/);
-  assert.match(debrief.summary, /2\/2/);
-});
-
-test('A notice does not count as B current information', () => {
-  const run = createRun();
-  recordEvent(run, 'notice_read', { chapter: 0 });
-  recordEvent(run, 'chapter_complete', { chapter: 1, route: 'ramp' });
-  assert.equal(buildDebrief(run).practice.id, 'freshness');
-  recordEvent(run, 'notice_read', { chapter: 1 });
-  assert.equal(buildDebrief(run).practice.id, 'communication');
-});
-
-test('debrief does not mutate input or share mutable practice options', () => {
-  const run = createRun();
-  recordEvent(run, 'gate_observed');
-  makeHandover(run, 'precise');
-  const snapshot = structuredClone(run);
-  const debrief = buildDebrief(run);
-  debrief.practice.options[0].label = 'changed externally';
-  assert.deepEqual(run, snapshot);
-  assert.notEqual(buildDebrief(run).practice.options[0].label, 'changed externally');
-});
-
-test('empty and incomplete records are safe and never imply completion', () => {
-  for (const run of [undefined, {}, createRun(), { events: [null, {}, { type: 'unknown' }] }]) {
-    const debrief = buildDebrief(run);
-    assert.equal(debrief.practice.id, 'communication');
-    assert.equal(debrief.strengths.length, 0);
-    assert.equal(debrief.improvements.length, 0);
-    assert.match(debrief.summary, /기록이 없습니다/);
-  }
-});
-
-test('each practice has three unique options, one correct answer, and a real source', () => {
-  const runs = [createRun(), createRun(), createRun(), createRun()];
-  makeHandover(runs[0], 'generalized');
-  recordEvent(runs[1], 'route_attempt', { chapter: 1, route: 'stairs' });
-  recordEvent(runs[2], 'route_attempt', { chapter: 1, route: 'ramp' });
-  const practiceIds = new Set();
-  for (const run of runs) {
-    const { practice, cards } = buildDebrief(run);
-    practiceIds.add(practice.id);
-    assert.equal(practice.options.length, 3);
-    assert.equal(new Set(practice.options.map(option => option.id)).size, 3);
-    assert.equal(practice.options.filter(option => option.correct).length, 1);
-    for (const item of [practice, ...cards]) assert.ok(SOURCES.some(source => source.id === item.sourceId));
-    for (const option of practice.options) assert.ok(option.feedback.length > 0);
-  }
-  assert.equal(practiceIds.size, 4);
-  assert.equal(new Set(SOURCES.map(source => source.id)).size, SOURCES.length);
-  for (const source of SOURCES) assert.equal(new URL(source.url).protocol, 'https:');
-});
-
-test('invalid event input is rejected without changing the run', () => {
-  const run = createRun();
   assert.throws(() => recordEvent(run, ''), TypeError);
-  assert.throws(() => recordEvent(run, 'notice_read', null), TypeError);
-  assert.throws(() => recordEvent({}, 'notice_read'), TypeError);
-  assert.equal(run.events.length, 0);
+  assert.throws(() => recordEvent(run, 'x', null), TypeError);
+  assert.equal(run.events.length, 2);
+});
+
+test('every entrance open to 준 is outside 서연\'s card, and C opens after the note is sent', () => {
+  for (const e of Object.values(ENTRANCES)) if (e.chapters.includes(0)) assert.equal(e.seoyeonOk, false);
+  assert.ok(ENTRANCES.access.seoyeonOk && !ENTRANCES.access.chapters.includes(0));
+  assert.ok(STORY.sentAt < STORY.accessOpenAt && STORY.accessOpenAt < STORY.receivedAt);
+});
+
+test('noteContext reads 준\'s real entrance and how he learned about the gate', () => {
+  assert.deepEqual(noteContext(playedRun('ramp', 'notice_after')), { route: 'ramp', observedVia: 'notice_after' });
+  const run = playedRun('stairs');
+  recordEvent(run, 'route_attempt', { chapter: 1, route: 'ramp' });
+  assert.equal(noteContext(run).route, 'stairs');
+});
+
+test('every chip note fits, never mentions C, and parses back to exactly the chips', () => {
+  for (const route of ['stairs', 'ramp']) for (const observedVia of ['sign', 'notice_after']) for (const chips of allChips()) {
+    const text = composeNote(chips, { route, observedVia });
+    assert.ok(text.length <= MAX_NOTE, text);
+    assert.doesNotMatch(text, /C|경사로/);
+    const c = parseNote(text);
+    assert.equal(c.what, chips.what, text);
+    assert.equal(Boolean(c.time), chips.time, text);
+    assert.equal(c.route, chips.route ? route : null, text);
+    assert.equal(c.unknowns, chips.unknowns, text);
+    assert.equal(c.advice, chips.advice, text);
+    for (const quote of Object.values(c.quotes)) assert.ok(text.includes(quote), quote);
+  }
+});
+
+test('parseNote reads free text by rule', () => {
+  const cases = [
+    ['동쪽문 막힘ㅠ 난 계단으로 옴 이쪽으로 ㄱㄱ', { what: 'gate_closed', route: 'stairs' }],
+    ['대피소 전부 닫힘', { what: 'all_closed' }],
+    ['다른 입구는 모두 확인 못 했어', { what: null, unknowns: true }],
+    ['C로 와', { route: 'access' }],
+    ['ㅋㅋㅋ', { what: null, route: null, advice: null, time: null }],
+    ['2시 10분에 동쪽 출입구 통제 중', { what: 'gate_closed', time: '02:10' }],
+    ['14:10 동쪽 폐쇄. B 진출입로 운영. C는 몰라. 안내 다시 확인!', { what: 'gate_closed', time: '14:10', route: 'ramp', unknowns: true, advice: 'check_notice' }],
+  ];
+  for (const [text, expected] of cases) {
+    const c = parseNote(text);
+    for (const [k, v] of Object.entries(expected)) assert.equal(c[k], v, `${text} → ${k}`);
+  }
+  assert.equal(noteKind(parseNote('ㅋㅋㅋ')), 'unparsed');
+  assert.equal(noteKind(parseNote('대피소 전부 닫힘')), 'generalized');
+  assert.equal(noteKind(parseNote('14:10에 동쪽 출입구가 닫혀 있었어. 다른 입구 상태는 확인 못 했어.')), 'precise');
+});
+
+test('makeHandover keeps the player\'s words, sanitizes edits, and falls back to chips', () => {
+  const chips = { what: 'gate_closed', time: true, route: true, unknowns: true, advice: null };
+  const run = playedRun('ramp');
+  const h = makeHandover(run, { chips });
+  assert.equal(h.text, composeNote(chips, { route: 'ramp', observedVia: 'sign' }));
+  assert.equal(h.kind, 'precise');
+  assert.equal(h.claims.parsedBy, 'chips');
+  assert.equal(run.events.at(-1).type, 'handover_written');
+
+  const edited = makeHandover(playedRun(), { chips, edited: true, text: `  동쪽\u0007 막힘 ${'가'.repeat(200)}` });
+  assert.equal(edited.text.length, MAX_NOTE);
+  assert.doesNotMatch(edited.text, /[\u0000-\u001f]/);
+  assert.equal(edited.claims.parsedBy, 'rules');
+
+  const blank = makeHandover(playedRun(), { chips, edited: true, text: '   ' });
+  assert.equal(blank.text, composeNote(chips, { route: 'stairs', observedVia: 'sign' }));
+  assert.equal(blank.edited, false);
+});
+
+test('buildPins always gives body, time and one more reason, whatever was written', () => {
+  const texts = ['동쪽문 막힘ㅠ 난 계단으로 옴 이쪽으로 ㄱㄱ', 'C로 와', 'ㅋㅋㅋ', '대피소 전부 닫힘', '14:10 동쪽 폐쇄. B 진출입로 운영. C 경사로는 몰라. 안내 다시 확인'];
+  const runs = [];
+  for (const route of ['stairs', 'ramp']) {
+    for (const chips of allChips()) { const run = playedRun(route); makeHandover(run, { chips }); runs.push(run); }
+    for (const text of texts) { const run = playedRun(route); makeHandover(run, { edited: true, text }); runs.push(run); }
+  }
+  runs.push(createRun());
+  const anchors = new Set(['stairs', 'ramp', 'notice', 'gate', 'access', 'start0', 'start1']);
+  for (const run of runs) {
+    const pins = buildPins(run);
+    assert.equal(pins.length, 3);
+    assert.equal(pins[0].factor, 'body');
+    assert.equal(pins[1].factor, 'time');
+    assert.ok(['scope', 'advice', 'direction', 'place'].includes(pins[2].factor));
+    for (const pin of pins) {
+      assert.ok(anchors.has(pin.anchor), pin.anchor);
+      assert.ok(pin.was && pin.now);
+      // No blame on either character.
+      assert.doesNotMatch(pin.was + pin.now, /실수|잘못|서연(이|은)\s*못/);
+    }
+    assert.equal(ENTRANCES[pins[0].anchor].seoyeonOk, false);
+  }
+  const scoped = playedRun(); makeHandover(scoped, { chips: { what: 'all_closed' } });
+  assert.equal(buildPins(scoped)[2].factor, 'scope');
+  for (const kind of ['precise', 'partial', 'generalized', 'unparsed']) assert.equal(closingLines(kind).length, 2);
+});
+
+test('readClaims always lists C as after the note and cites real sources', () => {
+  const run = playedRun(); makeHandover(run, { chips: { what: 'gate_closed', route: true, advice: 'follow_me' } });
+  const rows = readClaims(run);
+  assert.ok(rows.some(r => r.label === 'C 경사로' && r.status === 'missing'));
+  assert.ok(rows.some(r => r.label === '들어간 길' && r.status === 'mismatch'));
+  assert.ok(rows.some(r => r.label === '시각' && r.status === 'missing'));
+  for (const row of rows) assert.ok(SOURCES.some(s => s.id === row.sourceId), row.sourceId);
+  assert.deepEqual(readClaims(createRun()), []);
+});
+
+test('practice selection follows the record', () => {
+  const generalized = playedRun(); makeHandover(generalized, { chips: { what: 'all_closed' } });
+  assert.equal(buildDebrief(generalized).practice.id, 'scope');
+  const tried = playedRun(); makeHandover(tried, { chips: { what: 'gate_closed' } });
+  recordEvent(tried, 'route_attempt', { chapter: 1, route: 'stairs' });
+  assert.equal(buildDebrief(tried).practice.id, 'access');
+  const calm = playedRun(); makeHandover(calm, { chips: { what: 'gate_closed' } });
+  assert.equal(buildDebrief(calm).practice.id, 'freshness');
+});
+
+test('debrief is safe on empty input and only cites real https sources', () => {
+  for (const run of [undefined, {}, createRun(), { events: [null, {}, { type: 'x' }] }]) {
+    const d = buildDebrief(run);
+    assert.equal(d.strengths.length, 0);
+    assert.equal(d.improvements.length, 0);
+    for (const item of [d.practice, ...d.cards]) assert.ok(SOURCES.some(s => s.id === item.sourceId), item.sourceId);
+    assert.equal(d.practice.options.filter(o => o.correct).length, 1);
+  }
+  for (const s of SOURCES) assert.equal(new URL(s.url).protocol, 'https:');
+  assert.equal(new Set(SOURCES.map(s => s.id)).size, SOURCES.length);
 });
