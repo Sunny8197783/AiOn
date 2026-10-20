@@ -97,7 +97,7 @@ export function createBuilder(kit) {
     }
     g.add(pivot);
     if (frameMat) { // frame posts + head
-      const ft = 0.05, fd = 0.16;
+      const ft = 0.05, fd = 0.24;
       g.add(axis === 'z' ? kit.box(ft, h + ft, fd, frameMat, { x: a - ft / 2, y, z: c }) : kit.box(fd, h + ft, ft, frameMat, { x: c, y, z: a - ft / 2 }));
       g.add(axis === 'z' ? kit.box(ft, h + ft, fd, frameMat, { x: b + ft / 2, y, z: c }) : kit.box(fd, h + ft, ft, frameMat, { x: c, y, z: b + ft / 2 }));
       g.add(axis === 'z' ? kit.box(w + 2 * ft, ft, fd, frameMat, { x: (a + b) / 2, y: y + h, z: c }) : kit.box(fd, ft, w + 2 * ft, frameMat, { x: c, y: y + h, z: (a + b) / 2 }));
