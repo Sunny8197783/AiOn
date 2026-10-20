@@ -186,8 +186,8 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
       if (light) {
         const f = rm ? 0.95 + 0.04 * Math.sin(t * 1.7)
           : 0.8 + 0.09 * Math.sin(t * 10.7 + Math.sin(t * 3.1) * 2) + 0.07 * Math.sin(t * 23.3) + 0.06 * (vnoise(t * 9, 3.7) - 0.5) * 2;
-        light.intensity = 60 * lightMul * scale * scale * shown * f;
-        light.visible = shown > 0.01;
+        // Intensity only: toggling visible would change the scene's light count and recompile every material.
+        light.intensity = shown > 0.01 ? 60 * lightMul * scale * scale * shown * f : 0;
         if (!rm) light.position.set(Math.sin(t * 7.3) * 0.03 * scale, 0.45 * scale + Math.sin(t * 5.1) * 0.04 * scale, Math.cos(t * 6.7) * 0.03 * scale);
       }
     }
