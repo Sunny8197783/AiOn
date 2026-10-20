@@ -3,6 +3,7 @@ export const SOURCES = [
   { id: 'korea', title: '국민안전24 · 비상대비 행동요령', url: 'https://safekorea.go.kr/safekorea-kor/acts/nacts/action-guide.do?category=stateOfEmergency&actsHeaderTitle=%EB%B9%84%EC%83%81%EB%8C%80%EB%B9%84&menuSn=4' },
   { id: 'korea_alert', title: '국민안전24 · 민방공 경보 행동요령', url: 'https://safekorea.go.kr/safekorea-kor/acts/nacts/action-guide.do?category=civlAirDefenseWarning&actsHeaderTitle=%EB%AF%BC%EB%B0%A9%EA%B3%B5%EA%B2%BD%EB%B3%B4&menuSn=4' },
   { id: 'sms_area', title: '재난문자방송 기준 및 운영규정 (행정안전부)', url: 'https://www.law.go.kr/LSW/admRulInfoP.do?admRulSeq=2100000274384&chrClsCd=010201' },
+  { id: 'sms_list', title: '국민안전24 · 재난문자 목록', url: 'https://safekorea.go.kr/safekorea-kor/ctim/cmsg/calamitySms.do?menuSn=34&firstYn=Y' },
   { id: 'press_code', title: '재난보도준칙 (한국기자협회)', url: 'https://www.journalist.or.kr/news/section4.html?p_num=10' },
   { id: 'seoul_2023', title: '서울신문 · 2023년 5월 31일 경계경보 문자', url: 'https://m.seoul.co.kr/news/2023/06/01/20230601002003' },
   { id: 'information', title: 'ICRC · 전시 유해 정보 Q&A', url: 'https://www.icrc.org/en/article/harmful-information-questions-and-answers' },
@@ -64,9 +65,12 @@ export function composeNote(chips = {}, { route = 'stairs', observedVia = 'sign'
   return parts.join(' ');
 }
 
+// '막' alone is often the adverb "just", so only its closed forms count.
+const SHUT = '폐쇄|닫|막[혀힌힘혔아았]';
+const UNKNOWN = /모르|몰라|몰랐|미확인|확인\s*(못|안)|확인하지/;
 const RULES = {
-  what: [['all_closed', /(전체|모두|전부|다)\s*(폐쇄|닫|막)|대피소[^.]{0,8}(폐쇄|닫|막)/], ['gate_closed', /(동쪽|동문)[^.]{0,8}(폐쇄|닫|막|통제)/]],
-  route: [['stairs', /계단|\bA\b/i], ['ramp', /진출입로|주차장|\bB\b/i], ['access', /\bC\b|경사로/i]],
+  what: [['all_closed', new RegExp(`(전체|모두|전부|다)\\s*(${SHUT})|대피(소|시설)[^.,]{0,8}(${SHUT})`)], ['gate_closed', new RegExp(`(동쪽|동문)[^.,]{0,8}(${SHUT}|통제)`)]],
+  route: [['stairs', /계단|\bA\b/i], ['ramp', /진출입로|\bB\b/i], ['access', /\bC\b|경사로/i]],
   advice: [['follow_me', /나처럼|따라\s*와|똑같이|같은\s*길|여기로/], ['direction', /오른쪽|왼쪽|쭉|건너/], ['check_notice', /안내[^.]{0,8}확인|확인[^.]{0,8}안내/]],
 };
 
@@ -76,15 +80,20 @@ export function parseNote(text) {
   const claims = { what: null, time: null, route: null, unknowns: false, advice: null, quotes: {} };
   for (const field of Object.keys(RULES)) {
     for (const [value, pattern] of RULES[field]) {
-      const clause = clauses.find(c => pattern.test(c));
+      // A clause about the east gate, or one saying what was not checked, is not a facility-wide claim;
+      // "계단 말고" rules a route out rather than naming it.
+      const clause = clauses.find(c => pattern.test(c)
+        && !(value === 'all_closed' && (/동쪽|동문/.test(c) || UNKNOWN.test(c)))
+        && !(field === 'route' && /말고|빼고|피해|안\s*돼|쓰지\s*마|가지\s*마/.test(c)));
       if (clause) { claims[field] = value; claims.quotes[field] = clause; break; }
     }
   }
   for (const clause of clauses) {
-    const m = clause.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/) || clause.match(/(\d{1,2})\s*시\s*(\d{1,2})\s*분/);
-    if (m) { claims.time = `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`; claims.quotes.time = clause; break; }
+    // Keep the player's own wording ("2시 10분"), never a guessed 24-hour time.
+    const m = clause.match(/\b([01]?\d|2[0-3]):[0-5]\d\b/) || clause.match(/\d{1,2}\s*시(?!간)(\s*\d{1,2}\s*분)?/);
+    if (m) { claims.time = m[0]; claims.quotes.time = clause; break; }
   }
-  const unknown = clauses.find(c => /모르|몰라|몰랐|미확인|확인\s*(못|안)|확인하지/.test(c));
+  const unknown = clauses.find(c => UNKNOWN.test(c));
   if (unknown) { claims.unknowns = true; claims.quotes.unknowns = unknown; }
   return claims;
 }
@@ -125,7 +134,7 @@ export function buildPins(run) {
   const other = bodyAt === 'stairs' ? 'ramp' : 'stairs';
   const body = {
     factor: 'body', anchor: bodyAt,
-    was: named ? `“${claims.quotes.route}”` : `기록에 들어간 입구 없음 · 준은 ${ENTRANCES[actual].short}로 들어감`,
+    was: named ? `“${claims.quotes.route}”` : `기록에 들어간 입구 없음 · 준이 들어간 입구: ${ENTRANCES[actual].short}`,
     now: `서연의 카드: ${ENTRANCES[bodyAt].card}`,
     also: { anchor: other, now: `✕ ${ENTRANCES[other].short} · ${ENTRANCES[other].card}` },
   };
@@ -143,7 +152,7 @@ export function buildPins(run) {
 export function closingLines(kind) {
   if (kind === 'generalized') return ['준이 본 것보다 넓은 말이었습니다. 그리고 준의 시각, 준의 몸, 준의 자리에서 쓴 말이었습니다.', '서연은 지금의 안내로 다시 판단합니다.'];
   if (kind === 'unparsed') return ['서연에게 닿은 것은 이 문장뿐이었습니다.', '서연은 지금의 안내에서 다시 시작합니다.'];
-  return ['틀린 말은 아니었습니다. 준의 시각, 준의 몸, 준의 자리에서는.', '서연은 지금의 안내로 다시 판단합니다.'];
+  return ['준의 시각, 준의 몸, 준의 자리에서 쓴 말이었습니다.', '서연은 지금의 안내로 다시 판단합니다.'];
 }
 
 // How each part of the note read from 서연's side. status: helped | recheck | mismatch | missing.
@@ -153,15 +162,15 @@ export function readClaims(run) {
   if (!c) return [];
   const rows = [];
   const add = (label, quote, status, why, sourceId) => rows.push({ label, quote: quote ?? null, status, why, sourceId });
-  if (c.what === 'gate_closed') add('본 것', c.quotes.what, c.time ? 'helped' : 'recheck', c.time ? '본 범위와 시각이 함께 있어 지금 안내와 비교할 수 있었습니다.' : '언제 본 것인지 없어 지금도 그런지 판단하기 어려웠습니다.', c.time ? 'press_code' : 'sms_area');
+  if (c.what === 'gate_closed') add('본 것', c.quotes.what, c.time ? 'helped' : 'recheck', c.time ? '본 범위와 시각이 함께 있어 지금 안내와 비교할 수 있었습니다.' : '언제 본 것인지 없어 지금도 그런지 판단하기 어려웠습니다.', c.time ? 'press_code' : 'sms_list');
   if (c.what === 'all_closed') add('본 것', c.quotes.what, 'mismatch', `준이 확인한 것은 ${gateKnown(h)}뿐이었습니다.`, 'press_code');
   if (c.route === 'stairs' || c.route === 'ramp') add('들어간 길', c.quotes.route, 'mismatch', '서연의 카드 기준과 다른 입구였습니다.', 'koddi_card');
   if (c.unknowns) add('모르는 것', c.quotes.unknowns, 'helped', '모르는 부분을 밝혀 서연이 직접 확인할 곳을 알 수 있었습니다.', 'press_code');
   if (c.advice === 'follow_me' || c.advice === 'direction') add('조언', c.quotes.advice, 'mismatch', '쓴 사람의 다리와 출발점 기준의 말이었습니다.', 'sms_area');
   if (c.advice === 'check_notice') add('조언', c.quotes.advice, 'helped', '지금의 현장 안내를 다시 보게 했습니다.', 'korea_alert');
-  if (!c.time) add('시각', null, 'missing', '언제의 정보인지가 없었습니다.', 'sms_area');
+  if (!c.time) add('시각', null, 'missing', '언제의 정보인지가 없었습니다.', 'sms_list');
   if (!c.unknowns) add('모르는 것', null, 'missing', '확인하지 못한 부분이 적혀 있지 않았습니다.', 'press_code');
-  add('C 경사로', null, 'missing', `${STORY.accessOpenAt}에 열렸습니다 — 기록을 보낸 뒤의 일이라 지금의 안내에서만 알 수 있었습니다.`, 'korea_alert');
+  add('C 경사로', c.route === 'access' ? c.quotes.route : null, c.route === 'access' ? 'recheck' : 'missing', `${STORY.accessOpenAt}에 열렸습니다 — 기록을 보낸 뒤의 일이라 지금의 안내에서만 알 수 있었습니다.`, 'korea_alert');
   return rows;
 }
 
@@ -221,7 +230,6 @@ export function buildDebrief(run) {
   if (kind === 'generalized') improvements.push('출입구 한 곳의 폐쇄를 시설 전체로 넓혀 전했습니다. 확인한 범위와 시각을 남겨 보세요.');
   if (readB) strengths.push('서연으로 지금의 현장 안내를 확인했습니다.');
   if (has('help_choice', 1) || doneB) strengths.push('서연이 자신의 기준으로 입구를 다시 골랐습니다.');
-  if (triedB && !has('help_choice', 1)) improvements.push('서연의 기준과 맞지 않는 입구에 다가갔습니다. 앞사람의 길을 내 기준에 대어 보세요.');
 
   const practiceId = kind === 'generalized' ? 'scope' : triedB ? 'access' : 'freshness';
   return {

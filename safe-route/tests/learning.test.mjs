@@ -67,13 +67,21 @@ test('parseNote reads free text by rule', () => {
     ['다른 입구는 모두 확인 못 했어', { what: null, unknowns: true }],
     ['C로 와', { route: 'access' }],
     ['ㅋㅋㅋ', { what: null, route: null, advice: null, time: null }],
-    ['2시 10분에 동쪽 출입구 통제 중', { what: 'gate_closed', time: '02:10' }],
+    ['2시 10분에 동쪽 출입구 통제 중', { what: 'gate_closed', time: '2시 10분' }],
+    ['14:10 대피소 동쪽 출입구 닫힘. 다른 입구는 몰라', { what: 'gate_closed', time: '14:10', unknowns: true }],
+    ['나 대피소에 막 도착했어', { what: null }],
+    ['대피시설이 닫혀 있었어', { what: 'all_closed' }],
+    ['14:10 동쪽 닫힘. 나머지 다 닫혔는지 확인 못 함', { what: 'gate_closed', unknowns: true }],
+    ['한빛 생활문화센터 지하주차장으로 와', { route: null }],
+    ['계단 말고 다른 입구로 가', { route: null }],
+    ['1시간 전에 동쪽 문 닫혀 있었어', { time: null, what: 'gate_closed' }],
     ['14:10 동쪽 폐쇄. B 진출입로 운영. C는 몰라. 안내 다시 확인!', { what: 'gate_closed', time: '14:10', route: 'ramp', unknowns: true, advice: 'check_notice' }],
   ];
   for (const [text, expected] of cases) {
     const c = parseNote(text);
     for (const [k, v] of Object.entries(expected)) assert.equal(c[k], v, `${text} → ${k}`);
   }
+  assert.equal(noteKind(parseNote('14:10 대피소 동쪽 출입구 닫힘. 다른 입구는 몰라')), 'precise');
   assert.equal(noteKind(parseNote('ㅋㅋㅋ')), 'unparsed');
   assert.equal(noteKind(parseNote('대피소 전부 닫힘')), 'generalized');
   assert.equal(noteKind(parseNote('14:10에 동쪽 출입구가 닫혀 있었어. 다른 입구 상태는 확인 못 했어.')), 'precise');

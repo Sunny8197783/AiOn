@@ -51,6 +51,7 @@ export function createReread(world, { start, reduceMotion = false }) {
     if (!pts.length) return;
     const material = own(new THREE.MeshBasicMaterial({ color: AMBER, transparent: true, opacity: 0.85, depthWrite: false }));
     const discs = own(new THREE.InstancedMesh(own(new THREE.CircleGeometry(0.6, 14)), material, pts.length));
+    discs.frustumCulled = false; // bounds would be cached while only the first dot is shown
     const matrix = new THREE.Matrix4();
     const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
     const one = new THREE.Vector3(1, 1, 1);
@@ -95,7 +96,7 @@ export function createReread(world, { start, reduceMotion = false }) {
     ctx.fillText(clip(now, 26), 140, 200, 860);
     const texture = own(new THREE.CanvasTexture(canvas));
     texture.colorSpace = THREE.SRGBColorSpace;
-    const sprite = new THREE.Sprite(own(new THREE.SpriteMaterial({ map: texture, depthTest: false })));
+    const sprite = new THREE.Sprite(own(new THREE.SpriteMaterial({ map: texture, depthTest: false, fog: false })));
     sprite.renderOrder = 10;
     return sprite;
   }
@@ -104,6 +105,7 @@ export function createReread(world, { start, reduceMotion = false }) {
   function pin(n, at, was, now, scale = 1.35) {
     const sprite = label(n, was, now);
     sprite.position.set(at.x, 6.5 * scale, at.z);
+    if (at.x < -20) sprite.center.x = 0.85; // C's label grows west so it clears A's
     sprite.scale.set(13 * scale, 3.8 * scale, 1);
     const pole = new THREE.Mesh(own(new THREE.CylinderGeometry(0.08, 0.08, 6 * scale, 6)), own(new THREE.MeshBasicMaterial({ color: AMBER })));
     pole.position.set(at.x, 3 * scale, at.z);

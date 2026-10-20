@@ -2,7 +2,7 @@ import * as THREE from './vendor/three.module.js';
 
 export const LOCATIONS = [
   { id: 'notice', label: '현장 안내', x: 0, z: 18 },
-  { id: 'gate', label: '동쪽 출입구', x: 12, z: 2 },
+  { id: 'gate', label: '동쪽 출입구', x: 12, z: 2, chapters: [0] },
   { id: 'stairs', label: '출입구 A · 계단', x: -13, z: -20 },
   { id: 'ramp', label: '출입구 B · 지하주차장 진출입로', x: 14, z: -20 },
   { id: 'access', label: '출입구 C · 경사로', x: -27, z: -21, chapters: [1] },
@@ -216,9 +216,8 @@ export function createWorld(canvas, { onUpdate } = {}) {
   }
 
   // Entrance C: a gentle ramp down beside the shelter. Shuttered in chapter 1, opened at 14:15 in chapter 2.
-  const accessRamp = box(4, 0.14, 7, '#b9c2b0', -27, -0.25, -26.5);
-  accessRamp.rotation.x = 0.07;
-  box(0.3, 0.02, 7, '#d9b84a', -27, -0.15, -26.5).rotation.x = 0.07;
+  box(4, 0.14, 7, '#b9c2b0', -27, -0.01, -26.5);
+  box(0.3, 0.02, 7, '#d9b84a', -27, 0.07, -26.5);
   for (const x of [-29.1, -24.9]) box(0.06, 0.06, 7, '#b8d0c0', x, 0.9, -26.5);
   box(4.2, 2.6, 0.2, '#152022', -27, 0.9, -30.1);
   solid(-27, -26.6, 4.4, 7.2);
@@ -327,7 +326,7 @@ export function createWorld(canvas, { onUpdate } = {}) {
     box(1, 0.12, 0.35, '#596563', 17.5, 0.07, z);
   }
   solid(17.5, 1.8, 0.65, 8);
-  sign(['동쪽 출입구', '현장 상태 확인'], 16.8, 2.2, 2, 3.1, 1.5, { background: '#735442', color: '#fff0c6', rotation: -Math.PI / 2 });
+  sign(['동쪽 출입구 폐쇄', 'A 계단', 'B 진출입로 이용'], 16.8, 2.2, 2, 3.1, 1.5, { background: '#735442', color: '#fff0c6', rotation: -Math.PI / 2 });
   for (const [x, z, angle] of [[21, 0, 0.3], [22, 3, 0.6], [24, 1, -0.2], [23, -1, 0.7]]) {
     const rubble = box(1.5, 0.45, 1, '#929789', x, 0.25, z);
     rubble.rotation.y = angle;

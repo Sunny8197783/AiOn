@@ -113,7 +113,7 @@ function readNotice() {
   }
   const choose = route => () => {
     recordEvent(run, 'notice_choice', {chapter, route}); updateObjectives();
-    toast(route === 'access' ? `준의 기록(${STORY.sentAt})에는 없던 입구 · ${STORY.accessOpenAt}에 열림` : '그 입구로 표시했어요. 가까이 가서 다시 판단할 수 있어요.');
+    toast(route === 'access' ? `C 경사로 · ${STORY.accessOpenAt}에 열림 · 준이 보낸 ${STORY.sentAt} 뒤의 일` : '그 입구로 표시했어요. 가까이 가서 다시 판단할 수 있어요.');
   };
   openDialog({eyebrow: `현장 안내 · ${STORY.accessOpenAt} 갱신`, title: '지금 운영 중인 출입구',
     body: `<div class="metadata"><span>출처: 가상 현장 안내자</span><span>갱신 시각: ${STORY.accessOpenAt}</span><span>적용: 이 시설</span></div><ul class="card-list"><li>동쪽 출입구: 폐쇄 유지</li><li>A 계단: 운영</li><li>B 지하주차장 진출입로: 운영 · 차량 통제 · 내리막이 가파름</li><li>C 경사로: ${STORY.accessOpenAt} 개방 · 유도블록 설치 · 안내자 있음</li></ul><div class="callout">시설 안에서는 관리자의 지시와 안내를 따릅니다.</div><p>어느 입구로 갈지는 서연이 정합니다.</p>`,
@@ -161,7 +161,7 @@ function openCompose() {
   const radio = (name, options) => options.map(([value, label]) => `<label class="pill"><input type="radio" name="${name}" value="${value}"><span>${escape(label)}</span></label>`).join('');
   const row = (legend, inner) => `<fieldset class="chips"><legend>${legend}</legend>${inner}</fieldset>`;
   openDialog({eyebrow: `서연(같은 동 이웃)에게 보내기 · ${STORY.sentAt}`, title: '무엇을 남길까요?',
-    body: `<p>준은 대피시설에 들어왔습니다. 서연에게 보낼 메시지를 고르거나 직접 고쳐 쓰세요.</p>
+    body: `<p>준은 대피시설에 들어왔습니다. 서연에게 보낼 메시지를 고르거나 직접 고쳐 쓰세요.</p>${ctx.observedVia === 'notice_after' ? '<p>입구 안내문: <strong>“동쪽 출입구 폐쇄 · A 계단 / B 진출입로 이용”</strong></p>' : ''}
       ${row('무엇을 봤나', radio('what', [['gate_closed', composeNote({what: 'gate_closed'}, ctx)], ['all_closed', composeNote({what: 'all_closed'}, ctx)]]))}
       ${row('언제', radio('time', [['true', `${STORY.gateSeenAt}에`], ['false', '시각 없이']]))}
       ${row('내가 쓴 길', radio('route', [['true', composeNote({route: true}, ctx)], ['false', '쓰지 않기']]))}
@@ -198,10 +198,10 @@ function openCompose() {
 const anchorOf = id => id === 'start0' ? STARTS[0] : id === 'start1' ? STARTS[1] : LOCATIONS.find(l => l.id === id);
 function markedNote(h) {
   const spans = [...new Set(Object.values(h.claims.quotes))].map(q => [h.text.indexOf(q), q]).filter(([i]) => i >= 0).sort((a, b) => a[0] - b[0]);
-  let html = '', at = 0, n = 0;
+  let html = '', at = 0;
   for (const [i, q] of spans) {
     if (i < at) continue;
-    html += `${escape(h.text.slice(at, i))}<mark class="claim">${escape(q)}<sup>${++n}</sup></mark>`;
+    html += `${escape(h.text.slice(at, i))}<mark class="claim">${escape(q)}</mark>`;
     at = i + q.length;
   }
   return html + escape(h.text.slice(at));
@@ -213,9 +213,11 @@ function showNote(mode) {
   $('legacy-text').innerHTML = mode === 'marked' ? markedNote(h) : escape(h.text);
   $('legacy-compare').hidden = mode !== 'panel';
 }
+// The focused Next button carries the caption, pin and (while shown) the note, so screen readers hear each step once.
 function caption(text, pin, last = false) {
   $('caption').hidden = false;
-  $('caption').innerHTML = `<p>${escape(text)}</p>${pin ? `<p class="pin-lines"><span class="was">${escape(pin.was)}</span><span class="now">${escape(pin.now)}</span></p>` : ''}<button type="button" id="caption-next" class="primary">${last ? '서연으로 계속' : '다음'} <span>▸</span></button><small>E · Enter · Space로 넘기기 · Esc로 끝까지</small>`;
+  const described = ['cap-text', pin && 'cap-pin', !$('legacy-note').hidden && 'legacy-text'].filter(Boolean).join(' ');
+  $('caption').innerHTML = `<p id="cap-text">${escape(text)}</p>${pin ? `<p id="cap-pin" class="pin-lines"><span class="was">${escape(pin.was)}</span><span class="now">${escape(pin.now)}</span>${pin.also ? `<span class="now">${escape(pin.also.now)}</span>` : ''}</p>` : ''}<button type="button" id="caption-next" class="primary" aria-describedby="${described}">${last ? '서연으로 계속' : '다음'} <span>▸</span></button><small>E · Enter · Space로 넘기기 · Esc로 끝까지</small>`;
   $('caption-next').onclick = rereadNext;
   $('caption-next').focus({preventScroll: true});
 }
@@ -229,14 +231,14 @@ function placePin(i) {
 function tickClock() {
   const times = ['14:12', '14:13', '14:14', '14:15', STORY.receivedAt];
   if (reduceMotion) { $('clock-label').textContent = STORY.receivedAt; return; }
-  times.forEach((t, i) => setTimeout(() => { $('clock-label').textContent = t; }, i * 300));
+  times.forEach((t, i) => setTimeout(() => { if (reread) $('clock-label').textContent = t; }, i * 300));
 }
 const REREAD_STEPS = [
   () => { reread.fx.eye(-0.5); showNote('phone'); caption('당신이 방금 준으로서 쓴 문장입니다. 서연에게 닿은 것은 이 문장뿐입니다.'); },
-  () => { showNote('marked'); caption(run.handover.kind === 'unparsed' ? '이 문장에서 입구·시각·범위를 찾지 못했어요.' : '문장을 나눠 봅니다. 밑줄 친 부분이 서연이 기댈 수 있는 정보입니다.'); },
+  () => { showNote('marked'); caption(run.handover.kind === 'unparsed' ? '이 문장에서 입구·시각·범위를 찾지 못했어요.' : '문장을 나눠 봅니다. 밑줄 친 부분이 이 문장이 서연에게 말하는 것입니다.'); },
   () => { $('legacy-note').hidden = true; world.setView('third'); reread.fx.crane(); reread.fx.showPath(paths[0]); caption('준이 실제로 걸은 길 — 당신은 알고 있지만, 서연은 보지 못했습니다.'); },
   () => caption('준이 고를 수 있던 입구는 둘 다 서연의 기준과 다릅니다.', placePin(0)),
-  () => { tickClock(); caption('기록은 그때의 사실입니다. 지금은 4분 뒤입니다.', placePin(1)); },
+  () => { tickClock(); caption(`기록은 ${STORY.sentAt}에 쓴 것입니다. 지금은 4분 뒤입니다.`, placePin(1)); },
   () => caption(closingLines(run.handover.kind).join(' '), placePin(2), true),
 ];
 function startReread() {
@@ -350,23 +352,26 @@ function toggleView(){
   toast(next==='first'?'1인칭 시점 · 드래그로 둘러봅니다':'3인칭 시점 · 드래그로 카메라를 돌립니다');
 }
 function goHome(){
-  phase='landing'; endReread(); if(dialog.open)dialog.close();
+  phase='landing'; chapter=0; endReread(); if(dialog.open)dialog.close();
   world.setActive(false);world.setChapter(0);setView('third');world.setTarget(null);
   $('landing').hidden=false;$('hud').hidden=true;$('results').hidden=true;$('legacy-note').hidden=true;document.body.classList.remove('playing');mapDraw($('landing-map'),{labels:false});
 }
 
 $('start').onclick=begin;$('guide').onclick=showGuide;$('pause').onclick=pause;$('map-button').onclick=showMap;$('interact-button').onclick=interact;$('view-toggle').onclick=toggleView;
-$('home').onclick=e=>{e.preventDefault();if(phase==='play'){openDialog({title:'훈련을 처음부터 시작할까요?',body:'<p>진행 중인 이동 기록은 초기화됩니다.</p>',buttons:[{label:'훈련 계속하기'},{label:'처음 화면으로',secondary:true,action:goHome}]});}else goHome();};
+$('home').onclick=e=>{e.preventDefault();if(phase==='play'||phase==='reread'){openDialog({title:'훈련을 처음부터 시작할까요?',body:'<p>진행 중인 이동 기록은 초기화됩니다.</p>',buttons:[{label:'훈련 계속하기'},{label:'처음 화면으로',secondary:true,action:goHome}]});}else goHome();};
 $('sound').onclick=()=>{soundEnabled=!soundEnabled;$('sound').textContent=soundEnabled?'소리 켜짐':'음소거';$('sound').setAttribute('aria-label',soundEnabled?'소리 끄기':'소리 켜기');if(soundEnabled)chime();};
 window.addEventListener('keydown',e=>{
   // Keep the browser's own Esc close from undoing pause or closing story dialogs.
   if(e.code==='Escape'&&(!dialog.open||locked()))e.preventDefault();
-  if(e.repeat||dialog.open)return;
-  if(phase==='reread'){
-    if(['KeyE','Enter','Space'].includes(e.code)){e.preventDefault();rereadNext();}
-    if(e.code==='Escape')rereadSkip();
+  if(phase==='reread'&&!dialog.open){
+    // A focused button or link handles its own Enter/Space; held keys must not race through the scene.
+    const own=e.target.closest?.('a,button');
+    if(e.code==='KeyE'||(['Enter','Space'].includes(e.code)&&!own)){e.preventDefault();if(!e.repeat)rereadNext();}
+    else if(e.repeat&&['Enter','Space'].includes(e.code))e.preventDefault();
+    if(e.code==='Escape'&&!e.repeat)rereadSkip();
     return;
   }
+  if(e.repeat||dialog.open)return;
   if(e.code==='KeyE'){e.preventDefault();interact();}if(e.code==='KeyM'){e.preventDefault();showMap();}if(e.code==='KeyV'){e.preventDefault();toggleView();}if(e.code==='Escape')pause();
 });
 document.addEventListener('visibilitychange',()=>{if(document.hidden && phase==='play'&&!dialog.open)pause();});
