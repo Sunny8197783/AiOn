@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111b1d">
-  <meta name="description" content="내가 남긴 정보가 다음 사람의 지도가 되는 3인칭 대피 학습 게임. 이어지는 길, 첫 번째 이야기.">
+  <meta name="description" content="내가 남긴 정보가 다음 사람의 지도가 되는 1인칭·3인칭 대피 학습 게임. 이어지는 길, 첫 번째 이야기.">
   <title>이어지는 길 · Civilian Relay</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23182426'/%3E%3Cpath d='M16 46V30l16-16 16 16v16M24 40l8-8 8 8' fill='none' stroke='%23f7b960' stroke-width='6'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
@@ -23,17 +23,18 @@
       <h1>당신이 남긴 길이,<br>누군가의 <em>내일</em>이 된다.</h1>
       <p class="hero-description">같은 동네, 서로 다른 두 사람.<br>불완전한 정보 속에서 길을 찾고,<br>다음 사람에게 당신의 판단을 건네세요.</p>
       <div class="hero-actions"><button id="start" class="primary">훈련 시작하기 <span>↗</span></button><span class="session-note">1인 플레이<br><b>약 6–8분 · PC 권장</b></span></div>
-      <div class="small-note">3인칭 대피 릴레이 <i>·</i> 일반 공습 상황 <i>·</i> 무료 체험</div>
+      <div class="small-note">1인칭·3인칭 대피 릴레이 <i>·</i> 공습경보 상황 <i>·</i> 무료 체험</div>
     </div>
     <aside class="district-card"><div class="district-head"><span>가상 훈련 지역</span><span class="live-dot">●</span></div><h2>연무동 <small>YEONMU DISTRICT</small></h2><canvas id="landing-map" width="270" height="170" aria-label="가상 동네 지도"></canvas><div class="district-foot"><span>주거 구역 A–03</span><span>14:08 &nbsp; 흐림</span></div></aside>
-    <div class="chapter-strip"><div><span class="chapter-number">01</span><span><b>낯선 경보</b><small>첫 번째 주민의 선택</small></span></div><span class="strip-line"></span><div><span class="chapter-number">02</span><span><b>이어받은 길</b><small>정보는 같아도, 조건은 다르게</small></span></div><span class="strip-line"></span><div><span class="chapter-number">03</span><span><b>선택의 흔적</b><small>두 경로가 만나는 복기</small></span></div></div>
+    <div class="chapter-strip"><div><span class="chapter-number">01</span><span><b>낯선 경보</b><small>첫 번째 주민의 선택</small></span></div><span class="strip-line"></span><div><span class="chapter-number">02</span><span><b>같은 문장, 다른 사람</b><small>내가 쓴 기록을 서연의 눈으로</small></span></div><span class="strip-line"></span><div><span class="chapter-number">03</span><span><b>선택의 흔적</b><small>두 경로가 만나는 복기</small></span></div></div>
     <div class="landing-footer"><span>PREPARE. DECIDE. PASS IT ON.</span><span>실제 대피 안내가 아닌 학습용 가상 시나리오입니다.</span></div>
   </main>
 
   <section id="hud" hidden aria-label="훈련 진행">
     <div class="mission-panel"><div class="eyebrow" id="chapter-label">CHAPTER 01</div><h2 id="character-name">준의 대피</h2><p id="character-description">혼자 이동하는 동네 주민</p><div class="mission-divider"></div><div class="mission-kicker">현재 목표</div><h3 id="objective-title"></h3><p id="objective-copy"></p><ol id="steps"></ol></div>
-    <div class="scenario-tag"><span class="status-dot"></span><span id="clock-label">14:08</span><span>일반 공습 · 가상 훈련</span></div>
-    <div class="legacy-note" id="legacy-note" hidden><span class="eyebrow">이어받은 기록</span><p id="legacy-text"></p><small>주민이 전달한 정보 · 최신 안내와 함께 판단하세요</small></div>
+    <div class="scenario-tag"><span class="status-dot"></span><span id="clock-label">14:08</span><span>공습경보 · 가상 훈련</span></div>
+    <div class="legacy-note" id="legacy-note" hidden><span class="eyebrow">이어받은 기록</span><small id="legacy-meta"></small><p id="legacy-text"></p><table class="cond-table" id="legacy-compare" hidden><thead><tr><th></th><th>준</th><th>서연</th></tr></thead><tbody><tr><th>시각</th><td>14:12에 씀</td><td>14:16에 읽음</td></tr><tr><th>출발</th><td>남쪽 큰길</td><td>서쪽 골목</td></tr><tr><th>이동</th><td>걸어서</td><td>보행 보조기</td></tr><tr><th>본 범위</th><td>동쪽 출입구 한 곳</td><td>지금의 안내판</td></tr></tbody></table></div>
+    <div id="caption" role="status" aria-live="polite" hidden></div>
     <div class="interaction" id="interaction" hidden><kbd>E</kbd><span id="interaction-text"></span><button id="interact-button" aria-label="현재 장소 확인">확인하기</button></div>
     <div class="controls"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 이동</span><span>드래그 / <kbd>J</kbd><kbd>L</kbd> 시점</span><span><kbd>E</kbd> 확인</span><span><kbd>M</kbd> 지도</span><button id="view-toggle" aria-pressed="false"><kbd>V</kbd> <span id="view-label">1인칭으로</span></button><button id="pause"><kbd>Esc</kbd> 일시정지</button></div>
     <button class="minimap-panel" id="map-button" aria-label="동네 지도 확대"><div><b>연무동</b><span>지도 펼치기 ↗</span></div><canvas id="minimap" width="230" height="190"></canvas><div class="map-key"><span>● 나</span><span>◇ 현재 목적지</span></div></button>

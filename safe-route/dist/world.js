@@ -3,9 +3,13 @@ import * as THREE from './vendor/three.module.js';
 export const LOCATIONS = [
   { id: 'notice', label: '현장 안내', x: 0, z: 18 },
   { id: 'gate', label: '동쪽 출입구', x: 12, z: 2 },
-  { id: 'stairs', label: '계단 출입구', x: -13, z: -20 },
-  { id: 'ramp', label: '경사로 출입구', x: 14, z: -20 },
+  { id: 'stairs', label: '출입구 A · 계단', x: -13, z: -20 },
+  { id: 'ramp', label: '출입구 B · 지하주차장 진출입로', x: 14, z: -20 },
+  { id: 'access', label: '출입구 C · 경사로', x: -27, z: -21, chapters: [1] },
 ];
+
+// 준 starts on the south main road; 서연 starts in the west alley facing east.
+export const STARTS = [{ x: 0, z: 32, yaw: 0 }, { x: -20, z: 3, yaw: -Math.PI / 2 }];
 
 export const MAP_BUILDINGS = [
   { x: -24, z: 25, w: 18, d: 19 },
@@ -196,11 +200,11 @@ export function createWorld(canvas, { onUpdate } = {}) {
   for (const x of [-13, 14]) {
     box(4.6, 3.1, 0.15, '#23474d', x, 1.57, shelterFront);
     box(0.08, 3, 0.21, '#afbfb3', x, 1.57, shelterFront + 0.03);
-    sign(x < 0 ? ['출입구 A', '계단'] : ['출입구 B', '경사로'], x, 4.03, -24.1, 4.1, 1.35);
+    sign(x < 0 ? ['출입구 A', '계단'] : ['출입구 B', '지하주차장 진출입로'], x, 4.03, -24.1, 4.1, 1.35);
   }
   for (let i = 0; i < 4; i++) box(4.7, 0.13 * (i + 1), 0.8, '#c6c8b8', -13, 0.065 * (i + 1), -22.7 - i * 0.8);
   const ramp = box(5.3, 0.14, 5.9, '#b9c2b0', 14, 0.3, -23.1);
-  ramp.rotation.x = -0.082;
+  ramp.rotation.x = -0.16;
   for (const x of [11.2, 16.8]) {
     for (const z of [-21, -23, -25]) cylinder(0.04, 0.85, '#b8d0c0', x, 0.65, z);
     box(0.06, 0.06, 4.2, '#b8d0c0', x, 1.03, -23);
@@ -210,6 +214,19 @@ export function createWorld(canvas, { onUpdate } = {}) {
     box(3.6, 2, 0.1, '#78979a', x, 1.8, shelterFront + 0.05);
     box(0.08, 2, 0.16, '#c0c6af', x, 1.8, shelterFront + 0.1);
   }
+
+  // Entrance C: a gentle ramp down beside the shelter. Shuttered in chapter 1, opened at 14:15 in chapter 2.
+  const accessRamp = box(4, 0.14, 7, '#b9c2b0', -27, -0.25, -26.5);
+  accessRamp.rotation.x = 0.07;
+  box(0.3, 0.02, 7, '#d9b84a', -27, -0.15, -26.5).rotation.x = 0.07;
+  for (const x of [-29.1, -24.9]) box(0.06, 0.06, 7, '#b8d0c0', x, 0.9, -26.5);
+  box(4.2, 2.6, 0.2, '#152022', -27, 0.9, -30.1);
+  solid(-27, -26.6, 4.4, 7.2);
+  const accessShutter = box(4.2, 2.4, 0.12, '#8b908a', -27, 1.2, -22.9);
+  const accessSigns = [
+    sign(['출입구 C', '경사로 · 준비 중'], -27, 3.2, -22.8, 4.1, 1.35),
+    sign(['출입구 C · 경사로', '14:15 개방 · 안내자 있음'], -27, 3.2, -22.8, 4.1, 1.35),
+  ];
 
   function tree(x, z, size = 1) {
     const group = new THREE.Group();
@@ -319,7 +336,10 @@ export function createWorld(canvas, { onUpdate } = {}) {
 
   box(3.1, 2.4, 0.18, '#617879', 0, 2.35, 16.6);
   for (const x of [-1.3, 1.3]) box(0.1, 2.5, 0.11, '#4b6669', x, 1.3, 16.6);
-  sign(['현장 안내', '확인한 정보부터', '안내 기록  ·  14:10'], 0, 2.38, 16.71, 2.86, 2.12);
+  const noticeSheets = [
+    sign(['현장 안내', '확인한 정보부터', '안내  ·  14:08'], 0, 2.38, 16.71, 2.86, 2.12),
+    sign(['현장 안내 · 14:15 갱신', 'A 계단 · B 진출입로', 'C 경사로 개방'], 0, 2.38, 16.71, 2.86, 2.12),
+  ];
   box(3.4, 0.12, 0.6, '#425e60', 0, 3.62, 16.6);
   solid(0, 16.6, 3.1, 0.3);
 
@@ -417,13 +437,15 @@ export function createWorld(canvas, { onUpdate } = {}) {
     return colliders.some(c => x + radius > c.x - c.w / 2 && x - radius < c.x + c.w / 2 && z + radius > c.z - c.d / 2 && z - radius < c.z + c.d / 2);
   }
 
-  for (const location of LOCATIONS) {
-    if (isBlocked(location.x, location.z)) throw new Error(`이동 지점이 장애물과 겹칩니다: ${location.id}`);
+  for (const location of [...LOCATIONS, ...STARTS]) {
+    if (isBlocked(location.x, location.z)) throw new Error(`이동 지점이 장애물과 겹칩니다: ${location.id ?? 'start'}`);
   }
+
+  const inChapter = location => !location.chapters || location.chapters.includes(chapter);
 
   function getSnapshot() {
     let nearby = null;
-    for (const location of LOCATIONS) {
+    for (const location of LOCATIONS.filter(inChapter)) {
       const distance = Math.hypot(player.x - location.x, player.z - location.z);
       if (distance <= 4 && (!nearby || distance < nearby.distance)) nearby = { id: location.id, label: location.label, distance };
     }
@@ -451,11 +473,12 @@ export function createWorld(canvas, { onUpdate } = {}) {
 
   function setChapter(value) {
     chapter = value === 1 ? 1 : 0;
+    const start = STARTS[chapter];
     keys.clear();
-    player.set(0, 0, 32);
+    player.set(start.x, 0, start.z);
     avatar.position.copy(player);
-    avatar.rotation.y = 0;
-    yaw = 0;
+    avatar.rotation.y = start.yaw;
+    yaw = start.yaw;
     pitch = 0.37;
     moving = false;
     stride = 0;
@@ -463,8 +486,12 @@ export function createWorld(canvas, { onUpdate } = {}) {
     hairMaterial.color.set(chapter ? '#a5afa7' : '#343d3a');
     walker.visible = chapter === 1;
     lookPitch = chapter ? -0.35 : -0.08;
-    cameraLook.set(0, 1.25, 32);
-    camera.position.set(0, 5.1, 41.5);
+    markers.forEach(marker => { marker.group.visible = inChapter(LOCATIONS.find(l => l.id === marker.id)); });
+    noticeSheets.forEach((sheet, i) => { sheet.visible = i === chapter; });
+    accessSigns.forEach((s, i) => { s.visible = i === chapter; });
+    accessShutter.visible = chapter === 0;
+    cameraLook.set(start.x, 1.25, start.z);
+    camera.position.set(start.x + Math.sin(yaw) * 9.5, 5.1, start.z + Math.cos(yaw) * 9.5);
     onUpdate?.(getSnapshot());
   }
 
@@ -571,7 +598,8 @@ export function createWorld(canvas, { onUpdate } = {}) {
     arms[1].rotation.x = chapter ? 0.72 : -legs[1].rotation.x * 0.8;
     body.position.y = moving ? Math.abs(Math.sin(stride)) * 0.035 : Math.sin(elapsed * 1.8) * 0.009;
     avatar.position.copy(player);
-    if (view === 'first') {
+    if (cameraOverride) cameraOverride(camera, dt);
+    else if (view === 'first') {
       // The body follows the view so the walker stays in front of the eyes.
       avatar.rotation.y = yaw;
       const bob = moving && !reduceMotion ? Math.sin(stride * 2) * 0.03 : 0;
@@ -609,6 +637,11 @@ export function createWorld(canvas, { onUpdate } = {}) {
     }
   }
 
+  // A scripted camera (the reread scene) replaces the player camera while set.
+  let cameraOverride = null;
+  const setCameraOverride = fn => { cameraOverride = typeof fn === 'function' ? fn : null; };
+
+  setChapter(0);
   requestAnimationFrame(animate);
-  return { setActive, setChapter, setTarget, setVisited, setView, getSnapshot };
+  return { scene, setActive, setChapter, setTarget, setVisited, setView, setCameraOverride, getSnapshot };
 }

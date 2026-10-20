@@ -123,6 +123,9 @@ test('buildPins always gives body, time and one more reason, whatever was writte
   }
   const scoped = playedRun(); makeHandover(scoped, { chips: { what: 'all_closed' } });
   assert.equal(buildPins(scoped)[2].factor, 'scope');
+  // 준 who only read the notice after arriving never "saw" the gate.
+  const told = playedRun('stairs', 'notice_after'); makeHandover(told, { chips: { what: 'all_closed' } });
+  assert.doesNotMatch(buildPins(told)[2].now + readClaims(told).map(r => r.why).join(' '), /직접/);
   for (const kind of ['precise', 'partial', 'generalized', 'unparsed']) assert.equal(closingLines(kind).length, 2);
 });
 

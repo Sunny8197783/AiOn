@@ -112,6 +112,9 @@ export function makeHandover(run, { chips = {}, text, edited = false } = {}) {
   return handover;
 }
 
+// What 준 actually knew about the gate, so no pin claims he saw more than he did.
+const gateKnown = h => (h?.observedVia === 'notice_after' ? '도착 후 안내문으로 안 동쪽 출입구 한 곳' : `직접 본 동쪽 출입구 한 곳 (${STORY.gateSeenAt})`);
+
 // The three reasons the note cannot be applied as-is. Text comes from templates plus the player's own quotes.
 export function buildPins(run) {
   const h = run?.handover;
@@ -130,7 +133,7 @@ export function buildPins(run) {
     ? { factor: 'time', anchor: 'access', was: `“${claims.quotes.route}”`, now: `${STORY.sentAt}의 C · 지금 상태는 안내판에서` }
     : { factor: 'time', anchor: 'notice', was: `기록: ${claims.time ?? '시각 없음'} · 보냄 ${STORY.sentAt}`, now: `지금 ${STORY.receivedAt} · 안내판이 ${STORY.accessOpenAt}에 바뀜 — 기록 뒤의 일` };
   let third;
-  if (claims.what === 'all_closed') third = { factor: 'scope', anchor: 'gate', was: `“${claims.quotes.what}”`, now: `준이 직접 본 것: 동쪽 출입구 한 곳 (${STORY.gateSeenAt})` };
+  if (claims.what === 'all_closed') third = { factor: 'scope', anchor: 'gate', was: `“${claims.quotes.what}”`, now: `준이 확인한 것: ${gateKnown(h)}` };
   else if (claims.advice === 'follow_me') third = { factor: 'advice', anchor: 'start1', was: `“${claims.quotes.advice}”`, now: '준의 다리, 준의 출발점 기준의 길' };
   else if (claims.advice === 'direction') third = { factor: 'direction', anchor: 'start1', was: `“${claims.quotes.advice}”`, now: '준의 출발점(남쪽 큰길) 기준 방향 · 서연은 서쪽 골목에서 출발', line: 'start0' };
   else third = { factor: 'place', anchor: 'start1', was: '준: 남쪽 큰길에서 출발', now: '서연: 서쪽 골목에서 출발', line: 'start0' };
@@ -145,19 +148,20 @@ export function closingLines(kind) {
 
 // How each part of the note read from 서연's side. status: helped | recheck | mismatch | missing.
 export function readClaims(run) {
-  const c = run?.handover?.claims;
+  const h = run?.handover;
+  const c = h?.claims;
   if (!c) return [];
   const rows = [];
   const add = (label, quote, status, why, sourceId) => rows.push({ label, quote: quote ?? null, status, why, sourceId });
   if (c.what === 'gate_closed') add('본 것', c.quotes.what, c.time ? 'helped' : 'recheck', c.time ? '본 범위와 시각이 함께 있어 지금 안내와 비교할 수 있었습니다.' : '언제 본 것인지 없어 지금도 그런지 판단하기 어려웠습니다.', c.time ? 'press_code' : 'sms_area');
-  if (c.what === 'all_closed') add('본 것', c.quotes.what, 'mismatch', `준이 본 것은 동쪽 출입구 한 곳(${STORY.gateSeenAt})이었습니다.`, 'press_code');
+  if (c.what === 'all_closed') add('본 것', c.quotes.what, 'mismatch', `준이 확인한 것은 ${gateKnown(h)}뿐이었습니다.`, 'press_code');
   if (c.route === 'stairs' || c.route === 'ramp') add('들어간 길', c.quotes.route, 'mismatch', '서연의 카드 기준과 다른 입구였습니다.', 'koddi_card');
   if (c.unknowns) add('모르는 것', c.quotes.unknowns, 'helped', '모르는 부분을 밝혀 서연이 직접 확인할 곳을 알 수 있었습니다.', 'press_code');
   if (c.advice === 'follow_me' || c.advice === 'direction') add('조언', c.quotes.advice, 'mismatch', '쓴 사람의 다리와 출발점 기준의 말이었습니다.', 'sms_area');
   if (c.advice === 'check_notice') add('조언', c.quotes.advice, 'helped', '지금의 현장 안내를 다시 보게 했습니다.', 'korea_alert');
   if (!c.time) add('시각', null, 'missing', '언제의 정보인지가 없었습니다.', 'sms_area');
   if (!c.unknowns) add('모르는 것', null, 'missing', '확인하지 못한 부분이 적혀 있지 않았습니다.', 'press_code');
-  add('C 경사로', null, 'missing', `${STORY.accessOpenAt}에 열렸습니다 — 기록을 보낸 뒤의 일입니다.`, 'korea_alert');
+  add('C 경사로', null, 'missing', `${STORY.accessOpenAt}에 열렸습니다 — 기록을 보낸 뒤의 일이라 지금의 안내에서만 알 수 있었습니다.`, 'korea_alert');
   return rows;
 }
 
