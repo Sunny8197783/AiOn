@@ -1,6 +1,7 @@
 // Environment presets: sun/moon, sky, fog, exposure, bloom, clouds, grade and light groups per time of day.
 // Angles are degrees: azimuth from north (-z) clockwise toward east (+x), elevation above the horizon.
 // lit: light group -> scale (0 = off). Groups not listed are left as they are.
+// bloom: [strength, radius, threshold] (threshold in linear HDR before tone mapping; lower at night so lamps glow).
 
 export const MOON = [140, 34];
 
@@ -11,7 +12,7 @@ export const PRESETS = {
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [195, 50], key: [195, 50], keyColor: '#fff2df', keyI: 3.3,
     hemi: ['#cddcf5', '#7a6c58', 0.6], envI: 0.85,
-    fog: ['#c4d2df', 0.0022], exposure: 0.95, bloom: [0.22, 0.35],
+    fog: ['#c4d2df', 0.0022], exposure: 0.95, bloom: [0.22, 0.35, 0.95],
     sky: { turbidity: 2.2, rayleigh: 1.0, mie: 0.004, mieG: 0.8, gain: 1.0 },
     night: NIGHT_OFF,
     clouds: { cover: 0.32, opacity: 0.95, lit: '#ffffff', shade: '#a3adbd', gain: 0.95 },
@@ -23,7 +24,7 @@ export const PRESETS = {
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [248, 8], key: [248, 8], keyColor: '#ffb36a', keyI: 3.0,
     hemi: ['#b9c6dd', '#8a5a3a', 0.45], envI: 0.7,
-    fog: ['#e3bf9f', 0.0028], exposure: 1.0, bloom: [0.35, 0.5],
+    fog: ['#e3bf9f', 0.0028], exposure: 1.0, bloom: [0.35, 0.5, 0.9],
     sky: { turbidity: 4.5, rayleigh: 2.0, mie: 0.006, mieG: 0.86, gain: 1.0 },
     night: NIGHT_OFF,
     clouds: { cover: 0.38, opacity: 0.95, lit: '#ffd2a1', shade: '#8a7f8f', gain: 1.0 },
@@ -35,7 +36,7 @@ export const PRESETS = {
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [258, -3], key: [255, 6], keyColor: '#ff8c5a', keyI: 0.7,
     hemi: ['#6a6fa8', '#3a2c2e', 0.55], envI: 0.6,
-    fog: ['#7d6a86', 0.0026], exposure: 1.15, bloom: [0.6, 0.55],
+    fog: ['#7d6a86', 0.0026], exposure: 1.15, bloom: [0.6, 0.55, 0.8],
     sky: { turbidity: 6, rayleigh: 3.2, mie: 0.009, mieG: 0.9, gain: 1.1 },
     night: { amount: 0.35, zenith: '#12183a', horizon: '#3a2a4a', glow: 0.2, glowColor: '#ff9a55', stars: 0.05, moon: 0.6 },
     clouds: { cover: 0.45, opacity: 0.95, lit: '#ff9a62', shade: '#4a3a5c', gain: 0.6 },
@@ -47,7 +48,7 @@ export const PRESETS = {
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.25,
     hemi: ['#1c2640', '#1a1612', 0.35], envI: 0.35,
-    fog: ['#232634', 0.0028], exposure: 1.25, bloom: [0.9, 0.6],
+    fog: ['#232634', 0.0028], exposure: 1.25, bloom: [0.9, 0.6, 0.7],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#04070f', horizon: '#1a1c28', glow: 0.55, glowColor: '#ff9a55', stars: 0.15, moon: 1 },
     clouds: { cover: 0.35, opacity: 0.9, lit: '#6b5a52', shade: '#1a1c26', gain: 0.12 },
@@ -59,7 +60,7 @@ export const PRESETS = {
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [270, -25], key: MOON, keyColor: '#a9c2ff', keyI: 0.45,
     hemi: ['#141c30', '#07080a', 0.22], envI: 0.25,
-    fog: ['#0b0f18', 0.0032], exposure: 1.35, bloom: [1.1, 0.65],
+    fog: ['#0b0f18', 0.0032], exposure: 1.35, bloom: [1.1, 0.65, 0.7],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#02040a', horizon: '#0b1020', glow: 0, glowColor: '#ff9a55', stars: 1, moon: 1 },
     clouds: { cover: 0.28, opacity: 0.9, lit: '#3a4258', shade: '#07090f', gain: 0.05 },
@@ -71,7 +72,7 @@ export const PRESETS = {
     outdoor: false, env: 'room', shadowBox: 24,
     sun: [210, 35], key: [210, 35], keyColor: '#fff0dc', keyI: 1.6,
     hemi: ['#fff1e0', '#6b5848', 0.35], envI: 0.4,
-    fog: ['#d8d0c4', 0.006], exposure: 1.0, bloom: [0.35, 0.45],
+    fog: ['#d8d0c4', 0.006], exposure: 1.0, bloom: [0.35, 0.45, 0.9],
     sky: { turbidity: 3, rayleigh: 1.2, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: NIGHT_OFF,
     clouds: { cover: 0.32, opacity: 0.95, lit: '#ffffff', shade: '#a3adbd', gain: 0.95 },
@@ -83,7 +84,7 @@ export const PRESETS = {
     outdoor: false, env: 'room', shadowBox: 24,
     sun: [270, -25], key: MOON, keyColor: '#9fb6ea', keyI: 0.5,
     hemi: ['#1a2238', '#0a0a0c', 0.12], envI: 0.06,
-    fog: ['#0a0d14', 0.01], exposure: 1.4, bloom: [0.9, 0.6],
+    fog: ['#0a0d14', 0.01], exposure: 1.4, bloom: [0.9, 0.6, 0.75],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#02040a', horizon: '#0b1020', glow: 0.1, glowColor: '#ff9a55', stars: 0.6, moon: 1 },
     clouds: { cover: 0.28, opacity: 0.9, lit: '#3a4258', shade: '#07090f', gain: 0.05 },
@@ -95,7 +96,7 @@ export const PRESETS = {
     outdoor: false, env: 'room', shadowBox: 30, noSky: true,
     sun: [270, -25], key: [200, 60], keyColor: '#ffffff', keyI: 0,
     hemi: ['#cfe3ea', '#3a3f40', 0.3], envI: 0.3,
-    fog: ['#2a3236', 0.02], exposure: 1.1, bloom: [0.55, 0.5],
+    fog: ['#2a3236', 0.02], exposure: 1.1, bloom: [0.55, 0.5, 0.85],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: NIGHT_OFF,
     clouds: { cover: 0, opacity: 0, lit: '#000000', shade: '#000000', gain: 0 },
@@ -117,7 +118,7 @@ export function envState(THREE, name, rain = false) {
     keyAz: p.key[0], keyEl: p.key[1], keyColor: C(p.keyColor), keyI: p.keyI,
     sunAz: p.sun[0], sunEl: p.sun[1],
     hemiSky: C(p.hemi[0]), hemiGround: C(p.hemi[1]), hemiI: p.hemi[2], envI: p.envI,
-    fogColor: C(p.fog[0]), fogDensity: p.fog[1], exposure: p.exposure, bloom: p.bloom[0], bloomRadius: p.bloom[1],
+    fogColor: C(p.fog[0]), fogDensity: p.fog[1], exposure: p.exposure, bloom: p.bloom[0], bloomRadius: p.bloom[1], bloomThreshold: p.bloom[2] ?? 0.85,
     turbidity: p.sky.turbidity, rayleigh: p.sky.rayleigh, mie: p.sky.mie, mieG: p.sky.mieG, skyGain: p.sky.gain,
     night: p.night.amount, zenith: C(p.night.zenith), horizon: C(p.night.horizon), glow: p.night.glow, glowColor: C(p.night.glowColor),
     stars: p.night.stars, moon: p.night.moon,
