@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "safe-route", "runtimeExecutable": "node", "runtimeArgs": ["safe-route/server.mjs"], "port": 4173 }
+  ]
+}

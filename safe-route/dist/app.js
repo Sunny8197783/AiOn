@@ -4,9 +4,8 @@ import { SOURCES, createRun, recordEvent, makeHandover, buildDebrief } from './l
 const $ = (id) => document.getElementById(id);
 const escape = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let world, run, phase = 'landing', chapter = 0, target = 'notice', snapshot, visited = new Set();
-let paths = [[], []], lastPosition, toastTimer, audio, soundEnabled = false, practiceDone = false;
+let paths = [[], []], lastPosition, toastTimer, audio, soundEnabled = false;
 const dialog = $('dialog');
-const storageKey = 'civilian-relay-last-run-v1';
 const names = ['준', '서연'];
 const shortLabels = { notice: '현장 안내', gate: '동쪽 입구', stairs: '계단', ramp: '경사로' };
 
@@ -40,7 +39,6 @@ function openDialog({eyebrow = 'CIVILIAN RELAY', title, body, buttons = [], afte
   after?.();
 }
 dialog.addEventListener('close', () => { if (phase === 'play') { world?.setActive(true); $('world').focus({preventScroll:true}); } });
-dialog.addEventListener('cancel', e => { if (phase === 'transition') e.preventDefault(); });
 
 function events(type, currentChapter = chapter) {
   return run?.events.some(e => e.type === type && e.details.chapter === currentChapter);
@@ -74,7 +72,7 @@ function updateObjectives() {
 }
 
 function begin() {
-  run = createRun(); paths = [[], []]; practiceDone = false; chapter = 0;
+  run = createRun(); paths = [[], []]; chapter = 0;
   $('landing').hidden = true; $('results').hidden = true; $('hud').hidden = false;
   document.body.classList.add('playing'); startChapter(0);
 }
@@ -111,8 +109,8 @@ function enterShelter(route) {
   recordEvent(run, 'route_attempt', {chapter, route});
   if (chapter === 1 && route === 'stairs') {
     if (!events('notice_read')) recordEvent(run, 'notice_read', {chapter:1,source:'계단 입구의 보호된 대기 지점에서 현장 안내자'});
-    setTarget('ramp');
-    openDialog({eyebrow:'경로 재계획',title:'서연이 이용하기 어려운 계단입니다.',body:'<p>준이 이 길을 지나갔더라도 서연에게 적합한 경로라는 뜻은 아닙니다. 계단을 무리하게 오르거나 보행 보조기를 버리지 않습니다.</p><div class="callout">입구의 보호된 대기 지점에서 현장 안내를 확인합니다. 안내자는 현재 이용 가능한 경사로 입구를 알려줍니다.</div><p>필요한 도움은 당사자의 의사를 확인하고 요청합니다.</p>',buttons:[{label:'경사로로 계획 바꾸기',action:()=>{setTarget('ramp');toast('지도 오른쪽의 경사로 출입구를 확인하세요.');}}]});
+    updateObjectives();
+    openDialog({eyebrow:'경로 재계획',title:'서연이 이용하기 어려운 계단입니다.',body:'<p>준이 이 길을 지나갔더라도 서연에게 적합한 경로라는 뜻은 아닙니다. 계단을 무리하게 오르거나 보행 보조기를 버리지 않습니다.</p><div class="callout">입구의 보호된 대기 지점에서 현장 안내를 확인합니다. 안내자는 현재 이용 가능한 경사로 입구를 알려줍니다.</div><p>필요한 도움은 당사자의 의사를 확인하고 요청합니다.</p>',buttons:[{label:'경사로로 계획 바꾸기',action:()=>toast('지도 오른쪽의 경사로 출입구를 확인하세요.')}]});
     return;
   }
   markPlace(route);
@@ -120,8 +118,10 @@ function enterShelter(route) {
     phase = 'transition';
     const sawGate = run.events.some(e => e.type === 'gate_observed');
     if (!sawGate) recordEvent(run, 'gate_observed', {chapter,source:'대피 후 현장 안내문',time:'14:10'});
+    // The button shows exactly the sentence 서연 will receive.
+    const note = kind => escape(makeHandover(structuredClone(run), kind).text);
     openDialog({eyebrow:'첫 번째 대피 완료 · 정보 인계',title:'다음 사람에게 무엇을 남길까요?',
-      body:`<p>준이 대피시설에 도착했습니다. ${sawGate ? '이동 중 확인한' : '대피 후 현장 안내문에서 확인한'} 사실은 <strong>“14:10, 동쪽 출입구 폐쇄”</strong>입니다. 안내자는 이 기록을 다음 주민에게 전달합니다.</p><p>전달할 기록을 선택하세요.</p><button class="choice" data-note="precise"><b>확인한 범위만 전달</b>14:10 동쪽 출입구의 폐쇄 안내를 확인했습니다. 저는 ${route === 'stairs' ? '계단' : '경사로'} 입구로 도착했습니다. 다른 입구와 현재 운영 상태는 현장 안내를 확인해 주세요.</button><button class="choice" data-note="generalized"><b>시설 전체로 확대해 전달</b>대피소가 폐쇄됐습니다. 다른 대피소를 찾아가세요.</button>`,
+      body:`<p>준이 대피시설에 도착했습니다. ${sawGate ? '이동 중 확인한' : '대피 후 현장 안내문에서 확인한'} 사실은 <strong>“14:10, 동쪽 출입구 폐쇄”</strong>입니다. 안내자는 이 기록을 다음 주민에게 전달합니다.</p><p>전달할 기록을 선택하세요.</p><button class="choice" data-note="precise"><b>확인한 범위만 전달</b>${note('precise')}</button><button class="choice" data-note="generalized"><b>시설 전체로 확대해 전달</b>${note('generalized')}</button>`,
       after:()=> $('dialog-content').querySelectorAll('[data-note]').forEach(button=>button.addEventListener('click',()=>{
         makeHandover(run,button.dataset.note); recordEvent(run,'chapter_complete',{chapter:0,route});
         dialog.close(); chime(); startChapter(1);
@@ -181,14 +181,11 @@ function showMap() {
 }
 
 function sourceLink(id) { const s=SOURCES.find(s=>s.id===id);return s?`<a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">근거: ${escape(s.title)} ↗</a>`:''; }
-function save() {
-  try{localStorage.setItem(storageKey,JSON.stringify({run,paths,practiceDone}));}catch{toast('브라우저 저장 공간을 사용할 수 없습니다. 기록 내려받기는 가능합니다.');}
-}
 function showResults() {
   phase='results';world.setActive(false);$('hud').hidden=true;$('results').hidden=false;
   const result=buildDebrief(run);
-  $('results').innerHTML=`<div class="results-head"><div><div class="eyebrow">AFTER ACTION · 선택의 흔적</div><h1>당신의 선택은<br>다음 사람에게 이어졌습니다.</h1><p>${escape(result.summary)}</p></div><span class="mode-badge">규칙 기반 복기 · AI 미연결</span></div><div class="result-grid"><div class="route-card"><h2>같은 동네, 서로 다른 경로</h2><canvas id="result-map" width="650" height="400" aria-label="준과 서연의 이동 경로 비교"></canvas><div class="legend"><span style="color:#f6bb6e">━ 준의 경로</span><span style="color:#85c7bb">━ 서연의 경로</span></div><p>주민의 이동 조건과 정보가 달라지면 적절한 경로도 달라집니다. 빠른 도착이나 우연한 성공으로 판단을 평가하지 않습니다.</p><div class="callout">전달한 기록<br>${escape(run.handover?.text)}</div></div><div class="review-card"><h2>기록을 바탕으로 돌아보기</h2>${result.improvements.map(s=>`<div class="callout">${escape(s)}</div>`).join('')}${result.cards.map(c=>`<article><h3>${escape(c.title)}</h3><p>${escape(c.body)}</p>${sourceLink(c.sourceId)}</article>`).join('')}<div class="tag-row">${result.strengths.slice(0,3).map(s=>`<span>✓ ${escape(s)}</span>`).join('')}</div></div></div><div class="result-actions"><button id="practice" class="primary">${practiceDone?'후속 훈련 다시 보기':'조건을 바꿔 한 번 더'} <span>↗</span></button><button id="replay" class="secondary">처음부터 다시 플레이</button><button id="export" class="secondary">내 훈련 기록 내려받기</button></div><p class="results-foot">행동 기록으로 선택한 후속 훈련입니다. 외부 AI는 연결되지 않았습니다.<br>학습용 가상 시나리오이며 실제 생존 가능성을 계산하지 않습니다. 기록은 이 브라우저에만 저장됩니다.</p>`;
-  mapDraw($('result-map'),{showPaths:true});$('practice').onclick=()=>showPractice(result.practice);$('replay').onclick=begin;$('export').onclick=exportRun;save();chime();
+  $('results').innerHTML=`<div class="results-head"><div><div class="eyebrow">AFTER ACTION · 선택의 흔적</div><h1>당신의 선택은<br>다음 사람에게 이어졌습니다.</h1><p>${escape(result.summary)}</p></div><span class="mode-badge">규칙 기반 복기 · AI 미연결</span></div><div class="result-grid"><div class="route-card"><h2>같은 동네, 서로 다른 경로</h2><canvas id="result-map" width="650" height="400" aria-label="준과 서연의 이동 경로 비교"></canvas><div class="legend"><span style="color:#f6bb6e">━ 준의 경로</span><span style="color:#85c7bb">━ 서연의 경로</span></div><p>주민의 이동 조건과 정보가 달라지면 적절한 경로도 달라집니다. 빠른 도착이나 우연한 성공으로 판단을 평가하지 않습니다.</p><div class="callout">전달한 기록<br>${escape(run.handover?.text)}</div></div><div class="review-card"><h2>기록을 바탕으로 돌아보기</h2>${result.improvements.map(s=>`<div class="callout">${escape(s)}</div>`).join('')}${result.cards.map(c=>`<article><h3>${escape(c.title)}</h3><p>${escape(c.body)}</p>${sourceLink(c.sourceId)}</article>`).join('')}<div class="tag-row">${result.strengths.slice(0,3).map(s=>`<span>✓ ${escape(s)}</span>`).join('')}</div></div></div><div class="result-actions"><button id="practice" class="primary">조건을 바꿔 한 번 더 <span>↗</span></button><button id="replay" class="secondary">처음부터 다시 플레이</button><button id="export" class="secondary">내 훈련 기록 내려받기</button></div><p class="results-foot">행동 기록으로 선택한 후속 훈련입니다. 외부 AI는 연결되지 않았습니다.<br>학습용 가상 시나리오이며 실제 생존 가능성을 계산하지 않습니다.</p>`;
+  mapDraw($('result-map'),{showPaths:true});$('practice').onclick=()=>showPractice(result.practice);$('replay').onclick=begin;$('export').onclick=exportRun;chime();
 }
 function showPractice(practice) {
   openDialog({eyebrow:'TRANSFER TRAINING · 다른 상황에 적용',title:practice.title,body:`<p>${escape(practice.prompt)}</p><div id="practice-options">${practice.options.map(o=>`<button class="choice" data-answer="${escape(o.id)}">${escape(o.label)}</button>`).join('')}</div><div id="practice-response" aria-live="polite"></div><p>${sourceLink(practice.sourceId)}</p>`,buttons:[{label:'복기로 돌아가기',secondary:true}],after:()=>{
@@ -196,7 +193,7 @@ function showPractice(practice) {
       const option=practice.options.find(o=>o.id===button.dataset.answer);
       recordEvent(run,'practice_answer',{chapter,practice:practice.id,answer:option.id,correct:option.correct});
       $('practice-response').innerHTML=`<div class="practice-feedback"><strong>${option.correct?'✓ 상황에 맞는 판단입니다.':'다시 생각해 볼 수 있습니다.'}</strong><br>${escape(option.feedback)}</div>`;
-      if(option.correct){practiceDone=true;$('practice-options').querySelectorAll('button').forEach(b=>b.disabled=true);$('practice').textContent='후속 훈련 완료 · 다시 보기';chime();}save();
+      if(option.correct){$('practice-options').querySelectorAll('button').forEach(b=>b.disabled=true);$('practice').textContent='후속 훈련 완료 · 다시 보기';chime();}
     });
   }});
 }
@@ -205,7 +202,7 @@ function exportRun(){
   const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='civilian-relay-training.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function showGuide(){
-  openDialog({eyebrow:'FIELD GUIDE · 훈련 안내',title:'알고 있는 것을 행동으로.',body:`<p>두 주민을 순서대로 플레이하며 경보 확인, 정보의 범위, 경로 재계획을 연습합니다. 첫 사람의 기록이 다음 사람에게 이어집니다.</p><div class="callout">WASD / 방향키: 이동 · Shift: 준 달리기<br>마우스 드래그 / J·L: 카메라 회전<br>E: 안내 확인 · M: 지도 · Esc: 일시정지</div><p><strong>첫 시나리오:</strong> 일반 공습, 침수 없음, 지정 시설의 이용 가능한 출입구가 있는 가상 동네입니다. 실제로는 현지의 최신 경보와 관계 기관 안내를 따릅니다.</p><p>이번 버전의 복기는 <strong>규칙 기반</strong>입니다. AI 서비스는 연결되지 않았으며 외부 서버로 플레이 기록을 보내지 않습니다.</p><ul class="source-list">${SOURCES.map(s=>`<li><a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.title)} ↗</a></li>`).join('')}</ul><p>해외 자료는 일반적인 학습 원칙에 참고했습니다. 해외 신고 번호와 지역별 제도를 한국의 절차로 적용하지 않습니다.</p>`,buttons:[{label:'확인했습니다'},{label:'저장된 기록 삭제',secondary:true,action:()=>{try{localStorage.removeItem(storageKey);toast('브라우저에 저장한 훈련 기록을 삭제했습니다.');}catch{toast('저장 공간에 접근할 수 없습니다.');}}}]});
+  openDialog({eyebrow:'FIELD GUIDE · 훈련 안내',title:'알고 있는 것을 행동으로.',body:`<p>두 주민을 순서대로 플레이하며 경보 확인, 정보의 범위, 경로 재계획을 연습합니다. 첫 사람의 기록이 다음 사람에게 이어집니다.</p><div class="callout">WASD / 방향키: 이동 · Shift: 준 달리기<br>마우스 드래그 / J·L: 카메라 회전<br>E: 안내 확인 · M: 지도 · Esc: 일시정지</div><p><strong>첫 시나리오:</strong> 일반 공습, 침수 없음, 지정 시설의 이용 가능한 출입구가 있는 가상 동네입니다. 실제로는 현지의 최신 경보와 관계 기관 안내를 따릅니다.</p><p>이번 버전의 복기는 <strong>규칙 기반</strong>입니다. AI 서비스는 연결되지 않았으며 외부 서버로 플레이 기록을 보내지 않습니다.</p><ul class="source-list">${SOURCES.map(s=>`<li><a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.title)} ↗</a></li>`).join('')}</ul><p>해외 자료는 일반적인 학습 원칙에 참고했습니다. 해외 신고 번호와 지역별 제도를 한국의 절차로 적용하지 않습니다.</p>`,buttons:[{label:'확인했습니다'}]});
 }
 function pause(){
   if(phase!=='play'||dialog.open)return;
@@ -228,6 +225,8 @@ $('start').onclick=begin;$('guide').onclick=showGuide;$('pause').onclick=pause;$
 $('home').onclick=e=>{e.preventDefault();if(phase==='play'){openDialog({title:'훈련을 처음부터 시작할까요?',body:'<p>진행 중인 이동 기록은 초기화됩니다.</p>',buttons:[{label:'훈련 계속하기'},{label:'처음 화면으로',secondary:true,action:goHome}]});}else goHome();};
 $('sound').onclick=()=>{soundEnabled=!soundEnabled;$('sound').textContent=soundEnabled?'소리 켜짐':'음소거';$('sound').setAttribute('aria-label',soundEnabled?'소리 끄기':'소리 켜기');if(soundEnabled)chime();};
 window.addEventListener('keydown',e=>{
+  // Keep the browser's own Esc close from undoing pause or closing story dialogs.
+  if(e.code==='Escape'&&(!dialog.open||phase==='transition'))e.preventDefault();
   if(e.repeat)return;if(dialog.open)return;
   if(e.code==='KeyE'){e.preventDefault();interact();}if(e.code==='KeyM'){e.preventDefault();showMap();}if(e.code==='KeyV'){e.preventDefault();toggleView();}if(e.code==='Escape')pause();
 });

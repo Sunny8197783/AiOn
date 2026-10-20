@@ -34,8 +34,6 @@ export function createWorld(canvas, { onUpdate } = {}) {
   const cameraSolids = [];
   const materials = new Map();
   const geometries = new Map();
-  const textures = [];
-  let disposed = false;
   let active = false;
   let chapter = 0;
   let moving = false;
@@ -44,7 +42,6 @@ export function createWorld(canvas, { onUpdate } = {}) {
   let view = 'third';
   let lookPitch = -0.08;
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let frame = 0;
   let lastReport = -1;
   let stride = 0;
   let pointer = null;
@@ -108,7 +105,6 @@ export function createWorld(canvas, { onUpdate } = {}) {
     const texture = new THREE.CanvasTexture(surface);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
-    textures.push(texture);
     const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
     const geometry = new THREE.PlaneGeometry(width, height);
     const mesh = new THREE.Mesh(geometry, material);
@@ -447,7 +443,7 @@ export function createWorld(canvas, { onUpdate } = {}) {
     view = value === 'first' ? 'first' : 'third';
     if (view === 'first') {
       avatar.rotation.y = yaw;
-      lookPitch = -0.08;
+      lookPitch = chapter ? -0.35 : -0.08;
     }
     body.visible = shadow.visible = view === 'third';
     return view;
@@ -466,7 +462,7 @@ export function createWorld(canvas, { onUpdate } = {}) {
     clothes.color.set(chapter ? '#aa7659' : '#448582');
     hairMaterial.color.set(chapter ? '#a5afa7' : '#343d3a');
     walker.visible = chapter === 1;
-    lookPitch = -0.08;
+    lookPitch = chapter ? -0.35 : -0.08;
     cameraLook.set(0, 1.25, 32);
     camera.position.set(0, 5.1, 41.5);
     onUpdate?.(getSnapshot());
@@ -537,13 +533,11 @@ export function createWorld(canvas, { onUpdate } = {}) {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
   };
-  const observer = new ResizeObserver(resize);
-  observer.observe(canvas);
+  new ResizeObserver(resize).observe(canvas);
   resize();
 
   function animate() {
-    if (disposed) return;
-    frame = requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
     const dt = Math.min(clock.getDelta(), 0.05);
     const elapsed = clock.elapsedTime;
     let moveX = 0;
@@ -615,38 +609,6 @@ export function createWorld(canvas, { onUpdate } = {}) {
     }
   }
 
-  function dispose() {
-    disposed = true;
-    cancelAnimationFrame(frame);
-    observer.disconnect();
-    window.removeEventListener('keydown', onKeyDown);
-    window.removeEventListener('keyup', onKeyUp);
-    window.removeEventListener('blur', onBlur);
-    document.removeEventListener('visibilitychange', onVisibility);
-    canvas.removeEventListener('pointerdown', onPointerDown);
-    canvas.removeEventListener('pointermove', onPointerMove);
-    canvas.removeEventListener('pointerup', onPointerUp);
-    canvas.removeEventListener('pointercancel', onPointerUp);
-    canvas.removeEventListener('lostpointercapture', onPointerUp);
-    const disposedGeometries = new Set();
-    const disposedMaterials = new Set();
-    scene.traverse(object => {
-      if (object.geometry && !disposedGeometries.has(object.geometry)) {
-        object.geometry.dispose();
-        disposedGeometries.add(object.geometry);
-      }
-      const list = Array.isArray(object.material) ? object.material : [object.material];
-      list.filter(Boolean).forEach(material => {
-        if (!disposedMaterials.has(material)) {
-          material.dispose();
-          disposedMaterials.add(material);
-        }
-      });
-    });
-    textures.forEach(texture => texture.dispose());
-    renderer.dispose();
-  }
-
-  frame = requestAnimationFrame(animate);
-  return { setActive, setChapter, setTarget, setVisited, setView, getSnapshot, dispose };
+  requestAnimationFrame(animate);
+  return { setActive, setChapter, setTarget, setVisited, setView, getSnapshot };
 }

@@ -6,9 +6,8 @@
 .claude-flow/logs/
 .claude-flow/sessions/
 
-# Dependencies and generated files (npm install re-creates dist/vendor via prepare)
+# Dependencies
 node_modules/
-safe-route/dist/vendor/
 
 # Local AI-tooling runtime state
 .swarm/
@@ -17,3 +16,4 @@ safe-route/dist/vendor/
 .claude-flow/mods/session.json
 .claude/settings.local.json
 *.bak-*
+.serena/
