@@ -41,6 +41,7 @@ const LABELS = {
   soy: ['pet', '#c4161c', '#fff', '#1d1d1f', '진간장', '900mL', '#2a120a'], kimchi: ['bag', '#f6efe2', '#c4161c', '#2f8a3c', '포기김치', '500g'],
   gim: ['bag', '#1f3d24', '#fff', '#2f8a3c', '도시락김', '8봉'], soymilk: ['carton', '#c9a66b', '#fff', '#f6efe2', '두유', '190mL'],
   gum: ['blister', '#2fae66', '#fff', '#9ee8b8', '자일리톨 껌', ''],
+  pack6: ['pack', '#1f6fb2', '#fff', '#1f6fb2', '맑은샘 2L × 6', '먹는샘물'], pack6b: ['pack', '#2f9e7a', '#fff', '#2a7d5f', '한빛수 2L × 6', '먹는샘물'],
 };
 const CELL = Object.fromEntries(Object.keys(LABELS).map((k, i) => [k, i]));
 
@@ -61,6 +62,7 @@ export const PRODUCTS = {
   towel: ['box', 0.24, 0.25, 0.12, ['towel']], milk: ['box', 0.075, 0.2, 0.075, ['milk']], yogurt: ['cupS', 0.066, 0.06, 0.066, ['yogurt'], 2],
   tofu: ['box', 0.12, 0.05, 0.1, ['tofu'], 2], mix: ['box', 0.3, 0.1, 0.1, ['mix'], 2], soup: ['pouch', 0.14, 0.19, 0.02, ['soup']],
   cereal: ['box', 0.2, 0.28, 0.07, ['cereal']], oil: ['bottle5', 0.068, 0.21, 0.068, ['oil', 'soy']], kimchi: ['pouch', 0.16, 0.2, 0.06, ['kimchi']],
+  pack6: ['box', 0.34, 0.33, 0.23, ['pack6', 'pack6b']],
   gim: ['pouch', 0.22, 0.05, 0.15, ['gim'], 3], soymilk: ['box', 0.06, 0.11, 0.04, ['soymilk'], 2], gum: ['box', 0.06, 0.1, 0.02, ['gum']],
 };
 
@@ -105,6 +107,17 @@ function drawLabel(g, c, [style, bg, fg, ac, title, sub, liquid = '#cfe8f2']) {
     g.fillStyle = ac; for (let i = 0; i < 4; i++) g.fillRect(c * (0.23 + i * 0.145), c * 0.2, c * 0.1, c * 0.42);
     g.fillStyle = 'rgba(255,255,255,0.4)'; for (let i = 0; i < 4; i++) g.fillRect(c * (0.245 + i * 0.145), c * 0.2, c * 0.025, c * 0.42);
     txt(title, c / 2, c * 0.77, c * 0.1, fg, 800); txt(sub, c / 2, c * 0.9, c * 0.07, fg, 600);
+  } else if (style === 'pack') { // shrink-wrapped six-pack: bottles seen through film, brand band, carry handle
+    g.fillStyle = vgrad('#e4f1f8', '#a9cfe0'); g.fillRect(0, 0, c, c);
+    for (let i = 0; i < 3; i++) {
+      const bx = c * (0.08 + i * 0.3);
+      g.fillStyle = 'rgba(120,170,200,0.55)'; g.fillRect(bx, c * 0.16, c * 0.24, c * 0.84);
+      g.fillStyle = ac; g.fillRect(bx + c * 0.08, c * 0.04, c * 0.08, c * 0.08);
+      g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(bx + c * 0.04, c * 0.2, c * 0.03, c * 0.75);
+    }
+    g.fillStyle = bg; g.fillRect(0, c * 0.46, c, c * 0.26);
+    txt(title, c / 2, c * 0.55, c * 0.1, fg, 800, c * 0.9); txt(sub, c / 2, c * 0.66, c * 0.06, fg, 600);
+    g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(c * 0.3, 0, c * 0.4, c * 0.03);
   } else if (style === 'cup') {
     g.fillStyle = bg; g.fillRect(0, 0, c, c); hsheen(0.12);
     g.fillStyle = ac; g.fillRect(0, 0, c, c * 0.12);
@@ -190,13 +203,15 @@ export function createGoods(kit) {
   const S = shared(kit), buckets = new Map(), tags = new Map(), strips = [];
   const push = (key, item) => { if (!buckets.has(key)) buckets.set(key, []); buckets.get(key).push(item); };
   // run: { sec, x, z (front edge at run start), dir: [ax, az], face: [ox, oz], len, depth, y, clear, items, seed, fill, tags }
-  function stock({ sec = 'misc', x, z, dir, face, len, depth = 0.42, y, clear = 0.32, items, seed = 1, fill = 0.92, edge = true }) {
+  // rows/stack override the automatic depth rows (bottles: 1) and stack height.
+  function stock({ sec = 'misc', x, z, dir, face, len, depth = 0.42, y, clear = 0.32, items, seed = 1, fill = 0.92, edge = true, rows: rowsSet, stack: stackSet }) {
     const r = rng(seed * 131 + 7), [ax, az] = dir, [ox, oz] = face, ry = Math.atan2(ox, oz), block = len / items.length;
     items.forEach((id, bi) => {
       const P = PRODUCTS[id]; if (!P) return void console.error('[commerce] unknown product', id);
       const [shape, w, h, d, labels, stackMax = 1] = P;
       const fw = w + 0.012, n = Math.max(1, Math.floor(block / fw)), padA = (block - n * fw) / 2;
-      const rows = Math.max(1, Math.min(S.deep, Math.floor(depth / (d + 0.01)))), stack = Math.max(1, Math.min(stackMax, Math.floor(clear / (h + 0.004))));
+      const rows = Math.max(1, Math.min(rowsSet ?? (shape.startsWith('bottle') ? 1 : S.deep), Math.floor(depth / (d + 0.01))));
+      const stack = Math.max(1, Math.min(stackSet ?? stackMax, Math.floor(clear / (h + 0.004))));
       const cell = CELL[labels[(bi + seed) % labels.length]];
       let kept = 0;
       for (let j = 0; j < n; j++) {
@@ -244,6 +259,33 @@ export function createGoods(kit) {
     return { group, sections };
   }
   return { stock, build };
+}
+
+// Wire shopping carts (nested in a row) and plastic baskets (stacked): a few instanced parts each.
+// carts/baskets: [{ x, y, z, ry }]. Returns a Group.
+export function cartsAndBaskets(kit, carts = [], baskets = []) {
+  const P = kit.memo('commerce:carts', () => {
+    const grid = (color, line, cell) => kit.texture(kit.canvas(64, 64, (g) => { g.strokeStyle = color; g.lineWidth = line; for (let i = 0; i <= 64; i += cell) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 64); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(64, i); g.stroke(); } }));
+    const wire = new THREE.MeshStandardMaterial({ map: grid('#d8dde2', 3, 8), alphaTest: 0.5, metalness: 0.8, roughness: 0.35, side: THREE.DoubleSide });
+    const red = new THREE.MeshStandardMaterial({ map: grid('#c8202f', 5, 11), alphaTest: 0.5, roughness: 0.5, side: THREE.DoubleSide, color: 0xffffff });
+    const T = (geo, x, y, z, rx = 0, ry = 0, rz = 0) => geo.rotateX(rx).rotateY(ry).rotateZ(rz).translate(x, y, z);
+    const box = (w, h, d, x, y, z) => T(new THREE.BoxGeometry(w, h, d), x, y + h / 2, z);
+    const pl = (w, h, x, y, z, rx, ry) => T(new THREE.PlaneGeometry(w, h), x, y, z, rx, ry);
+    const cart = {
+      wire: mergeGeometries([pl(0.52, 0.86, 0, 0.5, 0, -Math.PI / 2), pl(0.86, 0.42, -0.27, 0.72, 0, 0, Math.PI / 2), pl(0.86, 0.42, 0.27, 0.72, 0, 0, Math.PI / 2),
+        pl(0.56, 0.42, 0, 0.72, -0.43), pl(0.5, 0.36, 0, 0.7, 0.43), pl(0.5, 0.3, 0, 0.22, 0.05, -Math.PI / 2)]),
+      metal: mergeGeometries([box(0.03, 0.03, 0.9, -0.22, 0.12, 0), box(0.03, 0.03, 0.9, 0.22, 0.12, 0), box(0.03, 0.85, 0.03, -0.27, 0.12, 0.45), box(0.03, 0.85, 0.03, 0.27, 0.12, 0.45),
+        box(0.025, 0.4, 0.025, -0.22, 0.12, -0.42), box(0.025, 0.4, 0.025, 0.22, 0.12, -0.42)]),
+      red: mergeGeometries([box(0.58, 0.05, 0.05, 0, 0.98, 0.5), box(0.5, 0.12, 0.02, 0, 0.82, -0.44)]),
+      black: mergeGeometries([[-0.22, -0.4], [0.22, -0.4], [-0.22, 0.4], [0.22, 0.4]].map(([x, z]) => T(new THREE.CylinderGeometry(0.06, 0.06, 0.04, 10), x, 0.06, z, 0, 0, Math.PI / 2))),
+    };
+    const basket = { red: mergeGeometries([pl(0.44, 0.3, 0, 0.005, 0, -Math.PI / 2), pl(0.44, 0.24, 0, 0.12, 0.15), pl(0.44, 0.24, 0, 0.12, -0.15), pl(0.3, 0.24, 0.22, 0.12, 0, 0, Math.PI / 2), pl(0.3, 0.24, -0.22, 0.12, 0, 0, Math.PI / 2)]) };
+    return { cart, basket, mats: { wire, red, metal: kit.mat('metal'), black: kit.mat('rubber') }, redSolid: kit.mat('paint:#c8202f') };
+  });
+  const g = new THREE.Group(); g.name = 'carts';
+  if (carts.length) for (const k of ['wire', 'metal', 'red', 'black']) g.add(kit.instanced(P.cart[k], k === 'red' ? P.redSolid : P.mats[k], carts));
+  if (baskets.length) g.add(kit.instanced(P.basket.red, P.mats.red, baskets));
+  return g;
 }
 
 // Gondola shelving. axis 'z' runs north-south centred on x; 'x' runs east-west centred on z.
