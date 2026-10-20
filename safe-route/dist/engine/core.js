@@ -66,7 +66,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     try { model = people.createPerson({ preset: 'jeongmin', seed: 1 }); if (!model?.group) throw new Error('createPerson returned no group'); }
     catch (err) { console.error('[engine] player model failed; using a capsule', err); model = capsulePerson({ preset: 'jeongmin' }); }
     controls.setModel(model);
-  });
+  }).catch((err) => console.error('[engine] people setup failed', err)); // never blocks level loading
   let fx = stubFx();
   const fxReady = import('./fx.js').then((m) => { fx = m.createFx(THREE, kit, { reduceMotion: RM }); })
     .catch((err) => console.error('[engine] engine/fx.js unavailable; fire, smoke and rain are disabled', err));
