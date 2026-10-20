@@ -236,7 +236,7 @@ export function buildShell(kit, T) {
     { x0: ax0, x1: ax1, z0: az[3], z1: az[2], ramp: { axis: 'z', y0: 1.5, y1: 0.75 } },
     { x0: ax0, x1: ax1, z0: az[4], z1: az[3], y: 1.5 });
   fixtures.push({ x: -13, y: 2.92, z: -20.5, ry: Math.PI / 2 }, { x: -13, y: 3.72, z: -31, ry: Math.PI / 2 }, { x: -9.6, y: 4.22, z: -37, ry: 0 });
-  lights.push({ pos: [-13, 2.6, -24], color: 0xf0f4ff, base: 7, dist: 12, circuit: 'A' }, { pos: [-12, 3.4, -36], color: 0xf0f4ff, base: 5, dist: 9, circuit: 'B' });
+  lights.push({ pos: [-13, 2.9, -27], color: 0xf0f4ff, base: 8, dist: 14, circuit: 'A' });
 
   // ---- east core: lift hall behind the open fire doors, stairs up to the lobby, toilets ----
   const ex0 = ROOM.x1 + 0.25, ex1 = 27;
