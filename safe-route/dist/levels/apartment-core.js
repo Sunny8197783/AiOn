@@ -77,7 +77,7 @@ export function buildLobby(B, g) {
   // Fire alarm set (bell + always-on red location lamp) by the stair door, potted plants, CCTV dome.
   g.add(kit.box(0.32, 0.5, 0.1, M.red, { x: 6.2, y: 1.0, z: -0.15 }));
   g.add(kit.cyl(0.07, 0.07, 0.04, M.metal, { x: 6.2, y: 1.35, z: -0.2, rx: Math.PI / 2 }));
-  g.add(kit.cyl(0.035, 0.035, 0.03, kit.lit('emergency', B.glowMat('#ff2a1a', 3), 3), { x: 6.2, y: 1.52, z: -0.2 }));
+  g.add(kit.cyl(0.035, 0.035, 0.03, B.redLamp ||= kit.lit('emergency', B.glowMat('#ff2a1a', 3), 3), { x: 6.2, y: 1.52, z: -0.2 }));
   for (const x of [0, 8]) { g.add(kit.cyl(0.24, 0.19, 0.5, M.stone, { x, z: -5.9 })); const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), kit.mat('foliage')); f.position.set(x, 0.95, -5.9); f.scale.set(1, 1.25, 1); f.castShadow = true; g.add(f); }
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.darkMetal); dome.rotation.x = Math.PI; dome.position.set(8.5, 2.6, -6.0); g.add(dome);
   for (const [x, z] of [[1.5, -2], [4, -2], [6.5, -2], [1.5, -4.6], [4, -4.6], [6.5, -4.6]]) g.add(kit.cyl(0.11, 0.11, 0.015, B.lobbyLamp ||= B.onPower(B.glowMat('#fff3e2', 3.2)), { x, y: 2.585, z, cast: false }));

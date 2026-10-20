@@ -91,7 +91,7 @@ export function createBuilder(kit) {
     }
     if (lock) { // digital door lock on the outside face (dir is the outside)
       pivot.add(along(0.075, 0.2, 0.035, B.M.black, sgn * (lw - 0.09), 1.12, dir * (t / 2 + 0.018)));
-      const led = B.onPower(B.glowMat('#4aa8ff', 1.6));
+      const led = B.lockLed ||= B.onPower(B.glowMat('#4aa8ff', 1.6));
       pivot.add(along(0.04, 0.05, 0.004, led, sgn * (lw - 0.09), 1.2, dir * (t / 2 + 0.037)));
       pivot.add(along(0.02, 0.02, 0.02, B.M.metal, sgn * lw / 2, 1.55, dir * (t / 2 + 0.01))); // peephole
     }
