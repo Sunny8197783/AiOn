@@ -1,4 +1,5 @@
-import * as THREE from './vendor/three.module.js';
+import * as THREE from 'three';
+import { FONT } from './engine/kit.js';
 
 const AMBER = '#f6bb6e';
 const TEAL = '#85c7bb';
@@ -6,7 +7,7 @@ const ease = t => t * t * (3 - 2 * t);
 const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 // 3D pieces of the "다시 읽기" scene: scripted camera, 준's path, and labelled pins.
-// The step order and every sentence live in app.js; this file only draws.
+// The step order and every sentence live in story/seoyeon.js; this file only draws.
 export function createReread(world, { start, reduceMotion = false }) {
   const group = new THREE.Group();
   world.scene.add(group);
@@ -29,9 +30,9 @@ export function createReread(world, { start, reduceMotion = false }) {
     };
   }
 
-  // Rise above the neighbourhood so both people's starts and all three entrances are in frame.
-  // Nearly top-down so the low buildings never hide entrance C.
-  function crane(to = new THREE.Vector3(-7, 66, 24), target = new THREE.Vector3(-7, 0, 3)) {
+  // Rise above the neighbourhood so both people's starts and all shelter entrances are in frame.
+  // Nearly top-down so the buildings never hide entrance C.
+  function crane(to = new THREE.Vector3(-25, 190, 95), target = new THREE.Vector3(-25, 0, 12)) {
     const from = new THREE.Vector3();
     const lookFrom = new THREE.Vector3();
     const look = new THREE.Vector3();
@@ -50,7 +51,7 @@ export function createReread(world, { start, reduceMotion = false }) {
     const pts = points.filter((_, i) => i % every === 0);
     if (!pts.length) return;
     const material = own(new THREE.MeshBasicMaterial({ color: AMBER, transparent: true, opacity: 0.85, depthWrite: false }));
-    const discs = own(new THREE.InstancedMesh(own(new THREE.CircleGeometry(0.6, 14)), material, pts.length));
+    const discs = own(new THREE.InstancedMesh(own(new THREE.CircleGeometry(1.1, 14)), material, pts.length));
     discs.frustumCulled = false; // bounds would be cached while only the first dot is shown
     const matrix = new THREE.Matrix4();
     const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
@@ -84,12 +85,12 @@ export function createReread(world, { start, reduceMotion = false }) {
     ctx.arc(70, 150, 44, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#16282a';
-    ctx.font = '700 56px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.font = `700 56px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(n), 70, 152);
     ctx.textAlign = 'left';
-    ctx.font = '700 46px "Malgun Gothic","Noto Sans KR",sans-serif';
+    ctx.font = `700 46px ${FONT}`;
     ctx.fillStyle = AMBER;
     ctx.fillText(clip(was, 26), 140, 100, 860);
     ctx.fillStyle = TEAL;
@@ -102,10 +103,10 @@ export function createReread(world, { start, reduceMotion = false }) {
   }
 
   // A pole at the place the reason belongs, topped by "what the note said" over "what is true for 서연".
-  function pin(n, at, was, now, scale = 1.35) {
+  function pin(n, at, was, now, scale = 2.6) {
     const sprite = label(n, was, now);
     sprite.position.set(at.x, 6.5 * scale, at.z);
-    if (at.x < -20) sprite.center.x = 0.85; // C's label grows west so it clears A's
+    if (at.x < -95) sprite.center.x = 0.85; // C's label grows west so it clears A's
     sprite.scale.set(13 * scale, 3.8 * scale, 1);
     const pole = new THREE.Mesh(own(new THREE.CylinderGeometry(0.08, 0.08, 6 * scale, 6)), own(new THREE.MeshBasicMaterial({ color: AMBER })));
     pole.position.set(at.x, 3 * scale, at.z);

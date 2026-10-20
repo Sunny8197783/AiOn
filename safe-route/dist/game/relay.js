@@ -1,6 +1,7 @@
 // The message 정민 sends 서연 from the shelter, and why it cannot be applied to her as-is.
 // Pure logic (node-tested). Times come from G.relay, set by the D-day chapter from the real clock.
-import { recordEvent } from './state.js';
+import { recordEvent, hhmm } from './state.js';
+export { hhmm };
 
 export const ENTRANCES = {
   stairs: { label: '출입구 A · 계단', short: 'A 계단', seoyeonOk: false, card: '계단은 혼자 내려가지 않음' },
@@ -8,7 +9,6 @@ export const ENTRANCES = {
   access: { label: '출입구 C · 경사로', short: 'C 경사로', seoyeonOk: true },
 };
 export const MAX_NOTE = 120;
-export const hhmm = (minute) => `${String(Math.floor(minute / 60) % 24).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
 // C opens after the message is sent and before 서연 reads it, so the message can never mention it from sight.
 export function relayTimes(sentMinute, gateMinute = sentMinute - 3) {

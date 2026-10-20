@@ -1,0 +1,36 @@
+/* 서연 relay: compose dialog, note panel, re-read captions. Falls back to its own colours if the design tokens are missing. */
+.relay-modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(5, 9, 11, .62); backdrop-filter: blur(6px); z-index: 60; }
+.relay-card { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 24px 26px; border-radius: 16px; background: rgba(18, 26, 30, .96); color: #eef3f4; border: 1px solid rgba(255, 255, 255, .1); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); font-size: calc(16px * var(--text-scale, 1)); }
+.relay-card h2 { margin: 4px 0 8px; font-size: 1.5em; }
+.relay-card .eyebrow { margin: 0; color: var(--accent, #f2b33d); font-size: .8em; letter-spacing: .08em; font-weight: 700; }
+.relay-card .quote { padding: 10px 12px; border-left: 3px solid var(--teal, #3cc6b5); background: rgba(60, 198, 181, .08); border-radius: 6px; }
+.chips { border: 0; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.chips legend { width: 100%; margin-bottom: 6px; font-size: .85em; color: #9fb0b5; font-weight: 600; }
+.pill { position: relative; display: inline-flex; }
+.pill input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.pill span { padding: 8px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .04); line-height: 1.35; }
+.pill input:checked + span { border-color: var(--accent, #f2b33d); background: rgba(242, 179, 61, .16); color: #fff; }
+.pill input:checked + span::before { content: '✓ '; color: var(--accent, #f2b33d); }
+.pill input:focus-visible + span { outline: 3px solid var(--teal, #3cc6b5); outline-offset: 2px; }
+.note-label { display: block; margin-top: 16px; font-weight: 700; }
+.note-label small { font-weight: 400; color: #9fb0b5; }
+#note-text { width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .2); background: #0d1417; color: #fff; font: inherit; resize: vertical; }
+.compose-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+.relay-card button, .relay-caption button { font: inherit; padding: 10px 18px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; }
+.relay-card button.primary, .relay-caption button.primary { background: var(--accent, #f2b33d); color: #1a1406; font-weight: 800; }
+.relay-card button.primary:disabled { opacity: .45; cursor: not-allowed; }
+.relay-card button.secondary { background: transparent; color: #eef3f4; border-color: rgba(255, 255, 255, .25); }
+.relay-card button:focus-visible, .relay-caption button:focus-visible { outline: 3px solid var(--teal, #3cc6b5); outline-offset: 2px; }
+.relay-note { position: fixed; z-index: 55; top: 18%; left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); padding: 16px 18px; border-radius: 22px; background: #f5f7f8; color: #182023; box-shadow: 0 18px 50px rgba(0, 0, 0, .45); border: 6px solid #10171a; font-size: calc(17px * var(--text-scale, 1)); }
+.relay-note small { display: block; color: #5c6a70; margin-bottom: 8px; }
+.relay-note p { margin: 0; line-height: 1.6; }
+mark.claim { background: rgba(242, 179, 61, .35); color: inherit; border-bottom: 2px solid #c98a12; padding: 0 2px; border-radius: 3px; }
+.relay-caption { position: fixed; z-index: 56; left: 50%; bottom: 6vh; transform: translateX(-50%); width: min(760px, calc(100% - 32px)); padding: 16px 20px; border-radius: 14px; background: rgba(10, 16, 19, .9); color: #eef3f4; border: 1px solid rgba(255, 255, 255, .12); display: grid; gap: 10px; justify-items: start; font-size: calc(17px * var(--text-scale, 1)); }
+.relay-caption p { margin: 0; line-height: 1.55; }
+.relay-caption small { color: #8fa0a6; }
+.pin-lines { display: grid; gap: 4px; }
+.pin-lines .was { color: #f6bb6e; }
+.pin-lines .was::before { content: '메시지 · '; font-weight: 700; }
+.pin-lines .now { color: #85c7bb; }
+.pin-lines .now::before { content: '서연 · '; font-weight: 700; }
+@media (max-width: 600px) { .relay-card { padding: 18px 16px; } .relay-note { top: 10%; } }

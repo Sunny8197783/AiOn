@@ -142,7 +142,7 @@ export async function doShelterCheck(ctx) {
   const options = routeOptions(G, 'home', 'shelter', { closures: [], gates: { east: true, stairs: true, ramp: true, access: false }, mobility: 'walk' });
   const mode = ladderStage(G, 'route');
   const res = await ctx.modal(() => ctx.ui.routemap({ mode, from: 'home', to: 'shelter', options, closures: [], gates: { east: 'open', stairs: 'open', ramp: 'open', access: 'closed' }, known: { closures: [] }, playerAt: { x: ctx.engine.player.x, z: ctx.engine.player.z } }));
-  recordEncounter(G, 'route', mode);
+  recordEncounter(G, 'route', 'planned');
   G.know.shelterLocated = true; G.know.entrancesChecked = seen.size >= 3; G.know.routeChecked = true; G.know.altRoute = options.length > 1;
   G.know.plannedRoute = options[res?.choice ?? 0]?.nodes ?? null;
   recordEvent(G, 'shelter_checked', { seen: [...seen], board });
@@ -157,21 +157,17 @@ export async function doEquip(ctx) {
     { text: '소화기 위치 (3층 복도)', done: done.ext }, { text: '가스 밸브 (주방)', done: done.gas }, { text: '분전반 (현관)', done: done.breaker }];
   const show = () => ctx.objective('집 장비 점검', '다 마치면 달력(계획판)에서 끝냅니다.', steps());
   show();
-  const batteries = () => {
-    if (G.know.battInstalled) return true;
-    if (!has(G, 'batteries_aa')) return false;
-    consume(G, 'batteries_aa', 1, 'home'); G.know.battInstalled = true; return true;
-  };
   await ctx.roam({ on: {
     homeRadio: async () => {
       if (done.radio) return void ctx.toast('라디오는 점검을 마쳤다.');
       if (!has(G, 'radio')) { await ctx.ui.talk({ speaker: '거실 탁자', role: '라디오 자리', lines: ['라디오가 없다. 정전되면 방송을 들을 방법을 따로 찾아야 한다.'] }); done.radio = true; ctx.event('radio_missing', {}); return show(); }
-      if (!batteries()) { await ctx.ui.talk({ speaker: '휴대용 라디오', role: '건전지식', lines: ['건전지가 없어 켜지지 않는다. 라디오는 있지만 지금은 쓸 수 없다.'] }); ctx.event('radio_blocked', { why: 'batteries' }); return; }
+      const ok = check(G, 'radio');
+      if (!ok.ok) { await ctx.ui.talk({ speaker: '휴대용 라디오', role: '건전지식', lines: ['건전지가 없어 켜지지 않는다. 라디오는 있지만 지금은 쓸 수 없다.'] }); ctx.event('radio_blocked', { why: 'batteries' }); return; }
       const res = await ctx.ui.radio({ mode: 'guided', start: 89.5, battery: true, extraSeconds: 0, stations: [
         { freq: 95.1, name: '음악 방송', kind: 'music', lines: ['(잔잔한 음악이 흐른다)'] },
         { freq: RADIO_FREQ, name: `재난방송 주관방송사 라디오 (게임 속 주파수 ${RADIO_FREQ}MHz)`, kind: 'official', lines: ['지금은 평상시 프로그램입니다.', '비상시에는 이 방송에서 정부와 지자체 안내를 전합니다. (가상 방송)'] },
       ] });
-      check(G, 'radio'); recordEncounter(G, 'radio', 'guided');
+      recordEncounter(G, 'radio', res?.station ? 'tuned' : 'opened');
       G.know.radioChecked = true; G.know.radioFreq = res?.station?.freq ?? RADIO_FREQ;
       ctx.note(`라디오 점검 완료. 재난방송 주파수 ${RADIO_FREQ}MHz에 맞춰 두었다.`, 'self');
       ctx.toast(fact('radio_batt').text, 'official', 5000);
@@ -179,8 +175,8 @@ export async function doEquip(ctx) {
     },
     homeStock: async () => {
       if (done.light) return void ctx.toast('손전등은 점검을 마쳤다.');
-      if (!batteries()) { await ctx.ui.talk({ speaker: '손전등', role: '베란다 수납장', lines: ['손전등은 있는데 건전지가 없다. 켜지지 않는다.'] }); ctx.event('light_blocked', {}); return; }
-      check(G, 'flashlight'); done.light = true; ctx.toast('손전등이 켜진다. 현관 신발장 위에 두었다.'); show();
+      if (!check(G, 'flashlight').ok) { await ctx.ui.talk({ speaker: '손전등', role: '베란다 수납장', lines: ['손전등은 있는데 건전지가 없다. 켜지지 않는다.'] }); ctx.event('light_blocked', {}); return; }
+      done.light = true; ctx.toast('손전등이 켜진다. 현관 신발장 위에 두었다.'); show();
     },
     homeDesk: async () => {
       if (done.power) return void ctx.toast('보조배터리는 충전해 두었다.');
@@ -191,7 +187,7 @@ export async function doEquip(ctx) {
       if (done.ext) return void ctx.toast('소화기 위치를 확인했다.');
       await ctx.ui.card({ kind: 'notice', title: '3층 복도 소화기', meta: '옥내소화전 옆', body: [fact('ext_1').text, fact('ext_2').text, fact('ext_3').text], actions: [{ id: 'ok', label: '사용 순서 익혀 보기', primary: true }] });
       await ctx.ui.extinguisher({ mode: 'guided', fire: 'small', practice: true });
-      recordEncounter(G, 'extinguisher', 'guided');
+      recordEncounter(G, 'extinguisher', 'practice');
       G.know.extinguisherLocated = true; done.ext = true; show();
     },
     homeGas: async () => { G.know.gasValve = true; done.gas = true; await ctx.ui.talk({ speaker: '가스 중간 밸브', role: '주방', lines: ['레인지 옆 가스 중간 밸브 위치를 확인했다.', fact('alert_caution').text] }); show(); },
@@ -220,7 +216,7 @@ export async function doDocs(ctx) {
     { id: 'idcopy', label: '신분증·통장·계약서 사본', value: '프린터로 사본 1부씩', why: fact('bag_copies').text, recommended: true },
   ];
   const res = await ctx.modal(() => ctx.ui.docs({ mode: 'guided', fields, carry: ['bag', 'home'] }));
-  recordEncounter(G, 'docs', 'guided');
+  recordEncounter(G, 'docs', 'written');
   const card = res?.card || {};
   const where = res?.where === 'bag' ? 'bag' : 'home';
   G.items.contact_card = { home: 0, bag: 0, bought: 0, checked: true, used: 0, ...(G.items.contact_card || {}) };
@@ -263,7 +259,7 @@ async function talkSeoyeon(ctx) {
     choices: [{ id: 'sms', label: '문자로 연락해요' }, { id: 'both', label: '문자도 하고, 문에 쪽지도 남길게요' }] });
   G.rel.seoyeon.contact = pick === 'both' ? 'both' : 'sms';
   G.rel.seoyeon.trust += 1;
-  if (!has(G, 'batteries_aa') && !G.know.battInstalled) {
+  if (!has(G, 'batteries_aa')) {
     const b = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['건전지 있으세요? 저 두 팩 사 놨는데 한 팩 나눠 드릴까요?'], choices: [{ id: 'yes', label: '고마워요, 받을게요' }, { id: 'no', label: '괜찮아요' }] });
     if (b === 'yes') { G.items.batteries_aa = { home: 0, bag: 0, bought: 0, checked: false, used: 0, ...(G.items.batteries_aa || {}) }; G.items.batteries_aa.home += 1; ctx.event('gift', { from: 'seoyeon', item: 'batteries_aa' }); }
   }
@@ -299,7 +295,7 @@ export async function doBag(ctx) {
   const res = await ctx.modal(() => ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals, tips: tips('bag_days', 'bag_nocook', 'bag_copies', 'bag_foil', 'bag_door') }));
   applyBag(G, res?.bag || {});
   const ev = evalBag(G, 'alert');
-  recordEncounter(G, 'bag', mode);
+  recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
   G.know.bagPacked = true;
   ctx.setLevelState('apartment', 'bag', 'packed');
   ctx.event('bag_packed', { weightKg: ev.weightKg, missing: ev.missing });

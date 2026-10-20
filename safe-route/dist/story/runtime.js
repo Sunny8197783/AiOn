@@ -44,7 +44,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     hud.setBattery(G.phone.battery);
     const load = bagLoad(G);
     hud.setBag(G.know.bagOn ? { weightKg: load.weightKg, limitKg: BAG_LIMIT.weightKg } : null);
-    engine.player.speedMul = speedMul(G);
+    engine.player.speedMul = ctx.speedOverride ?? speedMul(G);
     hud.setTension(Math.max(0, (G.stats.tension - 40) / 60));
   }
   ctx.refresh = refresh;
