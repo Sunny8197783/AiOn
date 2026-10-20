@@ -56,6 +56,10 @@ float pN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 }
 
 const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _m3 = new THREE.Matrix3();
+function pushSkin(out, sk, bone) {
+  if (!sk) { out.push(typeof bone === 'number' ? bone : 0, 1, 0, 0, 0, 0, 0, 0); return; }
+  for (let k = 0; k < 8; k++) out.push(sk[k] ?? 0);
+}
 
 // Accumulates lofted parts into one indexed BufferGeometry (with skin attributes when skinned).
 export function builder(skinned = false) {
@@ -79,13 +83,18 @@ export function builder(skinned = false) {
       P.push(_v.x, _v.y, _v.z); N.push(_n.x, _n.y, _n.z);
     }
     C.push(...cols); U.push(...uvs); R.push(...pbrs);
-    if (skinned) for (let i = 0; i < n; i++) { SI.push(skin[i * 4], skin[i * 4 + 2], 0, 0); SW.push(skin[i * 4 + 1], skin[i * 4 + 3], 0, 0); }
+    if (skinned) for (let i = 0; i < n; i++) { // up to 4 influences, normalised
+      const k = i * 8, s = skin[k + 1] + skin[k + 3] + skin[k + 5] + skin[k + 7] || 1;
+      SI.push(skin[k], skin[k + 2], skin[k + 4], skin[k + 6]);
+      SW.push(skin[k + 1] / s, skin[k + 3] / s, skin[k + 5] / s, skin[k + 7] / s);
+    }
     for (const k of idx) I.push(k + base);
   }
 
   // rings: [{ y, rx, rz?, x?, z?, p? (superellipse, 2 = ellipse), a? (half arc), ac? (arc centre), c? (Color), pbr? }]
   // theta 0 points +z (back), +-PI points -z (front), +PI/2 points +x. Arc mode (any ring has a) leaves a gap.
-  // o: { seg, color: Color | fn(ring, theta, i, p), pbr, skin: bone | fn(p, ring, i, theta) -> [b0,w0,b1,w1],
+  // o: { seg, color: Color | fn(ring, theta, i, p), pbr: array | fn(ring, theta, i, p),
+  //      skin: bone | fn(p, ring, i, theta) -> [b0,w0,b1,w1,b2,w2,b3,w3] (missing pairs = 0),
   //      cap (close both ends), flip (inward faces), m (Matrix4 applied after normals) }
   function loft(rings0, o = {}) {
     let rings = rings0;
@@ -108,9 +117,8 @@ export function builder(skinned = false) {
         const cc = typeof o.color === 'function' ? o.color(r, th, i, p) : (r.c ?? o.color);
         cols.push(cc.r, cc.g, cc.b);
         uvs.push(th * circ, v);
-        pbrs.push(...(r.pbr ?? o.pbr ?? PBR.fabric));
-        const sk = typeof o.skin === 'function' ? o.skin(p, r, i, th) : [o.skin ?? 0, 1, 0, 0];
-        skin.push(sk[0], sk[1], sk[2] ?? 0, sk[3] ?? 0);
+        pbrs.push(...(typeof o.pbr === 'function' ? o.pbr(r, th, i, p) : (r.pbr ?? o.pbr ?? PBR.fabric)));
+        pushSkin(skin, typeof o.skin === 'function' ? o.skin(p, r, i, th) : null, o.skin);
       }
     });
     const out = desc !== !!o.flip;
@@ -144,8 +152,7 @@ export function builder(skinned = false) {
         const th = 2 * Math.PI * k / seg, c = Math.cos(th), s = Math.sin(th);
         pos.push(R0.p.x + R0.r * (R0.nr.x * c + R0.b.x * s), R0.p.y + R0.r * (R0.nr.y * c + R0.b.y * s), R0.p.z + R0.r * (R0.nr.z * c + R0.b.z * s));
         cols.push(cc.r, cc.g, cc.b); uvs.push(th * R0.r, v); pbrs.push(...pb);
-        const sk = typeof o.skin === 'function' ? o.skin([R0.p.x, R0.p.y, R0.p.z]) : [o.skin ?? 0, 1, 0, 0];
-        skin.push(sk[0], sk[1], sk[2] ?? 0, sk[3] ?? 0);
+        pushSkin(skin, typeof o.skin === 'function' ? o.skin([R0.p.x, R0.p.y, R0.p.z]) : null, o.skin);
       }
     });
     for (let i = 0; i < all.length - 1; i++) for (let k = 0; k < seg; k++) {
@@ -161,6 +168,16 @@ export function builder(skinned = false) {
     const ring = (y, k) => ({ y, rx: Math.max(0.0006, hw - rr * k), rz: Math.max(0.0006, hd - rr * k), p });
     const rings = [ring(0, 1), ring(rr * 0.29, 0.29), ring(rr, 0), ring(h - rr, 0), ring(h - rr * 0.29, 0.29), ring(h, 1)];
     loft(rings, { seg: o.seg ?? 16, cap: true, ...o });
+  }
+
+  // Ellipsoid centred at c [x,y,z] with radii r [rx,ry,rz].
+  function blob(c, r, o = {}) {
+    const n = o.rings ?? 8, rows = [];
+    for (let k = 0; k <= n; k++) {
+      const f = -Math.PI / 2 + Math.PI * k / n, cf = Math.max(0.02, Math.cos(f));
+      rows.push({ y: c[1] + r[1] * Math.sin(f), x: c[0], z: c[2], rx: r[0] * cf, rz: r[2] * cf, p: o.p });
+    }
+    loft(rows, { seg: o.seg ?? 10, ...o });
   }
 
   function build() {
@@ -179,7 +196,7 @@ export function builder(skinned = false) {
     return g;
   }
 
-  return { loft, pipe, rbox, build, vertexCount: () => P.length / 3 };
+  return { loft, pipe, rbox, blob, build, vertexCount: () => P.length / 3 };
 }
 
 // Linear interpolation of ring rows (ascending y) at height y; numeric fields only.
@@ -189,7 +206,10 @@ export function ringAt(rows, y) {
     const a = rows[i], b = rows[i + 1];
     if (y <= b.y) {
       const t = b.y === a.y ? 0 : (y - a.y) / (b.y - a.y), out = { ...a, y };
-      for (const k of ['rx', 'rz', 'x', 'z', 'p']) if (a[k] != null || b[k] != null) out[k] = (a[k] ?? 0) + ((b[k] ?? 0) - (a[k] ?? 0)) * t;
+      for (const k of ['rx', 'rz', 'x', 'z', 'p', 'a']) if (a[k] != null || b[k] != null) {
+        const d = k === 'a' ? Math.PI : k === 'p' ? 2 : 0;
+        out[k] = (a[k] ?? d) + ((b[k] ?? d) - (a[k] ?? d)) * t;
+      }
       return out;
     }
   }
@@ -209,7 +229,7 @@ export function zoned(rows, zones) {
   for (const r of rows) {
     while (e < edges.length && edges[e] <= r.y) {
       const y = edges[e], base = ringAt(rows, y);
-      if (y !== r.y || true) { out.push(dress(base, zoneAt(y - 1e-6)), dress(base, zoneAt(y))); }
+      out.push(dress(base, zoneAt(y - 1e-6)), dress(base, zoneAt(y)));
       e++;
     }
     if (!out.length || out[out.length - 1].y !== r.y || out[out.length - 1].c !== zoneAt(r.y).c) out.push(dress(r, zoneAt(r.y)));
