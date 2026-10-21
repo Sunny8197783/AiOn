@@ -3,7 +3,6 @@
 // ceiling light panels, painted window views and NPC creation with a visible fallback.
 // Products are InstancedMeshes that share one atlas; a per-instance aCell attribute picks the label.
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FONT, rng } from '../engine/kit.js';
 
@@ -48,7 +47,8 @@ const CELL = Object.fromEntries(Object.keys(LABELS).map((k, i) => [k, i]));
 // name: [shape, w, h, d, labels, stack]. For fixed-size shapes (bottles, cans, cups) w/h/d are the real sizes.
 export const PRODUCTS = {
   water2: ['bottle2', 0.11, 0.32, 0.11, ['water2a', 'water2b']], water5: ['bottle5', 0.068, 0.21, 0.068, ['water5', 'water5b']],
-  drink: ['bottle5', 0.068, 0.21, 0.068, ['cola', 'cider', 'ion', 'tea']], can: ['can', 0.068, 0.123, 0.068, ['coffeeCan', 'juiceCan', 'soda', 'vita'], 2],
+  drink: ['bottle5', 0.068, 0.21, 0.068, ['cola', 'cider', 'ion', 'tea']], can: ['can', 0.068, 0.123, 0.068, ['coffeeCan', 'juiceCan', 'soda'], 2],
+  vita: ['can', 0.068, 0.123, 0.068, ['vita'], 2], soap: ['bottle5', 0.068, 0.21, 0.068, ['soap']],
   ramen: ['pouch', 0.3, 0.1, 0.22, ['ramenR', 'ramenB', 'ramenW'], 3], cup: ['cup', 0.11, 0.1, 0.11, ['cupR', 'cupU'], 3],
   rice: ['box', 0.15, 0.12, 0.2, ['rice'], 2], tuna: ['tin', 0.09, 0.046, 0.09, ['tuna'], 4], ham: ['mbox', 0.1, 0.055, 0.06, ['ham'], 4],
   bar: ['box', 0.15, 0.2, 0.05, ['bar']], cracker: ['pouch', 0.16, 0.22, 0.06, ['cracker']], chips: ['pouch', 0.2, 0.28, 0.08, ['chips', 'chips2']],
@@ -58,7 +58,7 @@ export const PRODUCTS = {
   butane: ['butane', 0.068, 0.19, 0.068, ['butane']], whistle: ['box', 0.08, 0.15, 0.02, ['whistle']], radio: ['box', 0.2, 0.14, 0.08, ['radio'], 2],
   aa: ['box', 0.1, 0.16, 0.02, ['aa', 'aaa']], flash: ['box', 0.08, 0.22, 0.05, ['flash']], power: ['box', 0.1, 0.16, 0.04, ['power']],
   candle: ['box', 0.12, 0.2, 0.06, ['candle']], aid: ['box', 0.26, 0.18, 0.1, ['aid'], 2], mask: ['box', 0.2, 0.12, 0.1, ['mask'], 3],
-  sanit: ['bottle5', 0.068, 0.21, 0.068, ['sanit', 'soap']], band: ['box', 0.1, 0.08, 0.03, ['band'], 3], deter: ['box', 0.25, 0.3, 0.12, ['deter']],
+  sanit: ['bottle5', 0.068, 0.21, 0.068, ['sanit']], band: ['box', 0.1, 0.08, 0.03, ['band'], 3], deter: ['box', 0.25, 0.3, 0.12, ['deter']],
   towel: ['box', 0.24, 0.25, 0.12, ['towel']], milk: ['box', 0.075, 0.2, 0.075, ['milk']], yogurt: ['cupS', 0.066, 0.06, 0.066, ['yogurt'], 2],
   tofu: ['box', 0.12, 0.05, 0.1, ['tofu'], 2], mix: ['box', 0.3, 0.1, 0.1, ['mix'], 2], soup: ['pouch', 0.14, 0.19, 0.02, ['soup']],
   cereal: ['box', 0.2, 0.28, 0.07, ['cereal']], oil: ['bottle5', 0.068, 0.21, 0.068, ['oil', 'soy']], kimchi: ['pouch', 0.16, 0.2, 0.06, ['kimchi']],
@@ -155,8 +155,18 @@ function makeGeoms(hi) {
     can: cylG(0.033, 0.033, 0.123, s), tin: cylG(0.045, 0.045, 0.046, s + 2), butane: cylG(0.033, 0.033, 0.19, s),
     cup: cylG(0.055, 0.044, 0.1, s + 2), cupS: cylG(0.033, 0.027, 0.06, s),
     box: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), mbox: new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0),
-    pouch: new RoundedBoxGeometry(1, 1, 1, 2, 0.14).translate(0, 0.5, 0),
+    pouch: pillow(),
   };
+}
+// Pillow pack: a 2x2-segment box whose front/back faces bulge out (about 32 triangles).
+function pillow() {
+  const g = new THREE.BoxGeometry(1, 1, 1, 2, 2, 1), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = Math.abs(p.getX(i)), y = Math.abs(p.getY(i));
+    if (x < 0.4 && y < 0.4) p.setZ(i, p.getZ(i) * 1.35); else if (x < 0.4 || y < 0.4) p.setZ(i, p.getZ(i) * 1.12);
+  }
+  g.computeVertexNormals();
+  return g.translate(0, 0.5, 0);
 }
 const FIXED = new Set(['bottle2', 'bottle5', 'can', 'tin', 'butane', 'cup', 'cupS']);
 
