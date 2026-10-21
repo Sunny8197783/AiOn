@@ -252,7 +252,7 @@ export function buildStore(kit, people) {
     u.add(kit.box(0.34, 0.12, 0.08, M.white, { y: 0 }));
     const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2dc, emissiveIntensity: 0, roughness: 0.3 });
     for (const s of [-1, 1]) u.add(kit.cyl(0.035, 0.045, 0.06, m, { x: s * 0.11, y: -0.05, z: 0.06, rx: 0.6, cast: false }, 10));
-    const l = new THREE.PointLight(0xfff2dc, 2.6, 9, 2); l.position.set(x + Math.sin(ry) * 0.35, y - 0.12, z + Math.cos(ry) * 0.35); l.visible = false; dyn.add(l);
+    const l = new THREE.PointLight(0xfff2dc, 0, 9, 2); l.position.set(x + Math.sin(ry) * 0.35, y - 0.12, z + Math.cos(ry) * 0.35); dyn.add(l);
     return { l, m };
   });
   sign(['비상구'], { w: 0.5, h: 0.18, bg: '#1f9a4a', fg: '#ffffff', emissive: 1.2 }, { x: DOOR, y: 2.42, z: -0.22, ry: Math.PI }, 'emergency');
@@ -271,9 +271,9 @@ export function buildStore(kit, people) {
   // ---- state ----
   const state = { soldOut: [], power: 'on', outside: null };
   function applyPower(on) {
-    powered.visible = on;
+    powered.traverse((o) => { if (o.isLight) kit.gateLit(o, on); }); // dim, never hide: light count stays fixed
     for (const [m, c] of glow) m.emissive.copy(on ? c : BLACK);
-    for (const e of emerg) { e.l.visible = !on; e.m.emissiveIntensity = on ? 0 : 2.6; }
+    for (const e of emerg) { e.l.intensity = on ? 0 : 2.6; e.m.emissiveIntensity = on ? 0 : 2.6; }
     for (const p of extras) p.group.visible = on;
     clerk.setProp('flashlight', !on);
   }

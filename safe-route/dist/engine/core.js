@@ -149,8 +149,9 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     return built.get(id);
   }
   let queue = Promise.resolve(), busy = false;
-  // Fade out, swap level.group into the scene, place the player, precompile shaders, fade in.
-  function enter(levelId, spawn) {
+  // Fade out, swap level.group into the scene, place the player, run prepare(level) (level states, setEnv:
+  // the level is already current), precompile shaders for that final setup, fade in.
+  function enter(levelId, spawn, { prepare } = {}) {
     const run = queue.catch(() => {}).then(async () => {
       busy = true;
       const fadeS = RM ? 0 : 0.35;
@@ -168,6 +169,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
         const want = spawn ?? (L.spawns.entry ? 'entry' : names[0]);
         if (!controls.player.teleport(want) && names.length) controls.player.teleport(names[0]);
         controls.snap(); controls.update(0);
+        if (prepare) { try { await prepare(L); } catch (err) { console.error(`[engine] prepare for level "${levelId}" failed (continuing)`, err); } }
         try { await Promise.race([renderer.compileAsync(scene, camera), new Promise((r) => setTimeout(r, 4000))]); }
         catch (err) { console.warn('[engine] shader precompile failed (continuing)', err); }
         return L;

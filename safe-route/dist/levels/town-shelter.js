@@ -161,9 +161,9 @@ export function buildShelterSite(kit) {
     const ex = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), exitMat); ex.position.set(-110.7, yb + 2.0, 15.92); ex.rotation.y = Math.PI;
     const inner = kit.box(1.0, 0.06, 0.1, emLamp, { x: -110.7, y: yb + 2.15, z: 15.9, cast: false });
     const cl = new THREE.PointLight(0xf2f6ff, 14, 7, 2); cl.position.set(-110.7, yb + 1.9, 15.1); kit.lit('emergency', cl, 14);
-    opening.add(hole, ex, inner, cl); dyn.add(opening); kit.merge(opening);
+    opening.add(hole, ex, inner); dyn.add(opening, cl); kit.merge(opening); // cl outside `opening`: lights never hide
     solid(xl, xt, 13.45, z0, 'railC', -3, 2); solid(xl - 0.3, xl, 13.45, z1, 'railC', -3, 2);
-    gates.access = (open) => { shutter.visible = !open; opening.visible = open; };
+    gates.access = (open) => { shutter.visible = !open; opening.visible = open; kit.gateLit(cl, open); };
   }
 
   // ================= East: glass double doors, canopy, closure barrier and notice =================
