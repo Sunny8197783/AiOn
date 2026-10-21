@@ -189,7 +189,7 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
   function apply(S) {
     cur = S;
     dirFrom(S.keyAz, S.keyEl, keyDir); dirFrom(S.sunAz, S.sunEl, sunDir);
-    sun.color.fromArray(S.keyColor); sun.intensity = S.keyI; sun.visible = S.keyI > 0.01;
+    sun.color.fromArray(S.keyColor); sun.intensity = S.keyI > 0.01 ? S.keyI : 0; sun.shadow.autoUpdate = sun.intensity > 0;
     hemi.color.fromArray(S.hemiSky); hemi.groundColor.fromArray(S.hemiGround); hemi.intensity = S.hemiI;
     scene.fog.color.fromArray(S.fogColor); scene.fog.density = S.fogDensity; scene.background.copy(scene.fog.color);
     scene.environmentIntensity = S.envI; renderer.toneMappingExposure = S.exposure;
@@ -217,7 +217,7 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
     if (!reduceMotion) time += dt;
     cloudU.uTime.value = time;
     beacons.visible = kit.isLit('windows') && (reduceMotion || (time % 1.6) < 0.8);
-    if (!sun.visible) return;
+    if (!sun.intensity) return;
     const half = shadowBox / 2, cam = sun.shadow.camera;
     if (cam.right !== half) { cam.left = cam.bottom = -half; cam.right = cam.top = half; cam.updateProjectionMatrix(); }
     const texel = (2 * half) / sun.shadow.mapSize.x;
