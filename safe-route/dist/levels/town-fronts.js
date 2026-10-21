@@ -232,13 +232,14 @@ export function buildFronts(kit) {
 
   // ---- notice boards (text follows the notices state) ----
   const boards = {};
-  for (const [id, face] of [['shelterNotice', 0], ['aptNotice', 0], ['centerNotice', 0]]) {
-    const p = PLACES[id], bd = board(kit, { w: 512, h: 384 });
+  // back: +1 = board stands south of its point and faces north (-z); -1 = stands north, faces south.
+  for (const [id, back] of [['shelterNotice', 1], ['aptNotice', 1], ['centerNotice', -1]]) {
+    const p = PLACES[id], bd = board(kit, { w: 512, h: 384 }), b = back;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.05), new THREE.MeshStandardMaterial({ map: bd.texture, roughness: 0.6 }));
-    m.position.set(p.x, Y + 1.45, p.z + 0.25); m.rotation.y = Math.PI + face; group.add(m);
-    stat.add(kit.box(1.55, 1.2, 0.06, kit.mat('paint:#8a9198', { metalness: 0.6, roughness: 0.4 }), { x: p.x, y: Y + 0.85, z: p.z + 0.3 }), kit.box(1.7, 0.06, 0.32, dark, { x: p.x, y: Y + 2.05, z: p.z + 0.25 }));
-    for (const s of [-1, 1]) stat.add(kit.box(0.07, 2.05, 0.07, dark, { x: p.x + s * 0.72, y: Y, z: p.z + 0.3 }));
-    block(p.x - 0.85, p.x + 0.85, p.z + 0.15, p.z + 0.45, 2.2, 'noticeBoard');
+    m.position.set(p.x, Y + 1.45, p.z + 0.25 * b); m.rotation.y = b > 0 ? Math.PI : 0; group.add(m);
+    stat.add(kit.box(1.55, 1.2, 0.06, kit.mat('paint:#8a9198', { metalness: 0.6, roughness: 0.4 }), { x: p.x, y: Y + 0.85, z: p.z + 0.3 * b }), kit.box(1.7, 0.06, 0.32, dark, { x: p.x, y: Y + 2.05, z: p.z + 0.25 * b }));
+    for (const s of [-1, 1]) stat.add(kit.box(0.07, 2.05, 0.07, dark, { x: p.x + s * 0.72, y: Y, z: p.z + 0.3 * b }));
+    block(p.x - 0.85, p.x + 0.85, p.z + Math.min(0.15 * b, 0.45 * b), p.z + Math.max(0.15 * b, 0.45 * b), 2.2, 'noticeBoard');
     boards[id] = bd;
   }
 
