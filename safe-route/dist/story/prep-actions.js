@@ -1,7 +1,7 @@
 // The six preparation actions, each played in 3D (walk there, look, decide).
 import { buy, pack, unpack, check, consume, recordEvent } from '../game/state.js';
 import { routeOptions } from '../game/routes.js';
-import { evalBag, recordEncounter, ladderStage } from '../game/drills.js';
+import { evalBag, recordEncounter, ladderStage, BAG_GOALS } from '../game/drills.js';
 import { CATALOG, MART_SECTIONS, BAG_LIMIT } from '../game/items.js';
 import { fact } from '../game/facts.js';
 
@@ -299,7 +299,7 @@ export async function doBag(ctx) {
   G.know.bagPacked = true;
   ctx.setLevelState('apartment', 'bag', 'packed');
   ctx.event('bag_packed', { weightKg: ev.weightKg, missing: ev.missing });
-  ctx.toast(ev.missing?.length ? `배낭을 현관에 두었다. 빠진 것: ${ev.missing.join(', ')}` : '배낭을 현관에 두었다. 필요한 것을 고루 담았다.');
+  ctx.toast(ev.missing?.length ? `배낭을 현관에 두었다. 빠진 것: ${ev.missing.map(id => BAG_GOALS.alert.find(g => g.id === id)?.label ?? id).join(', ')}` : '배낭을 현관에 두었다. 필요한 것을 고루 담았다.');
 }
 
 export function applyBag(G, target) {

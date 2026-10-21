@@ -25,6 +25,7 @@ export async function prep(ctx) {
   G.chapter = 'prep';
   ctx.indoorEnv = 'interiorNight'; ctx.power = true; ctx.outdoorEnv = 'night';
   ctx.hud.setChapter('1장', '준비 — 남은 시간 여섯 칸');
+  ctx.objective(null);
   applyHome(ctx);
   await ctx.goto('apartment', 'home');
   ctx.refresh();
@@ -43,7 +44,7 @@ export async function prep(ctx) {
     ctx.refresh();
     ctx.objective(`${SLOT_LABEL[slot]} · 무엇을 할까`, '거실 벽의 달력(계획판)에서 고릅니다. 집 안을 둘러볼 수도 있습니다.',
       [{ text: `남은 칸 ${G.slots.total - G.slots.used}`, done: false }]);
-    const pick = opened ? await ctx.roam({ doors: false, on: { homePlanner: () => openPlanner(ctx, slot), ...homeFree(ctx) } }) : await openPlanner(ctx, slot);
+    const pick = opened ? await ctx.roam({ doors: false, on: { homePlanner: () => openPlanner(ctx, slot), ...homeFree(ctx) } }) : await ctx.modal(() => openPlanner(ctx, slot));
     opened = true;
     if (!pick) continue;
     const action = ACTIONS.find(a => a.id === pick);
@@ -125,15 +126,16 @@ async function eveningBeforeAlert(ctx) {
   await ctx.card({ kind: 'news', title: '저녁 뉴스 (가상)', meta: 'D-1 목 20:00',
     body: ['정부는 국민들에게 비상시 국민행동요령을 미리 확인해 달라고 당부했습니다.', '일부 지역에서 생수와 건전지를 대량으로 사 가는 일이 이어지자, 사재기를 자제하고 필요한 만큼만 구입해 달라고 요청했습니다.'],
     actions: [{ id: 'ok', label: 'TV를 끈다', primary: true }] });
-  ctx.objective('잠들기 전에', '할 수 있는 일이 남아 있다면 해 두고, 침대에서 잠듭니다.', [{ text: '주방에서 큰 통·냄비에 물 받아 두기 — 선택', done: !!G.know.tubFilled }, { text: '침대에서 잠들기', done: false }]);
+  const show = () => ctx.objective('잠들기 전에', '할 수 있는 일이 남아 있다면 해 두고, 침대에서 잠듭니다.', [{ text: '주방에서 큰 통·냄비에 물 받아 두기 — 선택', done: !!G.know.tubFilled }, { text: '침대에서 잠들기', done: false }]);
+  show();
   await ctx.roam({ doors: false, on: {
+    ...homeFree(ctx),
     homeSink: async () => {
       if (G.know.tubFilled) return void ctx.toast('큰 통과 냄비에 물을 받아 두었다.');
       const pick = await ctx.ui.talk({ speaker: '주방', role: '단수 대비', lines: ['단수에 대비해 큰 통과 냄비에 물을 받아 둘까? 씻거나 변기 물을 내리는 데 쓸 수 있다.'], choices: [{ id: 'yes', label: '받아 둔다' }, { id: 'no', label: '그만둔다' }] });
-      if (pick === 'yes') { G.know.tubFilled = true; ctx.event('tub_filled', {}); ctx.toast(ctx.factLine('home_tub'), 'official', 6000); }
+      if (pick === 'yes') { G.know.tubFilled = true; ctx.event('tub_filled', {}); ctx.toast(ctx.factLine('home_tub'), 'official', 6000); show(); }
     },
     homeBed: async () => 'sleep',
-    ...homeFree(ctx),
   } });
   await ctx.skip('D-1 목 밤', 'D-day 금 19:30', '다음 날, 회사는 오후 4시에 문을 닫았다. 정민은 일찍 집에 들어와 저녁을 먹었다.');
   G.day = 0; G.minute = 19 * 60 + 30;

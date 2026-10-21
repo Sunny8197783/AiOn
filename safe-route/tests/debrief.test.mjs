@@ -22,6 +22,7 @@ const storyDir = new URL('../dist/story/', import.meta.url);
 const story = readdirSync(storyDir).filter(f => f.endsWith('.js')).map(f => readFileSync(new URL(f, storyDir), 'utf8')).join('\n');
 const storyResults = [...new Set([...story.matchAll(/recordEncounter\(G, '\w+', '([\w-]+)'\)/g)].map(m => m[1]))];
 const storyPreps = [...new Set([...story.matchAll(/payoff\('(\w+)'/g)].map(m => m[1]))];
+const storyContacts = [...new Set([...story.matchAll(/\.contact = (?:[^;]*?)'(\w+)'/g)].map(m => m[1]))];
 
 test('every FACTS sourceId exists; SOURCES are unique https links', () => {
   assert.equal(srcIds.size, SOURCES.length);
@@ -167,6 +168,8 @@ test('no raw result id or prep id reaches the player', () => {
   const s = chapterSummary(G, 'c');
   for (const line of s.lines) assert.doesNotMatch(line, /[A-Za-z]/, line);
   for (const p of [...s.payoffs, ...endingRecord(G).helped]) assert.notEqual(p.prep, p.id, `label for payoff '${p.id}'`);
+  assert.ok(storyContacts.length >= 3, 'contact literals were found');
+  for (const c of storyContacts) { G.rel.seoyeon.contact = c; for (const p of endingRecord(G).people) assert.doesNotMatch(p.what, /[A-Za-z]/, p.what); }
 });
 
 test('endingRecord on a fresh game', () => {
@@ -198,7 +201,7 @@ test('endingRecord follows payoffs, unused items, know flags and people', () => 
   assert.ok(!r.unchecked.includes('가까운 대피소 위치'));
   assert.deepEqual(r.people, [
     { who: '오서연', what: '계단에서 보행기를 옆에서 들어 주었다' },
-    { who: '박영수 소장', what: '비상 연락 방법을 정했습니다 (문자·문 두드리기)' },
+    { who: '박영수 소장', what: '비상 연락 방법을 정했습니다 (문자·문에 쪽지)' },
     { who: '오서연', what: '비상 연락 방법을 정했습니다 (문자)' },
   ]);
   assert.deepEqual(r.practice, { text: fact('shelter_signs').text, sourceId: 'law_sign' }, 'next unchecked flag');

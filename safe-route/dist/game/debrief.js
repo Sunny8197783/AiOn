@@ -6,7 +6,7 @@ import { bagLoad, hhmm } from './state.js';
 import { EXT_STEPS } from './drills.js';
 
 const PEOPLE = { manager: '박영수 소장', clerk: '이수아', seoyeon: '오서연' };
-const CONTACT = { sms: '문자', door: '문 두드리기', both: '문자·문 두드리기' };
+const CONTACT = { sms: '문자', door: '문 두드리기', both: '문자·문에 쪽지', office: '관리사무소 창구', store: '가게로 찾아가기' };
 const TOOL = { radio: '라디오', bag: '비상가방', route: '경로 정하기', extinguisher: '소화기', docs: '비상연락처 카드' };
 // Every result string the story passes to recordEncounter, so no raw id reaches the player.
 const RESULT = {

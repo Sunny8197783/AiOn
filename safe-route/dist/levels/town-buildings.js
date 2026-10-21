@@ -5,7 +5,6 @@ import * as THREE from 'three';
 import { BUILDINGS, BOUNDS } from '../game/townmap.js';
 import { FONT } from '../engine/kit.js';
 import { CURB } from './town-plan.js';
-import { facade } from './town-facade.js';
 
 const FH = { apartment: 2.8, villa: 2.9, shop: 3.5, mart: 4.6, office: 3.7, civic: 3.6 };
 export const heightOf = (b) => b.h ?? (b.floors * (FH[b.kind] ?? 3) + (b.kind === 'apartment' ? 0.8 : 0));
@@ -36,7 +35,7 @@ export function buildBuildings(kit, { holes = {} } = {}) {
 
   // Facade material with optional colour tint (clones share textures; registered for night windows).
   const fac = (kind, floors, cols, seed, tint) => kit.memo(`town:fac:${kind}:${floors}:${cols}:${seed}:${tint || ''}`, () => {
-    const base = facade(kit, kind, { floors, cols, seed, lit: kind === 'office' ? 0.45 : 0.6 });
+    const base = kit.facade(kind, { floors, cols, seed, lit: kind === 'office' ? 0.45 : 0.6 });
     if (!tint) return base;
     const m = base.clone(); m.color.set(tint); kit.lit('windows', m, 1.1); return m;
   });

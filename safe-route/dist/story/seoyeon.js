@@ -68,7 +68,7 @@ async function reread(ctx) {
     return p;
   };
   const steps = [
-    () => { fx.eye(-0.5); showNote(h, 'phone'); return rereadCaption('방금 정민으로서 쓴 문장입니다. 서연에게 닿은 것은 이 문장뿐입니다.'); },
+    () => { engine.setView('first'); fx.eye(-0.5); showNote(h, 'phone'); return rereadCaption('방금 정민으로서 쓴 문장입니다. 서연에게 닿은 것은 이 문장뿐입니다.'); },
     () => { showNote(h, 'marked'); return rereadCaption(h.kind === 'unparsed' ? '이 문장에서 입구·시각·범위를 찾지 못했어요.' : '문장을 나눠 봅니다. 표시한 부분이 이 문장이 서연에게 말하는 것입니다.'); },
     () => { hideNote(); engine.setView('third'); fx.crane(); fx.showPath(ctx.trail || []); return rereadCaption('정민이 실제로 걸은 길 — 당신은 알고 있지만, 서연은 보지 못했습니다.'); },
     () => rereadCaption('정민이 들어갈 수 있던 입구는 둘 다 서연의 기준과 다릅니다.', placePin(0)),
@@ -87,7 +87,7 @@ async function reread(ctx) {
   recordEvent(G, 'reread_done', { pins: pins.map(p => p.factor) });
   fx.dispose(); hideNote();
   ctx.hud.setCinematic(false);
-  engine.setView('first');
+  engine.setView(ctx.settings.view);
   engine.setControls(true);
 }
 

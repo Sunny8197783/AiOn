@@ -81,6 +81,7 @@ async function moveAndFire(ctx) {
   ctx.setLevelState('shelter', 'power', 'emergency');
   ctx.setLevelState('shelter', 'fire', 'large');
   await ctx.goto('shelter', 'spot');
+  { const pl = ctx.engine.player, f = ctx.engine.level.anchors?.fire; if (f) pl.yaw = Math.atan2(-(f.x - pl.x), -(f.z - pl.z)); } // face the burning corner
   ctx.refresh();
   await ctx.caption('저녁. 주차장 구석에서 누군가 휴대용 버너로 라면을 끓이다 쌓아 둔 상자에 불이 옮겨 붙었다. 불길이 천장 배관에 닿는다.', null, 4200);
   await factCard(ctx, '대피소에서는', ['shelter_rules'], '공식 행동요령');
@@ -134,13 +135,15 @@ async function depart(ctx) {
   await ctx.goto('apartment', 'home', 'interiorDark');
   ctx.refresh();
   let noted = false, said = false;
-  ctx.objective('임시 집결지로', `14:00까지 행정복지센터 앞 임시 집결지에 도착합니다. ${G.know.evacClosuresKnown ? `오늘 통제: ${closures.map(c => CLOSURES[c].label).join(', ')}` : '어디가 통제인지는 아직 모릅니다.'}`, [{ text: '문에 쪽지 남기기 (선택)', done: false }, { text: '집결지 도착', done: false }]);
+  const show = () => ctx.objective('임시 집결지로', `14:00까지 행정복지센터 앞 임시 집결지에 도착합니다. ${G.know.evacClosuresKnown ? `오늘 통제: ${closures.map(c => CLOSURES[c].label).join(', ')}` : '어디가 통제인지는 아직 모릅니다.'}`, [{ text: '문에 쪽지 남기기 (선택)', done: noted }, { text: '집결지 도착', done: false }]);
+  show();
   await ctx.roam({ rate: 4, deadline: { day: 12, minute: 14 * 60, type: 'missedBus' }, on: {
     homeExitDoor: async () => {
       if (!noted) {
         const pick = await ctx.ui.talk({ speaker: '현관', role: '나가기 전에', lines: ['문에 쪽지를 남길까?'], choices: [{ id: 'note', label: `"${hhmm(G.minute)} 행정복지센터 집결지로 떠납니다 — 302호 정민"` }, { id: 'no', label: '그냥 나간다' }] });
         noted = true;
         if (pick === 'note') { recordEvent(G, 'note_left', {}); ctx.toast(fact('evac_note').text, 'official', 5000); }
+        show();
       }
       await ctx.goto('apartment', 'corridor3F');
     },

@@ -192,8 +192,8 @@ export function createKit(renderer, { quality = 'high' } = {}) {
 
   // ---- Facades: one texture per building face with optional night window glow (emissiveMap). ----
   // kind: 'apartment' | 'office' | 'shop' | 'villa' | 'civic'. Returns a material registered in light group 'windows'.
-  function facade(kind, { floors = 5, cols = 6, seed = 1, label = '', lit = 0.55, w = 1024, h = 1024 } = {}) {
-    return memo(`facade:${kind}:${floors}:${cols}:${seed}:${label}:${lit}`, () => {
+  function facade(kind, { floors = 5, cols = 6, seed = 1, label = '', lit: litShare = 0.55, w = 1024, h = 1024 } = {}) {
+    return memo(`facade:${kind}:${floors}:${cols}:${seed}:${label}:${litShare}`, () => {
       const r = rng(seed * 7919 + kind.length);
       const fh = h / floors, cw = w / cols;
       const glowCells = [];
@@ -209,7 +209,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
               const x = c * cw, big = c % 2 === 0;
               const wx = x + cw * 0.08, wy = y + fh * 0.18, ww = cw * (big ? 0.84 : 0.5), wh = fh * (big ? 0.68 : 0.42);
               g.fillStyle = '#c9c3b6'; g.fillRect(wx - 3, wy - 3, ww + 6, wh + 6);
-              const on = r() < lit; glowCells.push([wx, wy, ww, wh, on]);
+              const on = r() < litShare; glowCells.push([wx, wy, ww, wh, on]);
               g.fillStyle = on ? '#3c4650' : '#26313b'; g.fillRect(wx, wy, ww, wh);
               g.fillStyle = 'rgba(180,205,220,0.18)'; g.fillRect(wx, wy, ww * 0.45, wh);
               g.fillStyle = '#d8d3c8'; g.fillRect(wx + ww / 2 - 1.5, wy, 3, wh); g.fillRect(wx, wy + wh * 0.62, ww, 3);
@@ -218,11 +218,11 @@ export function createKit(renderer, { quality = 'high' } = {}) {
             }
           } else if (kind === 'office') {
             g.fillStyle = '#5f6b75'; g.fillRect(0, y + fh - 6, w, 6);
-            for (let c = 0; c < cols; c++) { const wx = c * cw + 3, wy = y + 6, ww = cw - 6, wh = fh - 14; const on = r() < lit; glowCells.push([wx, wy, ww, wh, on]); g.fillStyle = on ? '#2f4250' : '#1e2b35'; g.fillRect(wx, wy, ww, wh); g.fillStyle = 'rgba(190,215,230,0.15)'; g.fillRect(wx, wy, ww, wh * 0.4); }
+            for (let c = 0; c < cols; c++) { const wx = c * cw + 3, wy = y + 6, ww = cw - 6, wh = fh - 14; const on = r() < litShare; glowCells.push([wx, wy, ww, wh, on]); g.fillStyle = on ? '#2f4250' : '#1e2b35'; g.fillRect(wx, wy, ww, wh); g.fillStyle = 'rgba(190,215,230,0.15)'; g.fillRect(wx, wy, ww, wh * 0.4); }
           } else if (kind === 'villa' || kind === 'civic') {
-            for (let c = 0; c < cols; c++) { const wx = c * cw + cw * 0.25, wy = y + fh * 0.25, ww = cw * 0.5, wh = fh * 0.45; g.fillStyle = '#e9e6df'; g.fillRect(wx - 4, wy - 4, ww + 8, wh + 8); const on = r() < lit; glowCells.push([wx, wy, ww, wh, on]); g.fillStyle = on ? '#3a4652' : '#25303a'; g.fillRect(wx, wy, ww, wh); g.fillStyle = '#e9e6df'; g.fillRect(wx + ww / 2 - 2, wy, 4, wh); }
+            for (let c = 0; c < cols; c++) { const wx = c * cw + cw * 0.25, wy = y + fh * 0.25, ww = cw * 0.5, wh = fh * 0.45; g.fillStyle = '#e9e6df'; g.fillRect(wx - 4, wy - 4, ww + 8, wh + 8); const on = r() < litShare; glowCells.push([wx, wy, ww, wh, on]); g.fillStyle = on ? '#3a4652' : '#25303a'; g.fillRect(wx, wy, ww, wh); g.fillStyle = '#e9e6df'; g.fillRect(wx + ww / 2 - 2, wy, 4, wh); }
           } else { // shop: upper floors windows, ground floor storefront drawn by level
-            if (f < floors - 1) for (let c = 0; c < cols; c++) { const wx = c * cw + cw * 0.15, wy = y + fh * 0.2, ww = cw * 0.7, wh = fh * 0.55; const on = r() < lit; glowCells.push([wx, wy, ww, wh, on]); g.fillStyle = on ? '#3a4652' : '#25303a'; g.fillRect(wx, wy, ww, wh); }
+            if (f < floors - 1) for (let c = 0; c < cols; c++) { const wx = c * cw + cw * 0.15, wy = y + fh * 0.2, ww = cw * 0.7, wh = fh * 0.55; const on = r() < litShare; glowCells.push([wx, wy, ww, wh, on]); g.fillStyle = on ? '#3a4652' : '#25303a'; g.fillRect(wx, wy, ww, wh); }
             else { g.fillStyle = '#2a3238'; g.fillRect(cw * 0.1, y + fh * 0.15, w - cw * 0.2, fh * 0.8); glowCells.push([cw * 0.1, y + fh * 0.15, w - cw * 0.2, fh * 0.8, true]); }
           }
         }

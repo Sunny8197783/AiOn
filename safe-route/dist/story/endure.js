@@ -126,12 +126,14 @@ async function waterTrip(ctx) {
   ctx.speedOverride = carry > 12 ? 0.62 : 0.78;
   ctx.engine.player.carrying = 'water';
   adjust(G, 'fatigue', carry > 12 ? 14 : 8);
+  ctx.refresh();
   ctx.objective('집으로', `물 ${carry}리터를 들고 103동 3층까지 돌아갑니다. 무겁다.`, []);
   await ctx.roam({ rate: 2, tick: () => { bodyCheck(ctx)(); return onThird(ctx) ? 'up' : undefined; }, on: {
     elevator: async () => { ctx.toast('엘리베이터가 멈춰 있다. 계단으로.'); },
   } });
   ctx.speedOverride = null;
   ctx.engine.player.carrying = null;
+  ctx.refresh();
   (G.items.water_2l ??= { home: 0, bag: 0, bought: 0, checked: false, used: 0 }).home += forSeoyeon ? Math.floor((carry - 10) / 2) : Math.floor(carry / 2);
   if (forSeoyeon) {
     ctx.objective('303호에 물 전하기', '서연의 문을 두드립니다.', []);
@@ -216,8 +218,9 @@ async function corridorFire(ctx) {
   ctx.objective('복도의 불', '판단하세요. 작은 불이면 소화기로, 커졌다면 알리고 대피합니다.', []);
   const fight = async () => {
     const mode = ladderStage(G, 'extinguisher');
-    const res = await ctx.ui.extinguisher({ mode, fire: size });
-    const ev = evalExtinguisher(res?.sequence || [], { fire: size });
+    const fire = size; // judged on the fire the player saw when they chose
+    const res = await ctx.ui.extinguisher({ mode, fire });
+    const ev = evalExtinguisher(res?.sequence || [], { fire });
     recordEncounter(G, 'extinguisher', ev.result);
     if (ev.result === 'out') {
       resolved = 'out'; ctx.setLevelState('apartment', 'hallFire', 'out'); ctx.setLevelState('apartment', 'smoke', 0.1); ctx.audio.fire(0);
@@ -237,7 +240,8 @@ async function corridorFire(ctx) {
     await ctx.ui.talk({ speaker: '박영수 소장', role: '1층', lines: ['다들 내려왔죠? 119에 신고했어요. 소방대가 금방 껐대요. 304호 어르신도 무사하시고요.'] });
     return 'retreat';
   };
-  await ctx.roam({ rate: 0, tick: (dt) => { if (!resolved && (t += dt) > 28) grow(); }, on: {
+  // The fire spreads only while the player is free to act; dialogs and the drill have their own pace.
+  await ctx.roam({ rate: 0, tick: (dt) => { if (!resolved && ctx.engine.controlsEnabled && (t += dt) > 28) grow(); }, on: {
     homeExitDoor: async () => { await ctx.goto('apartment', 'corridor3F'); },
     hallFire: async () => {
       const pick = await ctx.ui.talk({ speaker: '복도', role: size === 'small' ? '택배 상자에 붙은 작은 불' : '천장까지 닿는 불길', lines: [size === 'small' ? '304호 앞 택배 상자 위로 촛불이 넘어져 있다. 불길은 아직 작다.' : '불길이 천장에 닿았다. 연기가 복도를 채운다.'],
@@ -256,6 +260,7 @@ async function dayThree(ctx) {
   const G = ctx.G;
   G.day = 3; G.minute = 10 * 60;
   ctx.outdoorEnv = 'day';
+  ctx.objective(null);
   ctx.setLevelState('apartment', 'smoke', 0);
   await ctx.goto('apartment', 'home', 'interiorDark');
   ctx.refresh();

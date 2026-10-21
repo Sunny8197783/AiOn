@@ -118,6 +118,8 @@ async function alert(ctx) {
   ctx.setLevelState('town', 'gates', { east: 'closed', stairs: 'open', ramp: 'open', access: 'closed' });
   ctx.setLevelState('town', 'notices', 'dday');
 
+  // What is still open depends on this run's closures; nobody names a road that is closed tonight.
+  const detour = [['danji', '단지길'], ['sijang', '시장길']].filter(([id]) => !closures.includes(id)).map(([, n]) => n).join('이나 ');
   let left = false, inStairs = false;
   const trail = ctx.trail = [];
   const steps = () => [{ text: '배낭 챙기기', done: !!G.know.bagOn || left }, { text: '계단으로 1층까지', done: inStairs }, { text: '가까운 대피소로', done: false }];
@@ -169,12 +171,12 @@ async function alert(ctx) {
       elevator: async () => { ctx.toast(`정전으로 멈춰 있다. ${fact('alert_stairs').text}`, 'official', 5000); recordEvent(G, 'elevator_tried', {}); },
       managerWindow: async () => {
         if (G.rel.manager.contact) {
-          await ctx.ui.talk({ speaker: '박영수 소장', role: '1층 현관', lines: ['정민 씨! 생활문화센터로 가요. 연무로 가운데는 통제한대요. 단지길이나 시장길로 돌아가요!'] });
-          G.know.closureHeard = true; ctx.note('박 소장: 연무로 중앙 구간 통제, 단지길·시장길로 우회', 'neighbor');
+          await ctx.ui.talk({ speaker: '박영수 소장', role: '1층 현관', lines: [`정민 씨! 생활문화센터로 가요. 연무로 가운데는 통제한대요. ${detour}로 돌아가요!`] });
+          G.know.closureHeard = true; ctx.note(`박 소장: 연무로 중앙 구간 통제, ${detour}로 우회`, 'neighbor');
         } else await ctx.ui.talk({ speaker: '관리사무소장', role: '1층 현관', lines: ['생활문화센터 대피소로 가세요! 길 막힌 데 있으니 안내 잘 보시고요!'] });
       },
       ...Object.fromEntries(Object.keys(CLOSURES).map(id => [`closure_${id}`, async () => {
-        await ctx.ui.talk({ speaker: '안내 요원', role: CLOSURES[id].label, lines: ['이 구간은 통제 중입니다. 돌아가 주세요. 생활문화센터는 단지길이나 시장길로 갈 수 있습니다.'] });
+        await ctx.ui.talk({ speaker: '안내 요원', role: CLOSURES[id].label, lines: [`이 구간은 통제 중입니다. 돌아가 주세요. 생활문화센터는 ${detour}로 갈 수 있습니다.`] });
         G.know.closureSeen = true; ctx.note(`${CLOSURES[id].label} (현장 안내 요원)`, 'site');
       }])),
       '*': async (point) => { if (point.kind === 'notice') await ctx.ui.talk({ speaker: point.label, role: '안내', lines: ['대피소: 연무 생활문화센터 지하주차장. 유도표지판의 화살표를 따라가세요.'] }); },
@@ -213,7 +215,8 @@ async function shelter(ctx) {
   ctx.engine.setEnv('underground', { seconds: 0.8 });
   let signed = false;
   ctx.objective('대피소 안에서', '접수대에서 명부를 쓰고 자리를 잡습니다.', [{ text: '명부 쓰기 (접수대)', done: false }, { text: '자리 잡기', done: false }]);
-  await ctx.roam({ rate: 0, on: {
+  await ctx.roam({ rate: 0, doors: false, on: {
+    shelterExit: async () => { ctx.toast('경보가 해제될 때까지 대피소 안에 머뭅니다.', 'site'); },
     reception: async () => {
       if (signed) return void ctx.toast('명부를 썼다.');
       const card = (G.items.contact_card?.bag ?? 0) > 0 || (G.items.doc_copies?.bag ?? 0) > 0;

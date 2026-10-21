@@ -161,11 +161,11 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
         p.rot += p.spin * dt;
         const size = p.s0 * (0.75 + 0.7 * Math.sin(Math.min(k * 1.25, 1) * Math.PI * 0.5) - 0.45 * k * k);
         const heat = 1 - k, a = smooth(0, 0.1, k) * Math.pow(1 - k, 1.1) * Math.min(1, shown * 1.6);
-        flames.push(p, size, p.rot, p.frame, 2.4 * (0.7 + 0.3 * heat), 2.4 * (0.32 + 0.5 * heat * heat), 2.4 * (0.1 + 0.35 * heat * heat * heat), a);
+        flames.push(p, size, p.rot, p.frame, 1.7 * (0.7 + 0.3 * heat), 1.7 * (0.32 + 0.5 * heat * heat), 1.7 * (0.1 + 0.35 * heat * heat * heat), a); // under bloom, so tongues keep their shape
       }
       flames.end();
       glow.begin();
-      glow.push(base, radius * 4.2, 0, 0, 1.0, 0.42, 0.14, 0.55 * shown);
+      glow.push(base, radius * 4.2, 0, 0, 1.0, 0.42, 0.14, 0.38 * shown);
       glow.end();
       eacc += (shown > 0.25 ? (rm ? 2 : 7) * shown * scale : 0) * dt;
       while (eacc >= 1) {

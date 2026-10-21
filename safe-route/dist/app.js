@@ -48,6 +48,24 @@ function applySettings() {
   store.set(SETTINGS_KEY, JSON.stringify(settings));
 }
 
+const DEBUG = new URLSearchParams(location.search).has('debug');
+// ?debug keeps frames coming while the page is hidden (an embedded pane can stop rAF yet still report
+// "visible"), so automated play-throughs work in the background.
+// ponytail: MessageChannel spin that stands in when rAF is 50 ms late, debug only.
+if (DEBUG) {
+  const raf = requestAnimationFrame.bind(window), ch = new MessageChannel(), q = [];
+  ch.port1.onmessage = () => {
+    const t = performance.now();
+    for (let i = q.length - 1; i >= 0; i--) if (q[i].ran) q.splice(i, 1); else if (t - q[i].at > 50) { q.splice(i, 1)[0].run(t); }
+    if (q.length) ch.port2.postMessage(0);
+  };
+  window.requestAnimationFrame = (cb) => {
+    const f = { at: performance.now(), ran: false, run(t) { if (!f.ran) { f.ran = true; cb(t); } } };
+    q.push(f); raf((t) => f.run(t)); ch.port2.postMessage(0);
+    return 0;
+  };
+}
+
 const audio = createAudio();
 const engine = createEngine({ canvas: document.getElementById('world'), quality: settings.quality, reduceMotion: settings.reduceMotion, levels: LEVELS,
   onQualityChange: (q) => { settings.quality = q; store.set(SETTINGS_KEY, JSON.stringify(settings)); } });
@@ -70,7 +88,7 @@ ctx.setPlayer = (preset) => engine.setPlayerPreset?.(preset);
 
 applySettings();
 // ?debug exposes the game for automated play-throughs (teleport to a point, read state).
-if (new URLSearchParams(location.search).has('debug')) window.__game = { ctx, engine, hud, get G() { return G; } };
+if (DEBUG) window.__game = { ctx, engine, hud, get G() { return G; } };
 
 // Global keys while roaming.
 let flashOn = false, flashT = 0;
@@ -106,6 +124,7 @@ async function run(start, resumeKey) {
     const [id, fn] = CHAPTERS[i];
     progress.index = i;
     ctx.resume = resumeKey ?? null;
+    hud.setObjective(null);
     if (!resumeKey) persist.checkpoint(id);
     resumeKey = null;
     for (;;) {
