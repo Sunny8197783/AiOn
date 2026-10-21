@@ -164,7 +164,7 @@ export function buildEvents(kit, people, walk) {
   // ================= per-frame =================
   let gt = 0;
   function update(dt, t, ctx = {}) {
-    const blink = Math.floor(t * 1.6) % 2 === 0;
+    const blink = ctx.reduced || Math.floor(t * 1.6) % 2 === 0; // steady when reduced motion is on
     flashMat.emissiveIntensity = active.length && blink ? 4 : 0;
     gt += dt;
     const pl = ctx.player;

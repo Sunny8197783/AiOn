@@ -155,7 +155,7 @@ export async function buildTown(kit, people, fx) {
     }
     WIND.uTime.value = t; WIND.uWind.value = reduced ? 0 : 1;
     traffic.update(dt, t, ctx);
-    events.update(dt, t, ctx);
+    events.update(dt, t, { ...ctx, reduced });
     crowd.update(dt, ctx);
     nt += dt;
     const pl = ctx.player;
