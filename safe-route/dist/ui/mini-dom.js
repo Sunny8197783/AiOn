@@ -13,7 +13,10 @@ export function el(tag, attrs = {}, ...kids) {
   return e;
 }
 
-export const escapeText = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// append() that skips null/false (native append would print "null").
+export const put = (parent, ...kids) => { parent.append(...kids.flat(Infinity).filter(k => k != null && k !== false)); return parent; };
+
+export const escapeText =(s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 const visible = (n) => !n.closest('[hidden]') && n.getClientRects().length > 0;
@@ -39,7 +42,7 @@ export function modal({ className = '', label = '', content = [], onKey } = {}) 
   const prev = document.activeElement;
   const root = el('div', { class: `mg-panel ${className}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': label, tabindex: '-1' });
   const back = el('div', { class: 'mg-backdrop' }, root);
-  root.append(...[].concat(content));
+  put(root, content);
   let resolve, closed = false;
   const done = new Promise(r => { resolve = r; });
   const release = trapFocus(root);
@@ -82,7 +85,7 @@ export function ladderHelp(mode, make) {
   const btn = el('button', { type: 'button', class: 'mg-btn mg-ghost', 'aria-expanded': 'false' }, '힌트 보기');
   btn.addEventListener('click', () => {
     const open = body.hidden;
-    if (open && !body.childElementCount) body.append(...[].concat(make()));
+    if (open && !body.childElementCount) put(body, make());
     body.hidden = !open; btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? '힌트 닫기' : '힌트 보기';
   });
   return el('div', { class: 'mg-hintbox' }, btn, body);

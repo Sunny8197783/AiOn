@@ -1,6 +1,6 @@
 // Packing one bag: two panes (집 비축 / 가방), click or keys move units, weight and volume meters, the goals
 // checklist. guided shows item tips inline, hint behind a button, free shows nothing extra.
-import { el, modal, header, ladderHelp, meterState, METER_WORD, fmtKg, announce } from './mini-dom.js';
+import { el, put, modal, header, ladderHelp, meterState, METER_WORD, fmtKg, announce } from './mini-dom.js';
 
 const TITLE = { alert: '비상가방 꾸리기', water: '물 받으러 갈 준비', evac: '대피 가방 하나' };
 const TAG = { water: '물', food: '식품', info: '정보', power: '전원', light: '빛', health: '건강', hygiene: '위생', warmth: '보온', tool: '도구', docs: '서류', fire: '화기 주의', spoil: '상하기 쉬움' };
@@ -107,7 +107,7 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
     mode === 'hint' ? el('p', { class: 'mg-why' }, '각 물건 아래에 도움말이 함께 보입니다.') : null,
   ]);
 
-  m.root.append(
+  put(m.root,
     header('가방', title, mode, 'mg-bag-title'),
     el('div', { class: 'mg-bag-grid' },
       el('section', { class: 'mg-pane', 'aria-labelledby': 'mg-pane-home' }, el('h3', { id: 'mg-pane-home' }, '집 비축 ', counts.home), lists.home),

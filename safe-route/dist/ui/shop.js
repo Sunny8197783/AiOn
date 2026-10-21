@@ -1,6 +1,6 @@
 // Shelf picker for the mart and the convenience store: quantity steppers, running total against the money
 // in hand, the weight that has to be carried home, stock badges and an info strip (labelled by source).
-import { el, modal, header, pill, won, fmtKg, announce } from './mini-dom.js';
+import { el, put, modal, header, pill, won, fmtKg, announce } from './mini-dom.js';
 
 const MAX_QTY = 20;
 const STOCK = { out: ['품절', 'is-out', '✕'], low: ['얼마 안 남음', 'is-low', '!'] };
@@ -110,7 +110,7 @@ export async function shop({ title = '진열대', money = 0, items = [], info = 
   const cancel = el('button', { type: 'button', class: 'mg-btn mg-ghost' }, '그만두기');
   cancel.addEventListener('click', () => m.close(null));
 
-  m.root.append(
+  put(m.root,
     header('장보기', title, null, 'mg-shop-title'),
     info.length ? el('ul', { class: 'mg-info', 'aria-label': '들은 정보' }, info.map(i => el('li', {}, pill(i.label), el('span', {}, i.text)))) : null,
     list,

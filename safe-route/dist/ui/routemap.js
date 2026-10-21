@@ -1,7 +1,7 @@
 // 2D map of 연무동 drawn from game/townmap.js: roads, crossings, buildings, the park, Korean labels, shelter
 // entrances with status icons, closures only when the player knows them, and up to 3 route options as lines
 // told apart by colour AND dash. routemap() resolves { choice: index | null }; miniMap() draws the HUD map.
-import { el, modal, header, ladderHelp } from './mini-dom.js';
+import { el, put, modal, header, ladderHelp } from './mini-dom.js';
 import { BOUNDS, SIDEWALK, ROADS, CROSSWALKS, BUILDINGS, AREAS, NODES, PLACES, SHELTER_ENTRANCES, CLOSURES } from '../game/townmap.js';
 import { explain } from '../game/routes.js';
 
@@ -146,7 +146,7 @@ export async function routemap({ mode = 'guided', from = 'home', to = 'shelter',
   const go = el('button', { type: 'button', class: 'mg-btn mg-primary' }, view ? '지도 닫기' : '이 길로 정한다');
   go.addEventListener('click', done);
 
-  m.root.append(
+  put(m.root,
     header(view ? '지도' : '경로 계획', view ? '연무동 지도' : '집에서 대피소까지', mode, 'mg-map-title'),
     el('div', { class: 'mg-map-grid' },
       wrap,

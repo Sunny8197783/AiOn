@@ -1,7 +1,7 @@
 // Portable radio: a backlit FM dial (drag, ←/→, Shift for fine steps), frequency readout, signal meter and
 // a waveform that turns to static off-station. Tuned in, the broadcast arrives line by line as captions;
 // '메모' keeps a line. Resolves { station, heard, noted }.
-import { el, modal, header, ladderHelp, pill, reduced } from './mini-dom.js';
+import { el, put, modal, header, ladderHelp, pill, reduced } from './mini-dom.js';
 import { radioSignal } from '../game/drills.js';
 
 const MIN = 87.5, MAX = 108, LOCK = 0.75;
@@ -114,7 +114,7 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
     const state = !power ? 'off' : cur ? `on:${cur.freq}` : clarity > 0 ? 'near' : 'static';
     if (state !== shownState) {
       shownState = state;
-      if (cur) { capWho.replaceChildren(el('b', {}, cur.name), mode === 'guided' && cur.kind === 'official' ? pill('official') : mode === 'guided' && cur.kind === 'rumor' ? pill('rumor') : null); capText.textContent = '…'; }
+      if (cur) { capWho.replaceChildren(); put(capWho, el('b', {}, cur.name), mode === 'guided' && (cur.kind === 'official' || cur.kind === 'rumor') ? pill(cur.kind) : null); capText.textContent = '…'; }
       else if (state === 'near') { capWho.replaceChildren(); capText.textContent = mode === 'free' ? '…지직… 말소리가 섞여 들린다…' : '…지직… 말소리가 섞여 들린다. 조금만 더 맞춰 보자.'; }
       else if (state === 'static') { capWho.replaceChildren(); capText.textContent = '치이이익— (잡음뿐이다)'; }
     }
@@ -141,7 +141,7 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
   }
   const help = ladderHelp(mode, () => [el('p', {}, `다이얼을 천천히 돌려 보세요 — 목표 ${target ? `${target.freq}MHz` : '방송이 들리는 곳'}`), el('p', { class: 'mg-why' }, '잡음이 줄고 신호 막대가 차오르면 방송이 들립니다. Shift를 누른 채 돌리면 0.1MHz씩 움직입니다.')]);
 
-  m.root.append(
+  put(m.root,
     header('라디오', '휴대용 라디오', mode, 'mg-radio-title'),
     help,
     el('div', { class: 'mg-radio-body' },

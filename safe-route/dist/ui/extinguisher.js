@@ -1,7 +1,7 @@
 // Extinguisher encounter: decide first (끈다 / 대피하며 알린다), then work the extinguisher by pressing the
 // steps in order — press-and-hold for 손잡이, ←/→ strokes for 쓸듯이 — over a live canvas of the fire.
 // Retreat is always available. Resolves { sequence, result } (result from game/drills.js evalExtinguisher).
-import { el, modal, header, ladderHelp, reduced, announce } from './mini-dom.js';
+import { el, put, modal, header, ladderHelp, reduced, announce } from './mini-dom.js';
 import { EXT_STEPS, EXT_CHOICES, evalExtinguisher } from '../game/drills.js';
 import { fact } from '../game/facts.js';
 
@@ -40,7 +40,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
   const retreatBtn = el('button', { type: 'button', class: 'mg-btn mg-retreat' }, el('span', { 'aria-hidden': 'true' }, '⤺ '), practice ? '연습 그만하기' : '물러나 알린다 (계단 · 119)');
   retreatBtn.addEventListener('click', () => (practice ? finish() : retreat()));
 
-  m.root.append(
+  put(m.root,
     header(practice ? '소화기 · 연습' : '소화기', practice ? '사용 순서 익히기' : large ? '천장까지 닿는 불길' : '작은 불', mode, 'mg-ext-title'),
     practice ? el('p', { class: 'mg-why' }, '연습입니다. 실제 불은 없습니다.') : null,
     el('div', { class: 'mg-ext-grid' },

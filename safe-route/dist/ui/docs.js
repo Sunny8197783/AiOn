@@ -1,6 +1,6 @@
 // Emergency contact card: a paper card on the desk. Tick a field to write it on the card, pick where the card
 // is kept, and see what stays readable once the phone is dead. Resolves { card: { id: value }, where }.
-import { el, modal, header, ladderHelp, reduced, announce } from './mini-dom.js';
+import { el, put, modal, header, ladderHelp, reduced, announce } from './mini-dom.js';
 
 const WHERE = { bag: ['배낭 앞주머니', '대피할 때 배낭과 함께 나갑니다.'], home: ['책상 서랍', '집 안에 있을 때만 꺼내 볼 수 있습니다.'] };
 
@@ -48,7 +48,7 @@ export async function docs({ mode = 'guided', fields = [], carry = ['bag', 'home
   const help = ladderHelp(mode, () => [el('p', {}, '휴대폰이 꺼져도 볼 수 있는 것은 종이에 적은 것뿐입니다. 꼭 필요한 연락처와 장소부터 적어 보세요.'),
     mode === 'hint' ? el('p', { class: 'mg-why' }, '각 항목 아래에 왜 필요한지가 함께 보입니다.') : null]);
 
-  m.root.append(
+  put(m.root,
     header('서류·연락처 정리', '비상연락카드', mode, 'mg-docs-title'),
     el('div', { class: 'mg-docs-grid' },
       el('div', { class: 'mg-docs-left' }, help, list, whereSet),
