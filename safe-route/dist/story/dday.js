@@ -41,7 +41,7 @@ function blackoutState(ctx) {
 async function evening(ctx) {
   const G = ctx.G;
   G.day = 0; G.minute = 19 * 60 + 30;
-  ctx.power = true; ctx.indoorEnv = 'interior'; ctx.outdoorEnv = 'night';
+  ctx.power = true; ctx.indoorEnv = 'interiorNight'; ctx.outdoorEnv = 'night';
   ctx.setLevelState('apartment', 'windowView', 'night');
   applyHome(ctx);
   await ctx.goto('apartment', 'home');

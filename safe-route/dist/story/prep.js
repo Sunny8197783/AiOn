@@ -23,7 +23,7 @@ function envForSlot(i) { return i === 0 ? 'night' : i >= 5 ? 'dusk' : 'day'; }
 export async function prep(ctx) {
   const { G } = ctx;
   G.chapter = 'prep';
-  ctx.indoorEnv = 'interior'; ctx.power = true; ctx.outdoorEnv = 'night';
+  ctx.indoorEnv = 'interiorNight'; ctx.power = true; ctx.outdoorEnv = 'night';
   ctx.hud.setChapter('1장', '준비 — 남은 시간 여섯 칸');
   applyHome(ctx);
   await ctx.goto('apartment', 'home');
@@ -37,6 +37,7 @@ export async function prep(ctx) {
     const slot = G.slots.used;
     setClockToSlot(G, slot);
     ctx.outdoorEnv = envForSlot(slot);
+    ctx.indoorEnv = slot === 0 ? 'interiorNight' : 'interior';
     ctx.engine.setEnv(ctx.indoorEnv, { seconds: 0.5 });
     ctx.setLevelState('apartment', 'windowView', slot === 0 ? 'night' : slot >= 5 ? 'dusk' : 'day');
     ctx.refresh();
@@ -116,7 +117,8 @@ function homeFree(ctx) {
 async function eveningBeforeAlert(ctx) {
   const { G } = ctx;
   G.day = -1; G.minute = 20 * 60;
-  ctx.outdoorEnv = 'night';
+  ctx.outdoorEnv = 'night'; ctx.indoorEnv = 'interiorNight';
+  ctx.engine.setEnv('interiorNight', { seconds: 1 });
   ctx.setLevelState('apartment', 'windowView', 'night');
   if (ctx.engine.level?.id !== 'apartment') await goHome(ctx);
   ctx.refresh();

@@ -62,15 +62,22 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     else console.error('[engine] engine/people.js unavailable; using capsule people', p.reason ?? 'no createPerson export');
     if (c.status === 'fulfilled' && typeof c.value.createCrowd === 'function') people.createCrowd = c.value.createCrowd;
     else console.error('[engine] engine/crowd.js unavailable; crowds stay empty', c.reason ?? 'no createCrowd export');
-    let model;
-    try { model = people.createPerson({ preset: 'jeongmin', seed: 1 }); if (!model?.group) throw new Error('createPerson returned no group'); }
-    catch (err) { console.error('[engine] player model failed; using a capsule', err); model = capsulePerson({ preset: 'jeongmin' }); }
-    controls.setModel(model);
+    controls.setModel(playerModel('jeongmin'));
   }).catch((err) => console.error('[engine] people setup failed', err)); // never blocks level loading
   let fx = stubFx();
   const fxReady = import('./fx.js').then((m) => { fx = m.createFx(THREE, kit, { reduceMotion: RM }); })
     .catch((err) => console.error('[engine] engine/fx.js unavailable; fire, smoke and rain are disabled', err));
   const ready = Promise.all([peopleReady, fxReady]);
+  // One cached model per preset; the 서연 interlude swaps the model the same controller drives.
+  const models = {};
+  function playerModel(preset) {
+    if (models[preset]) return models[preset];
+    let m;
+    try { m = people.createPerson({ preset, seed: 1 }); if (!m?.group) throw new Error('createPerson returned no group'); }
+    catch (err) { console.error(`[engine] player model "${preset}" failed; using a capsule`, err); m = capsulePerson({ preset }); }
+    return (models[preset] = m);
+  }
+  const setPlayerPreset = (preset) => ready.then(() => controls.setModel(playerModel(preset)));
 
   // ---- environment presets (tweened) ----
   let envName = null, envFrom = null, envTo = null, envK = 1, envDur = 0, rainFx = null, beam = 1;
@@ -237,7 +244,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     get controlsEnabled() { return controls.enabled; },
     get env() { return envName; },
     get reduceMotion() { return RM; },
-    enter, setEnv,
+    enter, setEnv, setPlayerPreset,
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
     setView: (v) => controls.setView(v),
     setControls: (on) => controls.setEnabled(on),
