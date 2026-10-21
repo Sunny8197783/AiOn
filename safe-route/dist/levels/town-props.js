@@ -41,13 +41,13 @@ export function buildProps(kit, { avoid = [] } = {}) {
   for (let x = -122; x <= 122; x += 26) {
     for (const [z, ry, off] of [[6.55, 0, 0], [-6.55, Math.PI, 13]]) {
       const xx = x + off;
-      if (xx > 126 || cw('yeonmu').some(a => Math.abs(a - xx) < 3.6) || Math.abs(Math.abs(xx) - 50) < 5.2) continue;
+      if (xx > 126 || cw('yeonmu').some(a => Math.abs(a - xx) < 4.6) || Math.abs(Math.abs(xx) - 50) < 5.2) continue;
       addLight(xx, z, ry);
     }
   }
   for (const [x, ry, road] of [[-54.55, -Math.PI / 2, 'munhwa'], [-45.45, Math.PI / 2, 'munhwa'], [45.45, -Math.PI / 2, 'hanbit'], [54.55, Math.PI / 2, 'hanbit']]) {
     for (let z = -102 + (x > 0 ? 13 : 0); z <= 104; z += 26) {
-      if (Math.abs(z) < 9 || Math.abs(Math.abs(z) - 60) < 5.5 || cw(road).some(a => Math.abs(a - z) < 3.6)) continue;
+      if (Math.abs(z) < 9 || Math.abs(Math.abs(z) - 60) < 5.5 || cw(road).some(a => Math.abs(a - z) < 4.6)) continue;
       addLight(x, z, ry);
     }
   }
