@@ -167,7 +167,7 @@ export function buildStairs(B, g, dyn) {
   const { kit, M } = B, S = STAIR;
   for (const n of [1, 2, 3, 4]) { // fire doors: 1F opens toward the lobby, 3F into the stairwell; 2F/4F stay shut
     const auto = n === 1 || n === 3;
-    const D = B.door(auto ? dyn : g, 'z', 0, 4.55, 5.45, yOf(n), 2.1, M.fireDoor, { hinge: 'a', dir: n === 1 ? -1 : 1, solid: auto });
+    const D = B.door(auto ? dyn : g, 'z', 0, 4.55, 5.45, yOf(n), 2.1, M.fireDoor, { hinge: 'a', dir: n === 1 ? -1 : 1 }); // 2F/4F keep a solid: the wall's door gap runs full height
     if (auto) B.autoDoor(D);
   }
   B.wallX(g, 3.3, 0, 5.1, -0.2, S.top, M.stairWall, { side: 1 });
