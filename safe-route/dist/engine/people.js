@@ -15,6 +15,7 @@ export const PROPS = ['backpack', 'waterJug', 'walker', 'flashlight', 'phone', '
 const BONE_NAMES = Object.keys(B);
 const AUTO = { phone: 'phone', carry: 'waterJug', walker: 'walker' }; // animations that need a prop shown
 const FADE = 0.2;
+const STAIRS = new Set(['stairsUp', 'stairsDown']);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _S = new THREE.Vector3(), _D = new THREE.Vector3(), _N = new THREE.Vector3(),
   _U = new THREE.Vector3(), _X = new THREE.Vector3(), _Y = new THREE.Vector3(), _Z = new THREE.Vector3(), _m = new THREE.Matrix4(),
   _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _gq = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -98,6 +99,29 @@ export function createPerson({ preset = 'crowd', seed } = {}) {
     bones[B.pelvis].position.set(J[B.pelvis][0] + Q[OFF], J[B.pelvis][1] + Q[OFF + 1], J[B.pelvis][2] + Q[OFF + 2]);
   }
 
+  // Ground contact for the procedural gaits (ground = plane y = 0 under the person): lift the pelvis when the
+  // lower ankle is below its standing height (never more, so no foot floats), then pitch each foot within the
+  // range that keeps both its toe and heel sole points at or above the ground.
+  const shoeL = 0.155 * d.H * (d.f ? 0.97 : 1), zt = -0.74 * shoeL, zh = 0.2 * shoeL;
+  const rt = Math.hypot(d.ankleY, zt), rh = Math.hypot(d.ankleY, zh), FM = [new THREE.Matrix4(), new THREE.Matrix4()];
+  const asinC = (x) => Math.asin(clamp(x, -1, 1));
+  function plantFeet() {
+    const feet = [B.lFoot, B.rFoot];
+    feet.forEach((f, k) => {
+      FM[k].identity();
+      for (const i of [B.root, B.pelvis, f - 2, f - 1, f]) { bones[i].updateMatrix(); FM[k].multiply(bones[i].matrix); }
+    });
+    const lift = Math.max(0, d.ankleY - Math.min(FM[0].elements[13], FM[1].elements[13]));
+    if (lift > 0) { bones[B.pelvis].position.y += lift; for (const M of FM) M.elements[13] += lift; }
+    feet.forEach((f, k) => {
+      const M = FM[k], ya = M.elements[13];
+      const yt = _v.set(0, -d.ankleY, zt).applyMatrix4(M).y, yh = _w.set(0, -d.ankleY, zh).applyMatrix4(M).y;
+      const lo = asinC((ya - yt) / rt) - asinC(ya / rt); // toe-up rotation that puts the toe on the ground
+      const hi = asinC(ya / rh) - asinC((ya - yh) / rh); // ... and the heel
+      bones[f].rotation.x += lo <= hi ? clamp(0, lo, hi) : (lo + hi) / 2;
+    });
+  }
+
   // Two-bone arm IK in world space: wrist to target, elbow toward pole (world direction), weight w.
   function solveArm(side, target, pole, w) {
     const a = side < 0 ? B.lArm : B.rArm, up = bones[a], fo = bones[a + 1], L1 = d.U1, L2 = d.U2;
@@ -161,6 +185,7 @@ export function createPerson({ preset = 'crowd', seed } = {}) {
       for (const wb of objs.walker.userData.wheels) wb.rotation.x = wheelA;
     }
     applyPose(P);
+    if (!STAIRS.has(cur) && !(fade < 1 && STAIRS.has(prev))) plantFeet(); // on stairs the ground is not the plane y = 0
     const mode = gripOf(eff(cur), { walker: objs.walker?.visible, cart: objs.cart?.visible });
     ikW += ((mode ? 1 : 0) - ikW) * Math.min(1, dt / FADE * 1.5);
     const needWorld = ikW > 0.01 || hangers.some(h => h.visible);

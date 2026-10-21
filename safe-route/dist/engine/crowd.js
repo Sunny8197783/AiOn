@@ -308,7 +308,7 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
       }
     }
     if (goal) steer(a, goal[0], goal[1], v, dt, pl);
-    else { const k = Math.max(0, 1 - dt * 6); a.vx *= k; a.vz *= k; a.x += a.vx * dt; a.z += a.vz * dt; }
+    else steer(a, a.x, a.z, 0, dt, pl); // standing: only step aside for neighbours and the player
   }
 
   // Animation, facing, placement and LOD for one member.
@@ -333,7 +333,7 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     if (mode === 'queue') queueTick(dt);
     for (const a of agents) {
       if (!a.on) continue;
-      if (mode !== 'sit' && mode !== 'idle') tick(a, dt, pl);
+      if (mode !== 'sit') tick(a, dt, pl);
       if (a.state === 'gone') continue;
       pose(a, dt);
       const d2 = hasViewer ? (a.x - viewer.x) ** 2 + (a.z - viewer.z) ** 2 : 0;
