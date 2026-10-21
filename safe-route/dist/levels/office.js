@@ -379,7 +379,11 @@ export function buildOffice(kit, people) {
   const staff1 = npc(people, 'crowd', 61, { x: -4.4, z: ISL[1] + 1.15, ry: 0, anim: 'sitChair' });
   const staff2 = npc(people, 'crowd', 62, { x: 4.6, z: -11.35, ry: 0.2, anim: 'phone' });
   chairs.forEach((c) => { if (Math.abs(c.x + 4.4) < 0.2 && Math.abs(c.z - ISL[1] - 1.15) < 0.3) { c.x = -4.4; c.z = ISL[1] + 1.15; c.ry = 0; } });
-  for (const p of [coworker, staff1, staff2]) dyn.add(p.group);
+  const worker = npc(people, 'crowd', 63, { x: -7, y: GY, z: -18.6, ry: -Math.PI / 2, anim: 'walk' }); worker.setSpeed(1.1);
+  const driver = npc(people, 'crowd', 64, { x: 35.4, y: GY, z: -32.8, ry: 2.6, anim: 'phone' });
+  const crew = [coworker, staff1, staff2, worker, driver];
+  for (const p of crew) dyn.add(p.group);
+  let pace = 1;
 
   // ---- state ----
   const state = { alerts: 0, dashboard: null, outside: null };
@@ -410,14 +414,17 @@ export function buildOffice(kit, people) {
     walk: [{ x0: -9, x1: 9, z0: -12, z1: 0, y: 0 }],
     solids, points,
     spawns: { entry: { x: DOOR, y: 0, z: -1.3, yaw: 0 }, desk: { x: ME.x, y: 0, z: ME.z + 1.25, yaw: 0 } },
-    npcs: { coworker, staff1, staff2 },
+    npcs: { coworker, staff1, staff2, worker, driver },
     states: { alerts: [0, 1, 2, 3], dashboard: ['(canvas)'], outside: [null, ...MOODS] },
     setState(key, v) { if (key === 'dashboard' && v === '(canvas)') return; setState(key, v); },
     update(dt, t, ctx = {}) {
       view.set(state.outside || moodFor(ctx.env, ctx.env === 'interiorNight' ? 'night' : 'dusk'));
       hazard.emissiveIntensity = Math.sin(t * Math.PI * 2.6) > 0 ? 3 : 0;
       acc += dt; if (acc > 0.6) { acc = 0; if (wallAlerts) { blink = !blink; redrawWall(); } }
-      for (const p of [coworker, staff1, staff2]) p.update(dt);
+      const wg = worker.group; wg.position.x += pace * 1.1 * dt; // paces between the pallet stacks below the window
+      if (wg.position.x > 6 || wg.position.x < -8) { pace = -pace; wg.position.x = Math.max(-8, Math.min(6, wg.position.x)); }
+      wg.rotation.y = pace > 0 ? -Math.PI / 2 : Math.PI / 2;
+      for (const p of crew) p.update(dt);
     },
     anchors: {
       deskCam: { x: ME.x, y: 1.2, z: ME.z + 1.15, look: { x: ME.x - 0.2, y: 1.0, z: ME.z + 0.18 } },
