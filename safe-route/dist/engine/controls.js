@@ -192,7 +192,20 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     override = typeof fn === 'function' ? fn : null;
   }
 
-  // ---- interaction: nearest enabled point within r, in front (< 75°) of the camera or the body ----
+  // A point is behind a wall when solids block the line to it at both 0.3 m and 1.5 m (low furniture does not
+  // hide it). Its own furniture is ignored: solids holding the point, and the last 0.35 m before it.
+  const so = { x: 0, y: 0, z: 0 }, sd = { x: 0, y: 0, z: 0 };
+  function hidden(p, solids) {
+    const dx = p.x - position.x, dz = p.z - position.z, d = Math.hypot(dx, dz);
+    if (d < 0.4) return false;
+    const k = (d - 0.35) / d, dy = ((p.y ?? position.y) - position.y) * k;
+    return [0.3, 1.5].every((h) => {
+      so.x = position.x; so.y = position.y + h; so.z = position.z; sd.x = dx * k; sd.y = dy; sd.z = dz * k;
+      return solids.some((s) => s && !s.off && !(p.x >= s.x0 && p.x <= s.x1 && p.z >= s.z0 && p.z <= s.z1) && segBox(so, sd, s, 0) <= 1);
+    });
+  }
+
+  // ---- interaction: nearest enabled point within r, in front (< 75°) of the camera or the body, not behind a wall ----
   function findNearest(L) {
     let best = null, bestScore = Infinity;
     for (const p of L?.points || []) {
@@ -206,7 +219,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
         if (off > 75 * D2R) continue;
       }
       const score = d + off * 0.6;
-      if (score < bestScore) { bestScore = score; best = p; }
+      if (score < bestScore && !hidden(p, L.solids || [])) { bestScore = score; best = p; }
     }
     return best;
   }

@@ -162,6 +162,8 @@ export function buildShell(kit, T) {
   add(kit.box(sx1 - sx0, 0.22, -16.25 - zFoot, M.step, { x: 5, y: 3.4 - 0.22, z: (zFoot - 16.25) / 2 })); // top landing
   add(kit.box(sx1 - sm1, 3.0, 0.08, M.wall, { x: (sm1 + sx1) / 2, z: zFoot + 0.04 }));                // closes the space under flight 2
   solids.push({ x0: sm1, x1: sx1, z0: zLand, z1: zFoot + 0.1, y0: -1, y1: 1.6 });
+  for (const y of [3.9, 4.5]) add(rod(THREE, { x: sx0, y, z: zFoot - 0.04 }, { x: sm, y, z: zFoot - 0.04 }, 0.022, M.stainless)); // top landing guard over flight 1
+  solid(sx0, sm1, zFoot - 0.12, zFoot, 3.2, 4.6);
   for (const [x, ya, za, yb, zb] of [[sx0 + 0.06, 0.9, zFoot, 2.6, zLand], [sm - 0.06, 0.9, zFoot, 2.6, zLand], [sx1 - 0.06, 2.6, zLand, 4.3, zFoot], [sm1 + 0.06, 2.6, zLand, 4.3, zFoot]]) {
     if (ya < 1) add(rod(THREE, { x, y: ya, z: za + 0.3 }, { x, y: ya, z: za }, 0.022, M.stainless));
     add(rod(THREE, { x, y: ya, z: za }, { x, y: yb, z: zb }, 0.022, M.stainless));
