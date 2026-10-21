@@ -182,6 +182,7 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
   const hillsNear = hillRing(kit, 760, 25, 110, 5, [[Math.PI * 1.5, 0.35, 0.9], [0.4, 0.25, 0.4]]);
   const hillsFar = hillRing(kit, 1100, 50, 150, 11, [[Math.PI * 1.35, 0.5, 0.6], [2.6, 0.4, 0.5]]);
   world.add(city, beacons, hillsNear, hillsFar);
+  group.userData.noAO = world.userData.noAO = true; // post.js keeps these out of the AO G-buffer
   scene.add(group, world);
 
   let shadowBox = 70, cur = null;
