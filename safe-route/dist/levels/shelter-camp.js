@@ -7,6 +7,7 @@ export const MAT_COLS = Array.from({ length: 13 }, (_, i) => -20.4 + 2.2 * i);
 export const MAT_ROWS = [-3.9, -1.55, 1.55, 3.9];
 export const SOUTH_MATS = { cols: [-20.6, -18.4, -16.2, -14, -11.8, -9.6], rows: [12.3, 14.5] };
 export const SPOT = { x: MAT_COLS[9], z: MAT_ROWS[3] };          // the free mat the player can take
+export const CHAIRS = { reception: [[-0.45, 0.7, 0], [0.5, 0.75, 0.2]], radio: [[-0.9, 0.2, -Math.PI / 2], [0.9, 0.25, Math.PI / 2], [0.1, 0.75, 0]] };   // [dx, dz, ry] from the table
 export const RECEPTION = { x: 2.0, z: -8.6 }, BOARD = { x: -3.0, z: -13.6 }, RADIO = { x: -5.5, z: 7.4 }, PALLETS = { x: -19.3, z: -13.2 };
 
 export function buildCamp(kit, T) {
@@ -88,7 +89,7 @@ export function buildCamp(kit, T) {
 
   // ---- reception: roster clipboard, pens, masks, sanitiser, battery lantern ----
   table(RECEPTION.x, RECEPTION.z);
-  chair(RECEPTION.x - 0.45, RECEPTION.z + 0.7, Math.PI); chair(RECEPTION.x + 0.5, RECEPTION.z + 0.75, Math.PI + 0.2);
+  for (const [dx, dz, ry] of CHAIRS.reception) chair(RECEPTION.x + dx, RECEPTION.z + dz, ry);   // staff sit south, facing the queue
   const rx = RECEPTION.x, rz = RECEPTION.z;
   add(kit.box(0.24, 0.012, 0.33, M.wood, { x: rx - 0.35, y: 0.74, z: rz - 0.05, ry: 0.1 }));
   const sheet = add(new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.28), new THREE.MeshStandardMaterial({ map: T.rosterTex(), roughness: 0.8 })));
@@ -117,7 +118,7 @@ export function buildCamp(kit, T) {
 
   // ---- the shared radio on its table, chairs around it ----
   table(RADIO.x, RADIO.z, 0, 1.2, 0.6);
-  for (const [dx, dz, ry] of [[-0.9, 0.2, -Math.PI / 2], [0.9, 0.25, Math.PI / 2], [0.1, 0.75, Math.PI]]) chair(RADIO.x + dx, RADIO.z + dz, ry);
+  for (const [dx, dz, ry] of CHAIRS.radio) chair(RADIO.x + dx, RADIO.z + dz, ry);
   const radio = new THREE.Group(); radio.position.set(RADIO.x, 0.72, RADIO.z - 0.05); radio.rotation.y = 0.15; add(radio, live);
   radio.add(kit.rbox(0.34, 0.2, 0.11, 0.02, kit.mat('paint:#3b3e42', { roughness: 0.5 })));
   const grille = new THREE.Mesh(new THREE.CircleGeometry(0.06, 20), kit.mat('paint:#1d1f22', { roughness: 0.9 })); grille.position.set(-0.08, 0.1, -0.056); grille.rotation.y = Math.PI; radio.add(grille);
@@ -155,8 +156,8 @@ export function buildCamp(kit, T) {
     const s = add(kit.sign([label], { w: 0.45, h: 0.14, bg: '#ffffff', fg: '#111', single: true })); s.position.set(x - 0.28, 0.6, z); s.rotation.y = -Math.PI / 2;
   }
   // priority area stand in the south-west bays
-  const pr = add(kit.sign(['노약자 · 영유아 동반 구역'], { w: 1.1, h: 0.3, bg: '#f7f5ee', fg: '#1f4e8c', border: '#1f4e8c', single: true })); pr.position.set(-15.2, 1.15, 10.9); pr.rotation.y = Math.PI;
-  add(kit.cyl(0.02, 0.02, 1.0, M.legs, { x: -15.2, z: 10.94 }, 6)); add(kit.cyl(0.16, 0.18, 0.03, M.seat, { x: -15.2, z: 10.94 }, 12));
+  const pr = add(kit.sign(['노약자 · 영유아 동반 구역'], { w: 1.1, h: 0.3, bg: '#f7f5ee', fg: '#1f4e8c', border: '#1f4e8c', single: true })); pr.position.set(-13.8, 1.15, 10.96); pr.rotation.y = Math.PI;
+  add(kit.cyl(0.02, 0.02, 1.0, M.legs, { x: -13.8, z: 11.0 }, 6)); add(kit.cyl(0.16, 0.18, 0.03, M.seat, { x: -13.8, z: 11.0 }, 12));
 
   // ---- banner hung from the drain line on the south wall (sways in the ventilation draught) ----
   const banner = new THREE.Group(); banner.position.set(-11.5, 2.78, ROOM.z1 - 0.12); add(banner, live);
