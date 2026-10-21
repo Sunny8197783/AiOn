@@ -408,7 +408,7 @@ export function buildOffice(kit, people) {
   ];
 
   kit.merge(stat); kit.merge(yard);
-  let acc = 0;
+  let acc = 0, rmT = 0, reduced = false;
   return {
     id: 'office', group, env: 'interior',
     walk: [{ x0: -9, x1: 9, z0: -12, z1: 0, y: 0 }],
@@ -419,8 +419,9 @@ export function buildOffice(kit, people) {
     setState(key, v) { if (key === 'dashboard' && v === '(canvas)') return; setState(key, v); },
     update(dt, t, ctx = {}) {
       view.set(state.outside || moodFor(ctx.env, ctx.env === 'interiorNight' ? 'night' : 'dusk'));
-      hazard.emissiveIntensity = Math.sin(t * Math.PI * 2.6) > 0 ? 3 : 0;
-      acc += dt; if (acc > 0.6) { acc = 0; if (wallAlerts) { blink = !blink; redrawWall(); } }
+      if ((rmT -= dt) <= 0) { rmT = 1; reduced = !!(globalThis.document?.documentElement?.classList?.contains('reduce-motion') || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches); }
+      hazard.emissiveIntensity = reduced ? 2 : Math.sin(t * Math.PI * 2.6) > 0 ? 3 : 0;   // reduced motion: steady lamp, rows stop blinking
+      acc += dt; if (acc > 0.6) { acc = 0; const b = wallAlerts && !reduced ? !blink : false; if (b !== blink) { blink = b; redrawWall(); } }
       const wg = worker.group; wg.position.x += pace * 1.1 * dt; // paces between the pallet stacks below the window
       if (wg.position.x > 6 || wg.position.x < -8) { pace = -pace; wg.position.x = Math.max(-8, Math.min(6, wg.position.x)); }
       wg.rotation.y = pace > 0 ? -Math.PI / 2 : Math.PI / 2;
