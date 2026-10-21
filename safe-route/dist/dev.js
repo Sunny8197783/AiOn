@@ -10,7 +10,7 @@ export const REGISTRY = {
 };
 const LEVEL_NAMES = { town: '연무동 거리', apartment: '한빛아파트 103동', mart: '연무마트', store: '바로편의점', office: '한결물류 사무실', shelter: '생활문화센터 대피소' };
 const ENV_NAMES = { day: '낮 13:00', afternoon: '오후 17:30', dusk: '해질녘 18:40', night: '밤 (전력 정상)', blackout: '정전 밤', interior: '실내', interiorNight: '실내 · 밤', interiorDark: '실내 · 소등', underground: '지하' };
-const MULTI = new Set(['closures', 'soldOut']); // array-valued states: toggle chips
+const MULTI = new Set(['closures', 'soldOut', 'ways']); // array-valued states: toggle chips
 const QS = new URLSearchParams(location.search);
 const opt = {
   level: REGISTRY[QS.get('level')] ? QS.get('level') : 'town', spawn: QS.get('spawn') || null,
