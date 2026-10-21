@@ -38,6 +38,7 @@ export async function buildApartment(kit, people, fx) {
   areas[0].add(kit.box(0.32, 0.12, 0.08, B.M.white, { x: 3.2, y: 2.3, z: -0.14 }));
   for (const dx of [-0.1, 0.1]) areas[0].add(kit.cyl(0.035, 0.03, 0.05, B.emLampMat, { x: 3.2 + dx, y: 2.25, z: -0.16, cast: false }));
   B.sensors.push({ x: 3.2, y: 2.2, z: -0.45, kind: 'backup' });
+  areas[1].add(kit.slab(3.4, 0.2, 3.7, B.M.concrete, { x: 5, y: -0.21, z: 3.25 })); // stairwell ground floor under the flights
   buildCorridor(B, areas[2], dyn, H);
   // live doors: merge each moving leaf (pivot) and gather their static frames into one merged group
   const frames = new THREE.Group(); frames.name = 'apt-door-frames';
@@ -169,7 +170,7 @@ export async function buildApartment(kit, people, fx) {
     stepLights(dt, p);
     if (power) for (const tick of B.ticks) tick(dt, t, S);
     else if (H.candleWindow) H.candleWindow.emissiveIntensity = 0.1 + 0.03 * Math.sin(t * 7.1) + 0.02 * Math.sin(t * 12.7); // a neighbour's candle in 301
-    props.update(dt, t);
+    props.update(dt, t); view.update(dt);
     fire.update(dt, cam); smoke.update(dt, cam); haze.update(dt, cam);
     if (p.y < 2 && Math.hypot(p.x - 10.4, p.z + 4.1) < 25) { // 박 소장 looks up when the player comes to the window
       manager.lookAt?.(...(Math.hypot(p.x - 10.4, p.z + 4.1) < 4.5 ? [p.x, p.z] : [null, null])); manager.update(dt);

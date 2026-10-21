@@ -4,6 +4,7 @@
 // kitchen windows lit at night, dark with green exit dots and a few torches in a blackout), and a far ring of city
 // and hills with stars and the moon. Everything is unlit (MeshBasic, no fog) and tinted per view; nothing is merged.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const hash = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
 const VIEWS = {
@@ -96,6 +97,26 @@ export function buildView(B) {
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
   const pools = add(kit.instanced(new THREE.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), poolMat, posts.map(p => ({ x: p.x, y: 0.02, z: p.z })), { cast: false, receive: false }));
 
+  // ---- traffic on the inner road: a few cars loop east-west; head/tail lamps at dusk, at night and in a blackout ----
+  const movers = [{ x: -50, z: 41.7, v: 7 }, { x: 8, z: 41.7, v: 6 }, { x: 30, z: 39.3, v: -6.5 }, { x: -20, z: 39.3, v: -7.5 }]; // keep right
+  const mBody = kit.instanced(shade(new THREE.BoxGeometry(4.5, 0.78, 1.84).translate(0, 0.67, 0)), basic({ vertexColors: true }), movers, { cast: false, receive: false });
+  movers.forEach((_, i) => mBody.setColorAt(i, new THREE.Color(['#ecebe7', '#1c1d20', '#b8bcc0', '#26324a'][i])));
+  const mCab = kit.instanced(shade(new THREE.BoxGeometry(2.4, 0.56, 1.6).translate(-0.15, 1.34, 0)), basic({ vertexColors: true }, 0x2a3038), movers, { cast: false, receive: false });
+  const lampGeo = mergeGeometries([[2.26, 0.7, 4, 4, 3.4], [-2.26, 0.75, 3, 0.15, 0.08]].flatMap(([x, y, cr, cg, cb]) => [-0.62, 0.62].map((z) => {
+    const b = new THREE.BoxGeometry(0.04, 0.12, 0.3).translate(x, y, z); b.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b.attributes.position.count * 3).map((_, i) => [cr, cg, cb][i % 3]), 3)); return b; })));
+  const mLamp = kit.instanced(lampGeo, new THREE.MeshBasicMaterial({ fog: false, vertexColors: true }), movers, { cast: false, receive: false });
+  const traffic = [mBody, mCab, mLamp];
+  for (const m of traffic) { m.frustumCulled = false; add(m); }
+  const tm = new THREE.Matrix4(), tq = new THREE.Quaternion(), tp = new THREE.Vector3(), ts = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+  function update(dt) {
+    movers.forEach((c, i) => {
+      c.x += c.v * Math.min(dt, 0.1); if (c.x > 62) c.x = -62; else if (c.x < -62) c.x = 62;
+      tm.compose(tp.set(c.x, -0.03, c.z), tq.setFromAxisAngle(up, c.v > 0 ? 0 : Math.PI), ts);
+      for (const m of traffic) m.setMatrixAt(i, tm);
+    });
+    for (const m of traffic) m.instanceMatrix.needsUpdate = true;
+  }
+
   let current = null;
   function setView(name) {
     const V = VIEWS[name];
@@ -107,10 +128,10 @@ export function buildView(B) {
     for (const t of tinted) t.mat.color.copy(t.base).multiplyScalar(V.tint);
     farMat.color.setScalar(V.far); facMat.color.setScalar(V.fac); capMat.color.set(V.cap);
     headMat.color.set(V.lamps ? new THREE.Color(5, 4.2, 3) : new THREE.Color(0xb9bcc0).multiplyScalar(V.tint));
-    pools.visible = !!V.lamps;
+    pools.visible = !!V.lamps; mLamp.visible = name !== 'day';
   }
-  setView('day');
-  return { group, setView, views: Object.keys(VIEWS) };
+  setView('day'); update(0);
+  return { group, setView, update, views: Object.keys(VIEWS) };
 }
 
 function drawFar(c, w, h, V, L) {
@@ -120,7 +141,7 @@ function drawFar(c, w, h, V, L) {
   const n = Math.round(L.stars.length * V.stars);
   for (let i = 0; i < n; i++) { const s = L.stars[i]; c.fillStyle = `rgba(235,240,255,${s.a})`; c.fillRect(s.x, s.y, s.s, s.s); }
   if (V.moon) {
-    const mx = 1150, my = 300, g = c.createRadialGradient(mx, my, 4, mx, my, 60); g.addColorStop(0, 'rgba(220,230,255,0.35)'); g.addColorStop(1, 'rgba(220,230,255,0)');
+    const mx = 1250, my = 300, /* azimuth ~140° like the engine's moon, low enough to show through windows */ g = c.createRadialGradient(mx, my, 4, mx, my, 60); g.addColorStop(0, 'rgba(220,230,255,0.35)'); g.addColorStop(1, 'rgba(220,230,255,0)');
     c.fillStyle = g; c.fillRect(mx - 60, my - 60, 120, 120); c.fillStyle = '#f2f0e6'; c.beginPath(); c.arc(mx, my, 9, 0, 7); c.fill();
   }
   L.ridges.forEach((ridge, i) => { c.fillStyle = V.hill[i]; c.beginPath(); c.moveTo(0, H0); ridge.forEach((y, x) => c.lineTo(x * 8, H0 - y)); c.lineTo(w, H0); c.closePath(); c.fill(); });
