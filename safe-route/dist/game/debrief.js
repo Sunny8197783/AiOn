@@ -8,16 +8,29 @@ import { EXT_STEPS } from './drills.js';
 const PEOPLE = { manager: '박영수 소장', clerk: '이수아', seoyeon: '오서연' };
 const CONTACT = { sms: '문자', door: '문 두드리기', both: '문자·문 두드리기' };
 const TOOL = { radio: '라디오', bag: '비상가방', route: '경로 정하기', extinguisher: '소화기', docs: '비상연락처 카드' };
-const RESULT = { out: '불을 껐습니다', 'retreat-ok': '대피하며 알렸습니다', escalated: '불이 커져 물러났습니다', incomplete: '끝까지 마치지 못했습니다' };
+// Every result string the story passes to recordEncounter, so no raw id reaches the player.
+const RESULT = {
+  out: '불을 껐습니다', 'retreat-ok': '대피하며 알렸습니다', escalated: '불이 커져 물러났습니다', incomplete: '끝까지 마치지 못했습니다',
+  risky: '연기 속으로 바로 나섰습니다', practice: '사용 순서를 익혔습니다', tuned: '공식 방송을 찾아 들었습니다', opened: '라디오를 켜 보았습니다',
+  missed: '공식 방송은 찾지 못했습니다', complete: '필요한 것을 다 챙겼습니다', partial: '몇 가지가 빠졌습니다', planned: '경로를 정해 두었습니다',
+  written: '카드를 적어 두었습니다',
+};
 const STAT = { health: '체력', thirst: '갈증', fatigue: '피로', tension: '긴장' };
 const LABEL = { official: '공식 안내', site: '현장 확인', neighbor: '이웃에게 들음', rumor: '소문·미확인', self: '내 기록' };
 
+// ctx.payoff(prep, moment) passes a preparation id; the player sees the Korean name.
+const PREP = {
+  bag: '비상가방', cash: '현금', docs: '비상연락처 카드·서류 사본', entrances: '대피소 출입구 확인', extinguisher: '소화기 위치·사용 순서',
+  flashlight: '손전등 건전지', judgement: '화재 상황 판단', powerbank: '보조배터리 충전', radio: '라디오 주파수·건전지',
+  route: '경로 확인', tub: '받아 둔 물', water_jug: '접이식 물통',
+};
+const payoffOf = (e) => ({ prep: PREP[e.details.prep] ?? e.details.prep, moment: e.details.moment, id: e.details.prep });
 const sourcesOf = (ids) => [...new Set(ids.map(id => fact(id)?.sourceId).filter(Boolean))];
 const lastEncounter = (G, tool) => G.events.findLast(e => e.type === 'encounter' && e.details?.tool === tool);
 // HUD value words; health is better high, the other stats are better low.
 const word = (stat, v) => { const good = stat === 'health' ? v : 100 - v; return good >= 60 ? '좋음' : good >= 30 ? '보통' : '나쁨'; };
-const resultWord = (r) => typeof r === 'string' ? RESULT[r] ?? r
-  : r?.result ? RESULT[r.result] ?? r.result
+const resultWord = (r) => typeof r === 'string' ? RESULT[r] ?? '해 봤습니다'
+  : r?.result ? RESULT[r.result] ?? '해 봤습니다'
     : typeof r?.ok === 'boolean' ? (r.ok ? '잘 해냈습니다' : '아쉬움이 남았습니다') : '해 봤습니다';
 
 const FAIL = {
@@ -115,7 +128,7 @@ export function chapterSummary(G, chapter) {
   }
   for (const e of of('help')) lines.push(`${PEOPLE[e.details.who] ?? e.details.who}: ${e.details.what}`);
   lines.push(`지금 상태: ${Object.entries(STAT).map(([s, l]) => `${l} ${word(s, G.stats[s])}`).join(', ')}`);
-  const payoffs = of('payoff').map(e => ({ prep: e.details.prep, moment: e.details.moment }));
+  const payoffs = of('payoff').map(payoffOf);
   return { lines, payoffs };
 }
 
@@ -139,7 +152,7 @@ const PRACTICE = [
 
 // Durable items count as used when items[id].used > 0 (state.use / state.consume).
 export function endingRecord(G) {
-  const helped = G.events.filter(e => e.type === 'payoff').map(e => ({ prep: e.details.prep, moment: e.details.moment }));
+  const helped = G.events.filter(e => e.type === 'payoff').map(payoffOf);
   const unused = [];
   for (const [id, e] of Object.entries(G.items)) {
     const c = CATALOG[id];
