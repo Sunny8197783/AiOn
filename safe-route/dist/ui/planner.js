@@ -33,6 +33,7 @@ export function planner({ day = '', slots = { total: 6, used: 0 }, actions = [],
   const board = el('div', { class: 'planner-board' },
     el('header', { class: 'planner-head' },
       el('p', { class: 'eyebrow' }, icon('calendar'), '준비 계획표'),
+      btn('닫기', { ghost: true, className: 'planner-close', onclick: () => m.close(null) }),
       el('h2', {}, day),
       el('p', { class: 'planner-sub' }, `남은 칸 `, el('b', {}, `${left}`), ` / ${total} · 모든 일을 다 할 수는 없습니다.`)),
     slotRow,
@@ -89,7 +90,7 @@ export function planner({ day = '', slots = { total: 6, used: 0 }, actions = [],
     card?.focus();
   }
   function onKey(e) {
-    if (e.key === 'Escape') { e.preventDefault(); if (selected) back(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); if (selected) back(); else m.close(null); return; }
     const at = cards.indexOf(document.activeElement);
     if (at < 0) return;
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];

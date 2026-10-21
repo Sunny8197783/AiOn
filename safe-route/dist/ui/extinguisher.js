@@ -148,11 +148,12 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
     S.danger = Math.min(1, S.danger + (practice ? 0 : 0.12)); S.shake = rm ? 0 : 0.35;
     say(text);
   }
-  function retreat() { if (S.ended) return; seq.push('retreat'); finish(); }
+  // Retreat stays the right call after the fire got away, so it works from the end screen too.
+  function retreat() { if (S.closed || S.endKind === 'out') return; if (!seq.includes('retreat')) seq.push('retreat'); finish(); }
   function say(text) { feedback.textContent = text; }
 
   function end(kind) {
-    S.ended = true; S.spraying = kind === 'out' ? false : S.spraying;
+    S.ended = true; S.endKind = kind; S.spraying = kind === 'out' ? false : S.spraying;
     const recap = steps.map(s => el('li', { class: S.done.has(s.id) ? 'is-done' : '' }, el('span', { 'aria-hidden': 'true' }, S.done.has(s.id) ? '✓ ' : '○ '), s.label));
     const shoutFirst = seq.filter(id => id !== 'fight')[0] === 'shout';
     const body = {
@@ -171,7 +172,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
   }
 
   function onKey(e) {
-    if (e.key === 'Escape') { if (S.ended || practice) finish(); else retreat(); return true; }
+    if (e.key === 'Escape') { if (practice || S.endKind === 'out') finish(); else retreat(); return true; }
     if (S.phase === 'act' && !S.ended && S.done.has('squeeze') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { stroke(e.key === 'ArrowLeft' ? -1 : 1); return true; }
     return false;
   }
@@ -190,7 +191,8 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
     S.sweepDir *= Math.pow(0.02, dt); S.shake = Math.max(0, S.shake - dt);
     dangerBar.style.width = `${S.danger * 100}%`;
     dangerBar.parentElement.dataset.state = S.danger > 0.75 ? 'over' : S.danger > 0.45 ? 'warn' : 'ok';
-    dangerText.textContent = S.danger > 0.75 ? '곧 번짐' : S.danger > 0.45 ? '서둘러야 함' : '여유 있음';
+    const word = S.danger > 0.75 ? '곧 번짐' : S.danger > 0.45 ? '서둘러야 함' : '여유 있음';
+    if (word !== dangerText.textContent) { if (dangerText.textContent && !S.ended) announce(`불이 번지기까지: ${word}`); dangerText.textContent = word; }
     drawScene(cv, now / 1000, dt, S, { reduced: rm, large });
     cv.setAttribute('aria-label', `불길 ${S.fireLv > 0.66 ? '큼' : S.fireLv > 0.25 ? '중간' : S.fireLv > 0 ? '작음' : '꺼짐'} · 안전핀 ${S.pinOut ? '뽑음' : '꽂혀 있음'} · 노즐 ${S.aimed ? '불 쪽' : '내려 둠'}${S.spraying ? ' · 분사 중' : ''}`);
     if (!S.closed) raf = requestAnimationFrame(loop);

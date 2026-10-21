@@ -2,11 +2,11 @@
 // What was prepared shows up here as time saved, not as a score.
 import { recordEvent, hhmm, use } from '../game/state.js';
 import { chapterSummary } from '../game/debrief.js';
-import { ladderStage, recordEncounter, evalBag } from '../game/drills.js';
+import { ladderStage, recordEncounter, evalBag, BAG_GOALS } from '../game/drills.js';
 import { CLOSURES } from '../game/townmap.js';
-import { BAG_LIMIT, CATALOG } from '../game/items.js';
+import { BAG_LIMIT } from '../game/items.js';
 import { fact } from '../game/facts.js';
-import { applyHome, applyBag } from './prep-actions.js';
+import { applyHome, applyBag, bagItems } from './prep-actions.js';
 import { radioScene, emergencyText, factCard, lightSource, drainBattery, has, AREA, BROADCASTS } from './common.js';
 import { seoyeonRelay } from './seoyeon.js';
 
@@ -91,7 +91,7 @@ async function evening(ctx) {
     } else if (pick === 'hall') {
       await ctx.say('3층 복도', ['비상구 표시등만 초록색으로 켜져 있다. 304호 어르신이 문을 열고 내다본다.', '"정전인가 봐요. 나는 초 하나 켜 놨어요."'], null, '정전');
     } else if (pick === 'candle') {
-      G.know.candleLit = true;
+      G.know.candleLit = true; use(G, 'candles');
       ctx.setLevelState('apartment', 'candles', 'lit');
       recordEvent(G, 'candle_lit', {});
       await factCard(ctx, '양초에 대한 안내는 공식 자료끼리 다릅니다', ['candle_prep', 'candle_no', 'candle_rules'], '판단이 필요한 정보');
@@ -128,12 +128,12 @@ async function alert(ctx) {
 
   const takeBag = async () => {
     if (G.know.bagOn) return;
-    if (G.know.bagPacked) { G.know.bagOn = true; ctx.payoff('bag', '현관에 둔 배낭을 메고 바로 나섰다'); recordEvent(G, 'departure', { bag: 'packed' }); return; }
+    if (G.know.bagPacked && Object.values(G.items).some(e => e.bag > 0)) { G.know.bagOn = true; ctx.payoff('bag', '현관에 둔 배낭을 메고 바로 나섰다'); recordEvent(G, 'departure', { bag: 'packed' }); return; }
     const pick = await ctx.ui.talk({ speaker: '현관', role: '배낭이 비어 있다', lines: ['지금 챙길까, 그냥 나갈까?'], choices: [{ id: 'pack', label: '급히 챙긴다 (시간이 든다)' }, { id: 'go', label: '휴대폰만 들고 나간다' }] });
     if (pick !== 'pack') { recordEvent(G, 'departure', { bag: 'none' }); return; }
-    const items = Object.entries(G.items).filter(([id, v]) => CATALOG[id] && v.home + v.bag > 0).map(([id, v]) => ({ id, name: CATALOG[id].name, weightKg: CATALOG[id].weightKg, volumeL: CATALOG[id].volumeL, home: v.home, bag: v.bag, tip: '', tags: [CATALOG[id].category] }));
+    const items = bagItems(G);
     const mode = ladderStage(G, 'bag');
-    const res = await ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals: ['물', '조리 없이 먹을 음식', '빛', '약', '연락처'], tips: [] });
+    const res = await ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals: BAG_GOALS.alert, tips: [] });
     applyBag(G, res?.bag || {});
     const ev = evalBag(G, 'alert');
     recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
@@ -179,6 +179,7 @@ async function alert(ctx) {
         await ctx.ui.talk({ speaker: '안내 요원', role: CLOSURES[id].label, lines: [`이 구간은 통제 중입니다. 돌아가 주세요. 생활문화센터는 ${detour}로 갈 수 있습니다.`] });
         G.know.closureSeen = true; ctx.note(`${CLOSURES[id].label} (현장 안내 요원)`, 'site');
       }])),
+      shelterNotice: async () => { await ctx.ui.talk({ speaker: '현장 안내판', role: hhmm(G.minute), lines: ['동쪽 출입구 폐쇄 · A 계단 운영 · B 진출입로 운영 (차량 통제) · C 경사로 준비 중'] }); },
       '*': async (point) => { if (point.kind === 'notice') await ctx.ui.talk({ speaker: point.label, role: '안내', lines: ['대피소: 연무 생활문화센터 지하주차장. 유도표지판의 화살표를 따라가세요.'] }); },
     },
     shelter: (point) => enterGate(ctx, point),
@@ -196,7 +197,6 @@ async function enterGate(ctx, point) {
     return;
   }
   if (point.id === 'shelterC') return void ctx.toast('셔터가 내려져 있다: "준비 중"', 'site');
-  if (point.id === 'shelterNotice') return void ctx.ui.talk({ speaker: '현장 안내판', role: hhmm(G.minute), lines: ['동쪽 출입구 폐쇄 · A 계단 운영 · B 진출입로 운영 (차량 통제) · C 경사로 준비 중'] });
   const route = point.id === 'shelterA' ? 'stairs' : 'ramp';
   if (!gateSeen()) recordEvent(G, 'gate_observed', { who: 'jeongmin', via: 'notice_after', minute: G.minute });
   recordEvent(G, 'route_attempt', { who: 'jeongmin', route, minute: G.minute });
@@ -210,6 +210,7 @@ async function enterGate(ctx, point) {
 async function shelter(ctx) {
   const G = ctx.G;
   ctx.setLevelState('shelter', 'crowd', 'arriving');
+  ctx.setLevelState('shelter', 'ways', ['stairs', 'ramp']); // east closed, C not open yet: nobody walks in there
   ctx.setLevelState('shelter', 'phase', 'alert');
   ctx.setLevelState('shelter', 'power', 'emergency');
   ctx.engine.setEnv('underground', { seconds: 0.8 });
@@ -237,6 +238,7 @@ async function shelter(ctx) {
 async function afterAlert(ctx) {
   const G = ctx.G;
   const h = G.handover;
+  ctx.setLevelState('shelter', 'ways', ['stairs', 'ramp', 'access']);
   await ctx.goto('shelter', 'spot');
   ctx.setLevelState('shelter', 'crowd', 'settled');
   ctx.engine.level?.npcs?.seoyeon && (ctx.engine.level.npcs.seoyeon.group.visible = true);
@@ -247,10 +249,11 @@ async function afterAlert(ctx) {
   await ctx.say('오서연', lines, null, '대피소');
   G.rel.seoyeon.trust += 1;
 
-  G.minute = 20 * 60 + 35; ctx.refresh();
+  const later = (m) => { G.minute = Math.max(G.minute, m); ctx.refresh(); }; // 서연's walk may already be past these
+  later(20 * 60 + 35);
   await emergencyText(ctx, { kind: '위급재난문자', time: '20:35', text: `[위급재난문자] 20:35 연무동지역 경계경보로 변경, 대피소에서 나와 경계 태세를 유지하며 이동 가능 ${AREA}` });
   await factCard(ctx, '경계경보로 바뀌었습니다', ['alert_downgrade', 'alert_caution']);
-  G.minute = 20 * 60 + 50; ctx.refresh();
+  later(20 * 60 + 50);
   await emergencyText(ctx, { kind: '안전안내문자', time: '20:50', text: `[안전안내문자] 20:50 연무동지역 경보해제. 정부 안내방송을 계속 들어 주십시오 ${AREA}` });
 
   // Home together. The building is still dark; 서연 lives on the same floor.
@@ -268,7 +271,7 @@ async function afterAlert(ctx) {
   } else {
     await ctx.say('오서연', ['네, 천천히 갈게요. 소장님이 계단 비춰 주신대요.'], null, '1층 계단 앞');
   }
-  G.day = 0; G.minute = 21 * 60 + 20;
+  later(21 * 60 + 20);
   await ctx.goto('apartment', 'home');
   const sum = chapterSummary(G, 'dday');
   await ctx.modal(() => ctx.ui.chapterCard({ chapter: '2장', title: '정전과 경보', lines: sum.lines, payoffs: sum.payoffs }));

@@ -13,7 +13,7 @@ export function el(tag, attrs = {}, ...children) {
   for (const [k, v] of Object.entries(attrs)) {
     if (v == null || v === false) continue;
     if (k === 'class' || k === 'className') node.className = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
+    else if (k === 'style' && typeof v === 'object') for (const [sk, sv] of Object.entries(v)) sk.startsWith('--') ? node.style.setProperty(sk, sv) : (node.style[sk] = sv);
     else if (k === 'dataset') Object.assign(node.dataset, v);
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k === 'text') node.textContent = v;
@@ -43,7 +43,8 @@ export function trapFocus(root) {
     if (e.shiftKey && (at === first || !root.contains(at))) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && (at === last || !root.contains(at))) { e.preventDefault(); first.focus(); }
   };
-  const onFocusIn = (e) => { if (!root.contains(e.target) && root.isConnected && isTop(root)) (focusables(root)[0] || root).focus(); };
+  // Minigame and relay dialogs (mini-dom, compose) sit above this stack and keep their own focus.
+  const onFocusIn = (e) => { if (!root.contains(e.target) && !e.target.closest?.('.mg-backdrop, .relay-modal') && root.isConnected && isTop(root)) (focusables(root)[0] || root).focus(); };
   root.addEventListener('keydown', onKey);
   document.addEventListener('focusin', onFocusIn);
   return () => { root.removeEventListener('keydown', onKey); document.removeEventListener('focusin', onFocusIn); };

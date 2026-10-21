@@ -212,3 +212,11 @@ test('endingRecord follows payoffs, unused items, know flags and people', () => 
   assert.deepEqual(all.practice, { text: fact('shelter_know').text, sourceId: 'mois_four' });
   assert.ok(srcIds.has(all.practice.sourceId));
 });
+
+test('fire fail card follows the scene it came from', () => {
+  const G = createGame({ seed: 1 });
+  const up = failDebrief(G, 'fire', { scene: 'upstairs' }), sh = failDebrief(G, 'fire', { scene: 'shelter' }), co = failDebrief(G, 'fire');
+  assert.match(up.missed, /창문을 닫고|대기/);
+  assert.notEqual(up.title, co.title); assert.notEqual(sh.title, co.title);
+  for (const d of [up, sh]) assert.ok(d.sourceIds.length && d.next);
+});

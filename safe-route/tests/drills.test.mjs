@@ -23,7 +23,7 @@ function alertBag(extraCart = {}) {
   const G = game({ water_500: 2, bars: 2, radio: 1, batteries_aa: 2, blanket: 1, contact_card: 1, ...extraCart });
   assert.equal(check(G, 'flashlight').ok, true);
   assert.equal(check(G, 'radio').ok, true);
-  packAll(G, { water_500: 1, bars: 1, flashlight: 1, radio: 1, meds: 1, contact_card: 1, blanket: 1 });
+  packAll(G, { water_2l: 1, bars: 1, flashlight: 1, radio: 1, meds: 1, contact_card: 1, blanket: 1 }); // water counts in litres: 2 L
   return G;
 }
 
@@ -88,7 +88,7 @@ test('evalBag: a full alert bag with checked gear is ok', () => {
   assert.deepEqual(r.extra, []);
   assert.deepEqual(r.unready, []);
   assert.deepEqual(r.tips, []);
-  assert.equal(r.weightKg, 1.29);
+  assert.equal(r.weightKg, 2.82); // 1.29 kg of gear + one 2 L bottle instead of 500 mL
 });
 
 test('evalBag: bought is not usable — unchecked gear does not cover a goal', () => {
@@ -108,7 +108,7 @@ test('evalBag: extras get a FACTS tip, overweight fails even when covered', () =
   assert.deepEqual(r.extra.sort(), ['candles', 'gas_stove', 'ramen']);
   for (const t of ['shelter_rules', 'candle_no', 'bag_nocook']) assert.ok(r.tips.includes(t), t);
   assert.equal(r.ok, true, 'extras alone do not fail the bag');
-  pack(G, 'water_2l', 4);
+  pack(G, 'water_2l', 3);
   r = evalBag(G, 'alert');
   assert.ok(r.weightKg > 8);
   assert.deepEqual(r.missing, []);
@@ -131,12 +131,12 @@ test('evalBag water trip: an empty jug and a light bag', () => {
   assert.ok(r.tips.includes('water_point'));
 });
 
-test('evalBag evac: water and food need several units', () => {
-  const G = game({ water_500: 2, bars: 3 });
+test('evalBag evac: water counts in litres, food in units', () => {
+  const G = game({ water_500: 4, bars: 3 });
   packAll(G, { water_500: 1, bars: 2 });
   let r = evalBag(G, 'evac');
-  assert.ok(r.missing.includes('water') && r.missing.includes('food'));
-  packAll(G, { water_500: 1, canned: 1 });
+  assert.ok(r.missing.includes('water') && r.missing.includes('food'), 'half a litre is not enough water');
+  packAll(G, { water_500: 3, canned: 1 });
   r = evalBag(G, 'evac');
   assert.ok(r.covered.includes('water') && r.covered.includes('food'));
   assertFacts(r.tips);

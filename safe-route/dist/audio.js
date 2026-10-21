@@ -160,7 +160,7 @@ export function createAudio() {
     g.linearRampToValueAtTime(0.3, t0 + 60); g.linearRampToValueAtTime(0, t0 + 63);
     G.add(lfo(0.37, 0.03, G.out.gain));
     [tone1, tone2, tone3].forEach((o) => o.stop(t0 + 63.3));
-    const end = setTimeout(() => { if (sirenNode === G) { sirenNode = null; want.siren = false; } }, 63500);
+    const end = setTimeout(() => { if (sirenNode === G) { sirenNode = null; want.siren = false; } stop(0.05); }, 63500); // also frees the LFO and reverb send
     const stop = G.stop; G.stop = (f) => { clearTimeout(end); stop(f); };
     return G;
   }

@@ -48,7 +48,10 @@ export function compose({ route, observedVia, gateSeenAt, sentAt }) {
     }));
     text.addEventListener('input', () => { edited = true; refresh(); });
     reset.addEventListener('click', () => { edited = false; refresh(); });
-    send.addEventListener('click', () => { box.remove(); prev?.focus?.(); resolve({ chips, text: text.value, edited }); });
+    // Radio groups make the Tab order differ from the element list, so also pull escaped focus back in.
+    const guard = (e) => { if (box.isConnected && !box.contains(e.target)) (box.querySelector('input:checked') || box.querySelector('input')).focus(); };
+    document.addEventListener('focusin', guard);
+    send.addEventListener('click', () => { document.removeEventListener('focusin', guard); box.remove(); prev?.focus?.(); resolve({ chips, text: text.value, edited }); });
     box.addEventListener('keydown', (e) => {
       if (e.key !== 'Tab') return;
       const f = [...box.querySelectorAll('input,textarea,button:not([hidden])')].filter(x => !x.disabled);

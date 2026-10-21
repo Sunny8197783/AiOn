@@ -1,6 +1,6 @@
 // Portable radio: a backlit FM dial (drag, ←/→, Shift for fine steps), frequency readout, signal meter and
 // a waveform that turns to static off-station. Tuned in, the broadcast arrives line by line as captions;
-// '메모' keeps a line. Resolves { station, heard, noted }.
+// '메모' keeps a line. Resolves { station, official, heard, noted: [{ text, kind }] }; official = an official line was heard.
 import { el, put, modal, header, ladderHelp, pill, reduced } from './mini-dom.js';
 import { radioSignal } from '../game/drills.js';
 
@@ -23,7 +23,7 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
     for (const h of heard) if (!top || n.get(h.station) >= n.get(top)) top = h.station; // ties: the later one
     return top;
   };
-  const finish = () => { closed = true; cancelAnimationFrame(raf); m.close({ station: best(), heard: heard.map(h => h.text), noted: [...noted] }); };
+  const finish = () => { closed = true; cancelAnimationFrame(raf); m.close({ station: best(), official: heard.some(h => h.station.kind === 'official'), heard: heard.map(h => h.text), noted: noted.map(n => ({ text: n.text, kind: n.station.kind })) }); };
   const m = modal({ className: 'mg-radio', label: '휴대용 라디오', onKey: (e) => { if (e.key === 'Escape') { finish(); return true; } } });
 
   // --- faceplate ---
@@ -93,8 +93,8 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
     seen.add(key); heard.push({ station, text });
     const memo = el('button', { type: 'button', class: 'mg-btn mg-chip', 'aria-pressed': 'false', 'aria-label': `메모: ${text}` }, '✎ 메모');
     memo.addEventListener('click', () => {
-      const on = !noted.includes(text);
-      if (on) noted.push(text); else noted.splice(noted.indexOf(text), 1);
+      const i = noted.findIndex(n => n.text === text), on = i < 0;
+      if (on) noted.push({ text, station }); else noted.splice(i, 1);
       memo.setAttribute('aria-pressed', String(on)); memo.textContent = on ? '✓ 메모함' : '✎ 메모';
     });
     transcript.append(el('li', {}, el('span', { class: 'mg-tr-who' }, `${station.freq}MHz`), el('span', { class: 'mg-tr-text' }, text), memo));

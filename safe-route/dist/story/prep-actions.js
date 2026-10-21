@@ -9,6 +9,7 @@ export const SEOYEON_CARD = ['보행 보조기를 씁니다', '평지와 완만�
 export const RADIO_FREQ = 102.1; // game frequency of the disaster-broadcast station (fictional)
 
 const has = (G, id, where = 'home') => (G.items[id]?.[where] ?? 0) > 0;
+const owned = (G, id) => has(G, id) || has(G, id, 'bag');
 const tips = (...ids) => ids.map(id => fact(id)?.text).filter(Boolean);
 
 export function applyHome(ctx) {
@@ -44,6 +45,12 @@ export async function goOut(ctx, title, body) {
       await ctx.goto('apartment', ctx.engine.player.y > 1 ? 'lobby' : 'corridor3F');
     },
   }, tick: () => (ctx.engine.level?.id === 'town' ? 'out' : undefined) });
+}
+
+// What the bag UI lists: everything at home or already packed. ready = usable now (checked, or needs no check).
+export function bagItems(G, withTips = false) {
+  return Object.entries(G.items).filter(([id, v]) => CATALOG[id] && v.home + v.bag > 0).map(([id, v]) => ({ id, name: CATALOG[id].name, weightKg: CATALOG[id].weightKg, volumeL: CATALOG[id].volumeL,
+    home: v.home, bag: v.bag, tip: withTips ? fact(CATALOG[id].facts?.[0])?.text ?? '' : '', tags: [CATALOG[id].category, CATALOG[id].risk].filter(Boolean), ready: !CATALOG[id].needsCheck || !!v.checked }));
 }
 
 function shopItems(G, section, soldOut) {
@@ -160,15 +167,15 @@ export async function doEquip(ctx) {
   await ctx.roam({ on: {
     homeRadio: async () => {
       if (done.radio) return void ctx.toast('라디오는 점검을 마쳤다.');
-      if (!has(G, 'radio')) { await ctx.ui.talk({ speaker: '거실 탁자', role: '라디오 자리', lines: ['라디오가 없다. 정전되면 방송을 들을 방법을 따로 찾아야 한다.'] }); done.radio = true; ctx.event('radio_missing', {}); return show(); }
+      if (!owned(G, 'radio')) { await ctx.ui.talk({ speaker: '거실 탁자', role: '라디오 자리', lines: ['라디오가 없다. 정전되면 방송을 들을 방법을 따로 찾아야 한다.'] }); done.radio = true; ctx.event('radio_missing', {}); return show(); }
       const ok = check(G, 'radio');
       if (!ok.ok) { await ctx.ui.talk({ speaker: '휴대용 라디오', role: '건전지식', lines: ['건전지가 없어 켜지지 않는다. 라디오는 있지만 지금은 쓸 수 없다.'] }); ctx.event('radio_blocked', { why: 'batteries' }); return; }
       const res = await ctx.ui.radio({ mode: 'guided', start: 89.5, battery: true, extraSeconds: 0, stations: [
         { freq: 95.1, name: '음악 방송', kind: 'music', lines: ['(잔잔한 음악이 흐른다)'] },
         { freq: RADIO_FREQ, name: `재난방송 주관방송사 라디오 (게임 속 주파수 ${RADIO_FREQ}MHz)`, kind: 'official', lines: ['지금은 평상시 프로그램입니다.', '비상시에는 이 방송에서 정부와 지자체 안내를 전합니다. (가상 방송)'] },
       ] });
-      recordEncounter(G, 'radio', res?.station ? 'tuned' : 'opened');
-      G.know.radioChecked = true; G.know.radioFreq = res?.station?.freq ?? RADIO_FREQ;
+      recordEncounter(G, 'radio', res?.official ? 'tuned' : 'opened');
+      G.know.radioChecked = true; if (res?.official) G.know.radioFreq = RADIO_FREQ;
       ctx.note(`라디오 점검 완료. 재난방송 주파수 ${RADIO_FREQ}MHz에 맞춰 두었다.`, 'self');
       ctx.toast(fact('radio_batt').text, 'official', 5000);
       done.radio = true; show();
@@ -180,7 +187,7 @@ export async function doEquip(ctx) {
     },
     homeDesk: async () => {
       if (done.power) return void ctx.toast('보조배터리는 충전해 두었다.');
-      if (!has(G, 'powerbank')) { ctx.toast('보조배터리가 없다. 휴대폰을 완충해 두는 수밖에 없다.'); G.phone.battery = 100; done.power = true; return show(); }
+      if (!owned(G, 'powerbank')) { ctx.toast('보조배터리가 없다. 휴대폰을 완충해 두는 수밖에 없다.'); G.phone.battery = 100; done.power = true; return show(); }
       check(G, 'powerbank'); G.phone.battery = 100; done.power = true; ctx.toast('보조배터리와 휴대폰을 완충했다.'); show();
     },
     extinguisher: async () => {
@@ -289,15 +296,14 @@ export async function doBag(ctx) {
   ctx.objective('비상가방 꾸리기', '현관의 배낭에 들고 나갈 물건을 담습니다.', []);
   await ctx.roam({ on: { homeBag: async () => 'go' } });
   const mode = ladderStage(G, 'bag');
-  const items = Object.entries(G.items).filter(([id, v]) => CATALOG[id] && (v.home > 0 || v.bag > 0) && id !== 'cash').map(([id, v]) => ({ id, name: CATALOG[id].name, weightKg: CATALOG[id].weightKg, volumeL: CATALOG[id].volumeL, home: v.home, bag: v.bag, tip: fact(CATALOG[id].facts?.[0])?.text ?? '', tags: [CATALOG[id].category, CATALOG[id].risk].filter(Boolean) }));
-  if (G.items.cash && (G.items.cash.home || G.items.cash.bag)) items.push({ id: 'cash', name: CATALOG.cash.name, weightKg: 0.01, volumeL: 0.01, home: G.items.cash.home, bag: G.items.cash.bag, tip: fact('bag_cash').text, tags: ['docs'] });
-  const goals = ['물과 조리 없이 먹을 음식 (2~3일분)', '빛(손전등)과 정보(라디오)', '복용약과 구급품', '비상연락카드·서류 사본·현금', '보온(은박담요·여벌옷)'];
+  const items = bagItems(G, true);
+  const goals = BAG_GOALS.alert;
   const res = await ctx.modal(() => ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals, tips: tips('bag_days', 'bag_nocook', 'bag_copies', 'bag_foil', 'bag_door') }));
   applyBag(G, res?.bag || {});
   const ev = evalBag(G, 'alert');
   recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
-  G.know.bagPacked = true;
-  ctx.setLevelState('apartment', 'bag', 'packed');
+  G.know.bagPacked = Object.values(G.items).some(e => e.bag > 0);
+  ctx.setLevelState('apartment', 'bag', G.know.bagPacked ? 'packed' : 'empty');
   ctx.event('bag_packed', { weightKg: ev.weightKg, missing: ev.missing });
   ctx.toast(ev.missing?.length ? `배낭을 현관에 두었다. 빠진 것: ${ev.missing.map(id => BAG_GOALS.alert.find(g => g.id === id)?.label ?? id).join(', ')}` : '배낭을 현관에 두었다. 필요한 것을 고루 담았다.');
 }

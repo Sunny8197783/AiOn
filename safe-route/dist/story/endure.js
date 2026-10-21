@@ -154,6 +154,7 @@ async function evening(ctx) {
   const G = ctx.G;
   G.minute = 17 * 60 + 30;
   ctx.outdoorEnv = 'dusk';
+  ctx.setLevelState('apartment', 'windowView', 'dusk');
   ctx.refresh();
   let visited = false;
   ctx.objective('저녁 · 할 수 있는 일', '편의점에 들러 볼 수도 있고, 집에서 쉴 수도 있습니다. 침대에서 하루를 마칩니다.', [{ text: '바로편의점 (선택)', done: false }, { text: '침대에서 쉬기', done: false }]);
@@ -207,6 +208,7 @@ async function corridorFire(ctx) {
   const G = ctx.G;
   G.day = 2; G.minute = 21 * 60 + 40;
   ctx.outdoorEnv = 'blackout';
+  ctx.setLevelState('apartment', 'windowView', 'blackout');
   ctx.setLevelState('apartment', 'hallFire', 'small');
   ctx.setLevelState('apartment', 'smoke', 0.25);
   await ctx.goto('apartment', 'home', 'interiorDark');
@@ -247,7 +249,8 @@ async function corridorFire(ctx) {
       const pick = await ctx.ui.talk({ speaker: '복도', role: size === 'small' ? '택배 상자에 붙은 작은 불' : '천장까지 닿는 불길', lines: [size === 'small' ? '304호 앞 택배 상자 위로 촛불이 넘어져 있다. 불길은 아직 작다.' : '불길이 천장에 닿았다. 연기가 복도를 채운다.'],
         choices: [{ id: 'shout', label: '"불이야!" 외친다', disabled: shouted }, { id: 'water', label: '물을 끼얹는다' }, { id: 'retreat', label: '대피하며 알린다 (계단 · 119)' }] });
       if (pick === 'shout') { shouted = true; recordEvent(G, 'fire_shout', {}); ctx.toast('문이 열리고 이웃들이 나온다. 304호 어르신이 1층에서 올라오고 있다.', 'site'); return; }
-      if (pick === 'water') { await factCard(ctx, '촛불 화재에 물은 위험할 수 있습니다', ['fire_candle'], '공식 안내'); grow(); return; }
+      // Once the fire reaches the ceiling the candle advice (extinguisher, blanket) no longer applies.
+      if (pick === 'water') { if (size === 'small') await factCard(ctx, '촛불 화재에 물은 위험할 수 있습니다', ['fire_candle'], '공식 안내'); else await factCard(ctx, '불길이 이미 커졌습니다', ['fire_big', 'fire_shout'], '공식 안내'); grow(); return; }
       return retreat();
     },
     extinguisher: async () => fight(),
@@ -260,6 +263,7 @@ async function dayThree(ctx) {
   const G = ctx.G;
   G.day = 3; G.minute = 10 * 60;
   ctx.outdoorEnv = 'day';
+  ctx.setLevelState('apartment', 'windowView', 'day');
   ctx.objective(null);
   ctx.setLevelState('apartment', 'smoke', 0);
   await ctx.goto('apartment', 'home', 'interiorDark');

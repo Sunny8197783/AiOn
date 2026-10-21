@@ -17,7 +17,7 @@ export const ACTIONS = [
   { id: 'rest', label: '휴식', cost: 1, icon: '🛏', desc: '쉬면서 피로와 긴장을 덜어 낸다.' },
 ];
 
-function setClockToSlot(G, i) { const [d, m] = SLOT_AT[Math.min(i, SLOT_AT.length - 1)]; G.day = d; G.minute = m; }
+function setClockToSlot(G, i) { const [d, m] = SLOT_AT[Math.min(i, SLOT_AT.length - 1)]; if (d * 1440 + m > G.day * 1440 + G.minute) { G.day = d; G.minute = m; } }
 function envForSlot(i) { return i === 0 ? 'night' : i >= 5 ? 'dusk' : 'day'; }
 
 export async function prep(ctx) {
@@ -86,7 +86,8 @@ async function runAction(ctx, action, slot) {
       adjust(G, 'fatigue', -25); adjust(G, 'tension', -12);
       break;
   }
-  G.day = end[0]; G.minute = Math.max(G.minute, end[1]);
+  const t = Math.max(G.day * 1440 + G.minute, end[0] * 1440 + end[1]); // absolute minutes, so a day change never rolls back
+  G.day = Math.floor(t / 1440); G.minute = t - G.day * 1440;
   if (ctx.engine.level?.id !== 'apartment') await goHome(ctx);
   applyHome(ctx);
 }

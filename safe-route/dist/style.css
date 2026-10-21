@@ -254,6 +254,7 @@ body:has(.modal-layer) .hud-prompt { opacity: 0; }
 .planner-board::before { content: ''; position: absolute; inset: 0 0 auto; height: 16px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: repeating-linear-gradient(90deg, #b8312b 0 40px, #a12923 40px 44px); }
 .planner-head .eyebrow { color: #a4610a; }
 .planner-head h2 { margin: .05em 0 .1em; }
+.planner-head { position: relative; } .planner-close { position: absolute; top: 0; right: 0; }
 .planner-sub { margin: 0 0 .8em; color: var(--ink-dim); } .planner-sub b { color: #b8312b; font-size: 1.15em; }
 .slot-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1em; }
 .slot { position: relative; display: grid; place-items: center; width: 64px; height: 60px; border-radius: 10px; border: 2px dashed rgba(0, 0, 0, .22); background: var(--paper-2); transition: background .2s, border-color .2s; }

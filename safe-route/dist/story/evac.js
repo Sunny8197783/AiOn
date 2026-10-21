@@ -1,12 +1,12 @@
 // 4장 남을까 떠날까 (D+6) and 5장 공식 대피 (D+12). Both choices in 4장 are valid under different
 // conditions; the fire in 4장 is the third encounter, where stepping back is the success.
 import { recordEvent, adjust, hhmm, bagLoad } from '../game/state.js';
-import { ladderStage, recordEncounter, evalBag, evalExtinguisher } from '../game/drills.js';
+import { ladderStage, recordEncounter, evalBag, evalExtinguisher, BAG_GOALS } from '../game/drills.js';
 import { chapterSummary, endingRecord } from '../game/debrief.js';
 import { CLOSURES } from '../game/townmap.js';
-import { BAG_LIMIT, CATALOG } from '../game/items.js';
+import { BAG_LIMIT } from '../game/items.js';
 import { fact, SOURCES } from '../game/facts.js';
-import { applyHome, applyBag } from './prep-actions.js';
+import { applyHome, applyBag, bagItems } from './prep-actions.js';
 import { radioScene, emergencyText, factCard, AREA } from './common.js';
 
 const stock = (G, ids) => ids.reduce((s, id) => s + (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0), 0);
@@ -22,7 +22,7 @@ export async function crossroads(ctx) {
     applyHome(ctx);
     await ctx.goto('apartment', 'home', 'interiorDark');
     ctx.refresh();
-    const heard = await ctx.modal(() => radioScene(ctx, 'rumor'));
+    const heard = await ctx.modal(() => radioScene(ctx, 'crossroads'));
     await ctx.card({ kind: 'notice', title: '연무구 안내 (가상)', meta: 'D+6 · 행정복지센터 게시판·라디오',
       body: ['희망하는 주민은 생활문화센터 임시 거처로 옮길 수 있습니다. (권고, 명령 아님)', '임시 거처: 급수·급식 지원, 공용 공간, 개인 공간 협소', '집에 머무는 주민도 비상급수시설을 계속 이용할 수 있습니다.', heard ? '(라디오에서 같은 내용을 들었다.)' : '(서연이 문 앞에 붙여 둔 메모에서 같은 내용을 읽었다.)'],
       actions: [{ id: 'ok', label: '지금 상황 보기', primary: true }] });
@@ -44,6 +44,7 @@ export async function crossroads(ctx) {
 async function stayAndSmoke(ctx) {
   const G = ctx.G;
   G.day = 7; G.minute = 22 * 60 + 10; ctx.outdoorEnv = 'blackout';
+  ctx.setLevelState('apartment', 'windowView', 'blackout');
   ctx.setLevelState('apartment', 'smoke', 0.35);
   await ctx.goto('apartment', 'home', 'interiorDark');
   ctx.refresh();
@@ -57,7 +58,7 @@ async function stayAndSmoke(ctx) {
       { id: 'stay', label: '창문을 닫고 119에 신고한 뒤 안내방송에 따른다' }], '22:10');
     recordEvent(G, 'smoke_choice', { pick });
     if (pick === 'handle') { felt = true; await ctx.say('현관 문손잡이', ['뜨겁다. 문 너머 복도에 연기가 차 있는 것 같다.', fact('fire_door').text], null, '손등으로'); continue; }
-    if (pick === 'fight') { recordEncounter(G, 'extinguisher', 'escalated'); ctx.fail('fire'); }
+    if (pick === 'fight') { recordEncounter(G, 'extinguisher', 'escalated'); ctx.fail('fire', { scene: 'upstairs' }); }
     if (pick === 'run') {
       adjust(G, 'health', -15); recordEncounter(G, 'extinguisher', 'risky');
       await factCard(ctx, '연기 속으로 나가기 전에', ['fire_judge', 'fire_door', 'fire_stay'], '되돌아보기');
@@ -89,7 +90,7 @@ async function moveAndFire(ctx) {
   const ev = evalExtinguisher(res?.sequence || [], { fire: 'large' });
   recordEncounter(G, 'extinguisher', ev.result);
   ctx.setLevelState('shelter', 'fire', 'none');
-  if (ev.result === 'escalated') ctx.fail('fire');
+  if (ev.result === 'escalated') ctx.fail('fire', { scene: 'shelter' });
   await factCard(ctx, '물러서는 것도 성공입니다', ['fire_big', 'fire_shout', 'fire_119']);
   ctx.payoff('judgement', '천장까지 닿은 불 앞에서 물러나 알리고 대피했다');
 }
@@ -100,7 +101,7 @@ export async function evacuation(ctx) {
   ctx.hud.setChapter('5장', '공식 대피');
   ctx.outdoorEnv = 'day';
   if (ctx.resume !== 'depart') {
-    await ctx.skip('D+7', 'D+12 화', G.know.stayMove === 'move' ? '닷새가 더 지났다. 임시 거처에서 지내다 오늘 아침 짐을 챙기러 집에 들렀다.' : '닷새가 더 지났다. 이웃 몇 집은 이미 떠났다.');
+    await ctx.skip('D+7', 'D+12 수', G.know.stayMove === 'move' ? '닷새가 더 지났다. 임시 거처에서 지내다 오늘 아침 짐을 챙기러 집에 들렀다.' : '닷새가 더 지났다. 이웃 몇 집은 이미 떠났다.');
     G.day = 12; G.minute = G.cond.evacNoticeAt;
     applyHome(ctx);
     await ctx.goto('apartment', 'home', 'interiorDark');
@@ -110,9 +111,9 @@ export async function evacuation(ctx) {
     const heard = await ctx.modal(() => radioScene(ctx, 'evac'));
     G.know.evacClosuresKnown = !!heard;
     // One bag, third encounter: no tips unless the ladder says so.
-    const items = Object.entries(G.items).filter(([id, v]) => CATALOG[id] && v.home + v.bag > 0).map(([id, v]) => ({ id, name: CATALOG[id].name, weightKg: CATALOG[id].weightKg, volumeL: CATALOG[id].volumeL, home: v.home, bag: v.bag, tip: '', tags: [CATALOG[id].category, CATALOG[id].risk].filter(Boolean) }));
+    const items = bagItems(G);
     const mode = ladderStage(G, 'bag');
-    const res = await ctx.modal(() => ctx.ui.bag({ mode, context: 'evac', limit: BAG_LIMIT, items, goals: ['물', '조리 없이 먹을 음식', '빛', '정보', '약', '연락처 카드', '서류 사본', '현금', '보온', '위생'], tips: [] }));
+    const res = await ctx.modal(() => ctx.ui.bag({ mode, context: 'evac', limit: BAG_LIMIT, items, goals: BAG_GOALS.evac, tips: [] }));
     applyBag(G, res?.bag || {});
     const ev = evalBag(G, 'evac');
     recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');

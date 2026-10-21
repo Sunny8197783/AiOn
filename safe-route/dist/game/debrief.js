@@ -62,7 +62,22 @@ const FAIL = {
       facts: load.over.weight ? ['bag_foil', 'bag_days'] : ['bag_days'],
     };
   },
-  fire(G) {
+  // detail.scene: 'corridor' (3장, default), 'upstairs' (4장 stay: smoke from another flat), 'shelter' (4장 move).
+  fire(G, { scene = 'corridor' } = {}) {
+    if (scene === 'upstairs') return {
+      title: '연기 속으로 불을 끄러 나갔습니다',
+      seen: '우리 집 안으로는 연기나 불길이 들어오지 않은 상태였습니다.',
+      missed: fact('fire_stay').text,
+      next: '문손잡이를 손등으로 먼저 만져 보고, 연기가 들어오지 않으면 집 안에서 창문을 닫고 119에 신고하기',
+      facts: ['fire_stay', 'fire_judge', 'fire_door'],
+    };
+    if (scene === 'shelter') return {
+      title: '대피소의 큰 불 앞에서 버텼습니다',
+      seen: '불길이 이미 천장 배관에 닿아 있었습니다.',
+      missed: fact('fire_big').text,
+      next: '천장까지 닿은 불은 끄려 하지 말고, "불이야!" 외치며 물러나 119에 알리기',
+      facts: ['fire_big', 'fire_shout', 'fire_119'],
+    };
     const r = lastEncounter(G, 'extinguisher')?.details.result;
     const res = typeof r === 'string' ? r : r?.result;
     const stepFact = EXT_STEPS.find(s => s.id === r?.firstError)?.facts[0];
@@ -102,10 +117,10 @@ const FAIL = {
 export const FAIL_TYPES = Object.keys(FAIL);
 
 // { title, seen, missed, next, sourceIds }: 당시 확인한 정보 / 판단에서 놓친 부분 / 다음에 시도할 준비.
-export function failDebrief(G, type) {
+export function failDebrief(G, type, detail = {}) {
   const make = FAIL[type];
   if (!make) throw new Error(`unknown fail type: ${type}`);
-  const { facts, ...d } = make(G);
+  const { facts, ...d } = make(G, detail);
   return { ...d, sourceIds: sourcesOf(facts) };
 }
 

@@ -23,16 +23,18 @@ export function recordEncounter(G, tool, result) {
 // --- Bag ------------------------------------------------------------------------------------
 
 const WATER = ['water_500', 'water_2l'];
+const LITRES = { water_500: 0.5, water_2l: 2 }; // drinking water is counted in litres, not bottles
 const FOOD = ['bars', 'canned', 'rice_instant'];
 const LIGHT = { id: 'light', label: '켜지는 손전등', items: ['flashlight'], facts: ['bag_days', 'power_prep'] };
 const INFO = { id: 'info', label: '라디오 또는 충전된 보조배터리', items: ['radio', 'powerbank'], facts: ['bag_days', 'radio_batt', 'comms_battery'] };
 const MEDS = { id: 'meds', label: '복용약·상비약', items: ['meds', 'first_aid'], facts: ['bag_days', 'contact_fields'] };
 const WARMTH = { id: 'warmth', label: '보온(은박담요·여벌 옷·우의)', items: ['blanket', 'clothes', 'raincoat'], facts: ['bag_foil', 'home_clothes'] };
 
-// Goals per context. min = units needed in the bag (default 1). The bag UI shows the labels.
+// Goals per context. min = units needed in the bag (default 1), or litres when per maps item -> litres.
+// The bag UI shows the labels and ticks a goal with the same rule (goalMet).
 export const BAG_GOALS = {
   alert: [
-    { id: 'water', label: '마실 물', items: WATER, facts: ['bag_days'] },
+    { id: 'water', label: '마실 물 2L 이상', items: WATER, min: 2, per: LITRES, facts: ['bag_days', 'water_sphere'] },
     { id: 'food', label: '조리 없이 먹을 음식', items: FOOD, facts: ['bag_nocook'] },
     LIGHT, INFO, MEDS,
     { id: 'contacts', label: '연락처 카드 또는 서류 사본', items: ['contact_card', 'doc_copies'], facts: ['contact_card', 'bag_copies'] },
@@ -42,7 +44,7 @@ export const BAG_GOALS = {
     { id: 'container', label: '빈 물통', items: ['water_jug'], facts: ['water_point'] },
   ],
   evac: [
-    { id: 'water', label: '마실 물 2병 이상', items: WATER, min: 2, facts: ['bag_days'] },
+    { id: 'water', label: '마실 물 2L 이상', items: WATER, min: 2, per: LITRES, facts: ['bag_days', 'water_sphere'] },
     { id: 'food', label: '조리 없이 먹을 음식 3개 이상', items: FOOD, min: 3, facts: ['bag_days', 'bag_nocook'] },
     LIGHT, INFO, MEDS,
     { id: 'contacts', label: '비상연락처 카드', items: ['contact_card'], facts: ['contact_card', 'contact_fields'] },
@@ -57,6 +59,8 @@ export const BAG_GOALS = {
 const EXTRA_TIPS = { gas_stove: 'shelter_rules', butane: 'shelter_rules', candles: 'candle_no', ramen: 'bag_nocook', fridge_food: 'food_4h', cooked_meat: 'myth_meat' };
 const WATER_TRIP_KG = 2; // game number: the way back carries up to 10 L of water
 
+export const goalMet = (g, count, ready) => g.items.filter(ready).reduce((s, id) => s + count(id) * (g.per?.[id] ?? 1), 0) >= (g.min ?? 1);
+
 export function evalBag(G, context) {
   const goals = BAG_GOALS[context];
   if (!goals) throw new Error(`unknown bag context: ${context}`);
@@ -65,8 +69,7 @@ export function evalBag(G, context) {
   const { weightKg, volumeL, over } = bagLoad(G);
   const covered = [], missing = [], tips = new Set();
   for (const g of goals) {
-    const n = g.items.filter(ready).reduce((s, id) => s + inBag(id), 0);
-    if (n >= (g.min ?? 1)) covered.push(g.id);
+    if (goalMet(g, inBag, ready)) covered.push(g.id);
     else { missing.push(g.id); g.facts.forEach(f => tips.add(f)); }
   }
   const wanted = new Set(goals.flatMap(g => g.items));
@@ -115,7 +118,7 @@ export const EXT_STEPS = [
   { id: 'sweep', label: '빗자루로 쓸듯이 뿌리기', facts: ['ext_3'] },
 ];
 export const EXT_CHOICES = [
-  { id: 'fight', label: '소화기로 끈다', facts: ['fire_small', 'fire_candle'] },
+  { id: 'fight', label: '소화기로 끈다', facts: ['fire_small'] }, // candle-specific advice stays with the candle fire's own card
   { id: 'retreat', label: '대피하며 알린다 (계단 · 119)', facts: ['fire_big', 'fire_119'] },
 ];
 const ORDER = EXT_STEPS.map(s => s.id);

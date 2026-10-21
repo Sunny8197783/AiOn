@@ -54,11 +54,17 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     if (engine.level?.id === levelId) engine.level.setState(key, value);
   };
 
-  // Enter a level and re-apply remembered states and the right lighting.
+  // Enter a level and re-apply remembered states and the right lighting. prepare runs before the engine
+  // precompiles shaders, so it compiles the lights the scene will really have.
   ctx.goto = async (levelId, spawn, env) => {
-    const level = await engine.enter(levelId, spawn);
-    for (const [k, v] of Object.entries(ctx.levelStates[levelId] || {})) level.setState(k, v);
-    engine.setEnv(env || (OUTDOOR.has(levelId) ? ctx.outdoorEnv : levelId === 'shelter' ? 'underground' : ctx.power ? ctx.indoorEnv : 'interiorDark'), { seconds: 0 });
+    let prepared = false;
+    const prepare = (level) => {
+      prepared = true;
+      for (const [k, v] of Object.entries(ctx.levelStates[levelId] || {})) level.setState(k, v);
+      engine.setEnv(env || (OUTDOOR.has(levelId) ? ctx.outdoorEnv : levelId === 'shelter' ? 'underground' : ctx.power ? ctx.indoorEnv : 'interiorDark'), { seconds: 0 });
+    };
+    const level = await engine.enter(levelId, spawn, { prepare });
+    if (!prepared) prepare(level);
     audio.ambience(ambienceFor(levelId), 1.2);
     return level;
   };
@@ -69,7 +75,8 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
 
   ctx.objective = (title, body = '', steps = []) => hud.setObjective(title, body, steps);
   ctx.toast = (text, label = 'self', ms = 3800) => hud.toast(text, { label, ms });
-  ctx.caption = (text, speaker, ms) => hud.caption(text, { speaker, ms });
+  // Captions off: same timing, nothing drawn, so story pacing does not change.
+  ctx.caption = (text, speaker, ms) => (settings.captions === false ? new Promise(r => setTimeout(r, ms ?? Math.min(7000, 1500 + text.length * 60))) : hud.caption(text, { speaker, ms }));
   ctx.event = (type, details = {}) => recordEvent(ctx.G, type, details);
   ctx.note = (text, label = 'self', place = engine.level?.id) => { note(ctx.G, text, label, place); ctx.toast(`메모: ${text}`, label); };
   ctx.payoff = (prep, moment) => { recordEvent(ctx.G, 'payoff', { prep, moment }); ctx.toast(`준비가 도움이 됐습니다 · ${moment}`, 'self', 4600); };
@@ -94,9 +101,9 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   // on: { pointId: async (point) => value }   doors: follow DOORS unless overridden
   // deadline: { minute, day, type } -> Fail(type) when the clock passes it
   ctx.roam = ({ on = {}, doors = true, deadline = null, rate = ctx.rate, tick = null, shelter = null } = {}) => new Promise((resolve, reject) => {
-    const prevRate = ctx.rate; ctx.rate = rate;
+    const prevRate = ctx.rate; ctx.rate = rate; ctx.roaming = true;
     let busy = false, done = false;
-    const finish = (fnRes, value) => { if (done) return; done = true; offI(); offF(); ctx.rate = prevRate; fnRes(value); };
+    const finish = (fnRes, value) => { if (done) return; done = true; offI(); offF(); ctx.rate = prevRate; ctx.roaming = false; fnRes(value); };
     const offI = engine.onInteract(async (point) => {
       if (busy || done) return;
       busy = true;
@@ -112,7 +119,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
       } catch (err) { finish(reject, err); } finally { busy = false; }
     });
     const offF = engine.onFrame((dt) => {
-      if (done) return;
+      if (done || !engine.controlsEnabled) return; // a menu or dialog pauses timers and deadlines too
       try {
         if (tick) { const v = tick(dt); if (v !== undefined) finish(resolve, v); }
         const G = ctx.G;

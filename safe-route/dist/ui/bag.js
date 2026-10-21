@@ -1,6 +1,7 @@
 // Packing one bag: two panes (집 비축 / 가방), click or keys move units, weight and volume meters, the goals
 // checklist. guided shows item tips inline, hint behind a button, free shows nothing extra.
 import { el, put, modal, header, ladderHelp, meterState, METER_WORD, fmtKg, announce } from './mini-dom.js';
+import { goalMet } from '../game/drills.js';
 
 const TITLE = { alert: '비상가방 꾸리기', water: '물 받으러 갈 준비', evac: '대피 가방 하나' };
 const TAG = { water: '물', food: '식품', info: '정보', power: '전원', light: '빛', health: '건강', hygiene: '위생', warmth: '보온', tool: '도구', docs: '서류', fire: '화기 주의', spoil: '상하기 쉬움' };
@@ -25,7 +26,8 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
   const counts = { home: el('small'), bag: el('small') };
   const meters = ['w', 'v'].map(k => ({ k, bar: el('span', { class: 'mg-bar-fill' }), text: el('b') }));
   const goalList = el('ul', { class: 'mg-goals', 'aria-label': '챙길 것' });
-  const goalGroups = goals.map(g => GOAL_WORDS.filter(([re]) => re.test(g)).map(([, ids]) => ids));
+  // A goal is a label (ticked by keyword) or a BAG_GOALS entry (ticked by the same rule evalBag uses).
+  const goalGroups = goals.map(g => typeof g === 'string' ? GOAL_WORDS.filter(([re]) => re.test(g)).map(([, ids]) => ids) : [g.items]);
 
   const move = (id, from, n) => {
     const to = from === 'home' ? 'bag' : 'home', k = Math.min(n, st[id][from]);
@@ -67,12 +69,12 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
       mt.bar.parentElement.dataset.state = s;
       mt.text.textContent = `${mt.k === 'w' ? fmtKg(val) : `${val.toFixed(1)}L`} / ${mt.k === 'w' ? fmtKg(max) : `${max}L`} · ${METER_WORD[s]}`;
     }
-    const inBag = (id) => (st[id]?.bag ?? 0) > 0;
+    const inBag = (id) => (st[id]?.bag ?? 0) > 0 && items.find(i => i.id === id)?.ready !== false; // packed but not checked/charged does not count
     goalList.replaceChildren(...goals.map((g, i) => {
-      const groups = goalGroups[i];
-      if (mode === 'free' || !groups.length) return el('li', { class: 'is-plain' }, el('span', { 'aria-hidden': 'true' }, '·'), g);
-      const ok = groups.every(ids => ids.some(inBag));
-      return el('li', { class: ok ? 'is-done' : '' }, el('span', { 'aria-hidden': 'true' }, ok ? '✓' : '○'), g, el('span', { class: 'sr-only' }, ok ? ' (담음)' : ' (아직)'));
+      const groups = goalGroups[i], label = typeof g === 'string' ? g : g.label;
+      if (mode === 'free' || !groups.length) return el('li', { class: 'is-plain' }, el('span', { 'aria-hidden': 'true' }, '·'), label);
+      const ok = typeof g === 'string' ? groups.every(ids => ids.some(inBag)) : goalMet(g, (id) => st[id]?.bag ?? 0, inBag);
+      return el('li', { class: ok ? 'is-done' : '' }, el('span', { 'aria-hidden': 'true' }, ok ? '✓' : '○'), label, el('span', { class: 'sr-only' }, ok ? ' (담음)' : ' (아직)'));
     }));
     if (!focusWhere) return;
     const rowsNow = [...lists[focusWhere].querySelectorAll('.mg-row')];

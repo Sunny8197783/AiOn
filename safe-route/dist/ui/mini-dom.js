@@ -47,6 +47,7 @@ export function modal({ className = '', label = '', content = [], onKey } = {}) 
   const done = new Promise(r => { resolve = r; });
   const release = trapFocus(root);
   back.addEventListener('keydown', (e) => {
+    if (e.repeat && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); return; } // a held interact key must not press buttons here
     if (onKey?.(e) === true) { e.preventDefault(); e.stopPropagation(); }
     else e.stopPropagation(); // keys typed in a minigame never reach the world controls
   });
