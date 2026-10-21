@@ -32,6 +32,7 @@ export function buildEvents(kit, people, walk) {
   for (const [id, rects] of Object.entries(BARRICADES)) {
     const g = new THREE.Group(); g.name = `closure:${id}`; g.visible = false; group.add(g);
     const units = [], cones = [], col = [], sol = [];
+    let light = null;
     const gp = CLOSURE_GUIDES[id];
     for (const r of rects) {
       const alongZ = r.z1 - r.z0 > r.x1 - r.x0, L = alongZ ? r.z1 - r.z0 : r.x1 - r.x0, n = Math.floor(L / 1.5);
@@ -58,7 +59,7 @@ export function buildEvents(kit, people, walk) {
       g.add(kit.cyl(0.04, 0.05, 3.2, steel, { x: tx, y: hy(tx, tz), z: tz }, 8), kit.box(0.9, 0.5, 0.5, kit.mat('paint:#f2c230'), { x: tx, y: hy(tx, tz), z: tz }));
       const head = kit.box(0.7, 0.35, 0.12, towerHead, { x: tx, y: hy(tx, tz) + 3.1, z: tz, ry: yawTo(-gp.face[0], -gp.face[1]), cast: false }); g.add(head);
       const L = new THREE.SpotLight(0xf4f8ff, 0, 26, 0.7, 0.6, 1.6); L.position.set(tx, hy(tx, tz) + 3.2, tz); L.target.position.set(tx - gp.face[0] * 6, 0, tz - gp.face[1] * 6);
-      kit.lit('emergency', L, 120); g.add(L, L.target);
+      kit.lit('emergency', L, 120); kit.gateLit(L, false); group.add(L, L.target); light = L; // outside g: lights never hide
       sol.push({ x0: tx - 0.5, x1: tx + 0.5, z0: tz - 0.3, z1: tz + 0.3, y0: -1, y1: 3, id: `closure:${id}`, off: true });
     }
     const um = kit.instanced(barrierGeo, kit.mat('paint:#ffffff', { roughness: 0.55 }), units); const c = new THREE.Color();
@@ -66,14 +67,14 @@ export function buildEvents(kit, people, walk) {
     g.add(um, kit.instanced(coneGeo, coneMat, cones));
     solids.push(...sol);
     kit.merge(g);
-    closures[id] = { group: g, solids: sol };
+    closures[id] = { group: g, solids: sol, light };
   }
   const guides = [person('guide', 71)];
   let active = [];
   function setClosures(ids = []) {
     const list = [].concat(ids || []).filter(id => { if (!closures[id]) { console.error(`[town] unknown closure "${id}"; known: ${Object.keys(CLOSURES).join(', ')}`); return false; } return true; });
     active = list;
-    for (const [id, c] of Object.entries(closures)) { const on = list.includes(id); c.group.visible = on; for (const s of c.solids) s.off = !on; }
+    for (const [id, c] of Object.entries(closures)) { const on = list.includes(id); c.group.visible = on; if (c.light) kit.gateLit(c.light, on); for (const s of c.solids) s.off = !on; }
     list.forEach((id, k) => { guides[k] ||= person('guide', 72 + k); });
     guides.forEach((p, k) => {
       if (!p) return;
@@ -110,7 +111,7 @@ export function buildEvents(kit, people, walk) {
     water.add(kit.box(1.8, 0.05, 0.7, white, { x: tbx, y: y + 0.72, z: tbz }), ...[-0.8, 0.8].map(dx => kit.box(0.05, 0.72, 0.6, dark, { x: tbx + dx, y, z: tbz })));
     const bottles = []; for (let k = 0; k < 14; k++) bottles.push({ x: tbx - 0.75 + (k % 7) * 0.24, y: y + 0.77, z: tbz - 0.12 + Math.floor(k / 7) * 0.24 });
     water.add(kit.instanced(new THREE.CylinderGeometry(0.055, 0.06, 0.32, 10).translate(0, 0.16, 0), kit.mat('paint:#9fd0ea', { roughness: 0.15, transparent: true, opacity: 0.75 }), bottles, { cast: false }));
-    const nt = kit.sign(['비상급수 운영', '09:00 – 17:00', '현장 안내에 따라 주세요'], { w: 0.7, h: 0.9, bg: '#ffffff', fg: '#1f4e8c', single: true }); nt.position.set(tbx + 1.4, y + 1.2, tbz + 0.02); water.add(nt, kit.box(0.05, 0.75, 0.05, dark, { x: tbx + 1.4, y, z: tbz - 0.02 }));
+    const nt = kit.sign(['비상급수 운영', '09:30 – 17:00', '현장 안내에 따라 주세요'], { w: 0.7, h: 0.9, bg: '#ffffff', fg: '#1f4e8c', single: true }); nt.position.set(tbx + 1.4, y + 1.2, tbz + 0.02); water.add(nt, kit.box(0.05, 0.75, 0.05, dark, { x: tbx + 1.4, y, z: tbz - 0.02 }));
     // queue lane: floor marks every metre, stanchions with belts both sides
     const marks = []; for (let k = 0; k < 10; k++) marks.push({ x: WATER.queue.x + k * 0.9, y: y + 0.006, z: WATER.queue.z });
     water.add(kit.instanced(new THREE.PlaneGeometry(0.5, 0.12).rotateX(-Math.PI / 2), kit.mat('paint:#f2c230', { polygonOffset: true, polygonOffsetFactor: -2 }), marks, { cast: false }));
