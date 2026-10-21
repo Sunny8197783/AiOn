@@ -301,9 +301,9 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
         a.face = Math.atan2(M.dirN.x, M.dirN.z);
       } else if (a.state === 'leave') {
         goal = [a.goal.x, a.goal.z]; v = 1.1 * a.slow;
-        if (dist(a.goal, a) < 0.8) { // out of the scene: rejoin at the tail
+        if (dist(a.goal, a) < 0.8) { // out of the scene: rejoin at the visible tail
           setProps(a, new Set([...a.props].filter(nm => nm !== M.carry))); a.moveAnim = 'walk';
-          const s = slot(line.length + 9); placeAt(a, s.x, s.z); a.state = 'line'; line.push(a); goal = null;
+          const s = slot(line.length); placeAt(a, s.x, s.z); a.state = 'line'; line.push(a); goal = null;
         }
       }
     }

@@ -60,7 +60,7 @@ export function createTownCrowd({ people, group, walk, quality = 'high' }) {
       case 'sparse': run('few', c => { c.setPaths(walkers); c.setMode('stroll', { speed: 1.15 }); }); return;
       case 'evacuating': {
         const { paths, targets } = evac();
-        for (const n of ['main', 'extra']) run(n, c => { c.setPaths(paths); c.setMode('brisk', { targets, speed: 1.9, despawn: true }); });
+        for (const n of ['main', 'extra']) run(n, c => { c.setPaths(paths); c.setMode('brisk', { targets, then: 'despawn' }); });
         return;
       }
       case 'queue':
@@ -68,8 +68,8 @@ export function createTownCrowd({ people, group, walk, quality = 'high' }) {
         run('few', c => { c.setPaths(walkers); c.setMode('stroll', { speed: 1.1 }); });
         return;
       case 'assembly':
-        run('main', c => { c.setArea(ASSEMBLY.area); c.setMode('idle', { area: ASSEMBLY.area }); });
-        run('line', c => c.setMode('queue', { point: ASSEMBLY.queue, at: ASSEMBLY.queue, dir: { x: 0, z: 1 }, spacing: 0.85, face: { x: 0, z: -1 } }));
+        run('main', c => c.setMode('idle', { area: ASSEMBLY.area, paths: [], instant: true }));
+        run('line', c => c.setMode('queue', { point: ASSEMBLY.queue, at: ASSEMBLY.queue, dir: { x: 0, z: 1 }, spacing: 0.85, face: { x: 0, z: -1 }, leave: { x: 1, z: 0 } })); // served leave east toward 문화로, clear of the buses
         return;
       default: console.error(`[town] crowd "${mode}" unknown; use ${CROWD_MODES.join(' | ')}`);
     }
