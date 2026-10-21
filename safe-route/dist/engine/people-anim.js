@@ -124,7 +124,8 @@ const POSES = {
   sit(P, c) { // on a floor mat, knees up; origin = under the hips. Hands rest on the knees (IK, see people.js)
     legsFold(P, c, 2.0, 0.058 * c.d.H, 0.2);
     const t = c.t + c.o * 19;
-    add(P, B.pelvis, -0.12); add(P, B.spine, -0.08, 0, 0.02 * sin(t * 0.2)); add(P, B.chest, -0.05 + 0.012 * sin(t * 1.5));
+    add(P, B.pelvis, -0.12); add(P, B.lThigh, 0.12); add(P, B.rThigh, 0.12); // tilt the hips, not the planted legs
+    add(P, B.spine, -0.08, 0, 0.02 * sin(t * 0.2)); add(P, B.chest, -0.05 + 0.012 * sin(t * 1.5));
     add(P, B.head, 0.06 + 0.04 * sin(t * 0.15), 0.3 * sin(t * 0.11) * sin(t * 0.05 + 2));
     for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 0.7, 0, s * 0.1); add(P, a + 1, 0.6); }
   },
