@@ -61,6 +61,7 @@ export function buildShelterSite(kit) {
       stat.add(kit.box(x1 - x0 - 0.2, 0.012, 0.05, yellow, { x: cx, y: top, z: z - run / 2 + 0.03, cast: false }));
     }
     const bottom = Y - rise * n;
+    stat.add(kit.box(x1 - x0, 0.22, 0.04, conc, { x: cx, y: Y - 0.21, z: zt + 0.02 })); // nosing of the top riser
     stat.add(kit.slab(x1 - x0, 0.1, 16 - (zt + run * n), conc, { x: cx, y: bottom - 0.1, z: (zt + run * n + 16) / 2 }));
     for (const x of [x0 - 0.15, x1 + 0.15]) {
       stat.add(kit.slab(0.3, Y + 1.6 + 1.0, 16 - 12.8, conc, { x, y: -1.6, z: (12.8 + 16) / 2 }));

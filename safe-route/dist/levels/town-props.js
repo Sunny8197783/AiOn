@@ -70,10 +70,11 @@ export function buildProps(kit, { avoid = [] } = {}) {
     g.fillStyle = r; g.fillRect(0, 0, w, w);
   }), { repeat: [1, 1] }));
   const poolMat = kit.memo('town:pool', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdcae, emissiveMap: glowTex, emissiveIntensity: 0.55, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }), 0.55));
-  const pools = lights.map(p => ({ x: p.x - Math.sin(p.ry) * 2.45, y: 0.14, z: p.z - Math.cos(p.ry) * 2.45, s: 1 }));
+  const pools = lights.map(p => ({ x: p.x - Math.sin(p.ry) * 2.45, y: 0.02, z: p.z - Math.cos(p.ry) * 2.45, s: 1 }));
   group.add(kit.instanced(new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2), poolMat, pools, { cast: false, receive: false }));
   // A few real lights at the places the story stops (others glow only).
-  for (const [x, z] of [[78, 25.5], [36, 8.4], [-95, 10.5], [-63, 31], [-80, -15], [-61, -34], [0, 9]]) {
+  const keyLights = [[78, 25.5], [-95, 10.5], [36, 8.4], [-80, -15], [-63, 31], [-61, -34], [0, 9]];
+  for (const [x, z] of keyLights.slice(0, { low: 2, medium: 4 }[kit.quality] ?? keyLights.length)) {
     const L = new THREE.PointLight(0xffd9a8, 260, 30, 2); L.position.set(x, 7.6, z);
     kit.lit('street', L, 260); group.add(L);
   }
