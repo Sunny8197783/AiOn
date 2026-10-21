@@ -277,11 +277,8 @@ export function buildProps(kit, { avoid = [] } = {}) {
   for (const dx of [-2.6, 2.6]) for (const dz of [-1, 1]) stat.add(kit.box(0.08, 2.3, 0.08, steel, { x: shx + dx, y: Y, z: shz + dz }));
   stat.add(kit.box(5.3, 1.6, 0.04, kit.mat('paint:#d8d4ca', { roughness: 0.8 }), { x: shx, y: Y, z: shz - 1.02 }));
   const bins = [['종이', '#2f6fb5'], ['캔·고철', '#e0a52a'], ['플라스틱', '#e06a2a'], ['유리병', '#3a8a4e'], ['비닐', '#8a8f94']];
-  bins.forEach(([label, c], i) => {
-    const x = shx - 2.1 + i * 1.05;
-    stat.add(kit.rbox(0.9, 1.05, 0.8, 0.05, kit.mat(`paint:${c}`, { roughness: 0.5 }), { x, y: Y, z: shz - 0.4 }));
-    const tag = kit.sign([label], { w: 0.7, h: 0.22, bg: '#ffffff', fg: c, single: true }); tag.position.set(x, Y + 1.32, shz - 0.99); stat.add(tag);
-  });
+  bins.forEach(([, c], i) => stat.add(kit.rbox(0.9, 1.05, 0.8, 0.05, kit.mat(`paint:${c}`, { roughness: 0.5 }), { x: shx - 2.1 + i * 1.05, y: Y, z: shz - 0.4 })));
+  const tags = kit.sign([bins.map(([l]) => l).join('     ')], { w: 5.2, h: 0.24, bg: '#ffffff', fg: '#2f3a44', single: true }); tags.position.set(shx, Y + 1.32, shz - 0.99); stat.add(tags);
   const shedSign = kit.sign(['분리수거장', '수요일 · 일요일 배출'], { w: 1.6, h: 0.45, bg: '#2f5a3e', single: true }); shedSign.position.set(shx, Y + 1.95, shz - 0.99); stat.add(shedSign);
   box(shx - 2.7, shx + 2.7, shz - 1.1, shz + 0.05, 2.4, 'recycling');
 

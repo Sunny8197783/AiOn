@@ -10,7 +10,7 @@ import { yawTo } from './town-util.js';
 
 const NG = (g) => (g.index ? g.toNonIndexed() : g);
 const merge = (list) => mergeGeometries(list.map(NG));
-const PARTS = ['body', 'glass', 'dark', 'metal', 'head', 'tail'];
+const PARTS = ['body', 'glass', 'dark', 'lamp'];
 
 // Side profiles in (s from the front bumper, y). Wheel arches are cut into the bottom edge.
 const TYPES = {
@@ -47,11 +47,11 @@ function vehicleGeo(T) {
     new THREE.BoxGeometry(W * 0.98, 0.16, 0.12).translate(0, T.top[0][1] + 0.06, z(0.04)), new THREE.BoxGeometry(W * 0.98, 0.16, 0.12).translate(0, T.top[0][1] + 0.06, z(L - 0.04)),
     new THREE.BoxGeometry(W * 0.5, 0.17, 0.04).translate(0, T.lights[0] - 0.12, z(0) - 0.01),
     ...[-1, 1].map(sx => new THREE.BoxGeometry(0.1, 0.09, 0.16).translate(sx * (W / 2 + 0.07), T.glass[0][1] + 0.06, z(T.glass[0][0] + 0.15)))];
-  const lamp = (s, y, w, d) => [-1, 1].map(sx => new THREE.BoxGeometry(w, 0.12, d).translate(sx * (W / 2 - 0.22 - w / 2 + 0.1), y, z(s)));
+  // Head and tail lamps share one material: UVs pick the white or red half of a 2 px texture.
+  const lamp = (s, y, w, d, u) => [-1, 1].map(sx => { const g = new THREE.BoxGeometry(w, 0.12, d).translate(sx * (W / 2 - 0.22 - w / 2 + 0.1), y, z(s)), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, u, 0.5); return g; });
   return {
-    body: merge(bodyParts), glass, dark: merge(dark),
-    metal: merge([...hubs, new THREE.BoxGeometry(0.52, 0.11, 0.02).translate(0, T.top[0][1] + 0.2, z(L) + 0.07)]),
-    head: merge(lamp(T.lights[2], T.lights[0], 0.36, 0.07)), tail: merge(lamp(T.lights[3], T.lights[1], 0.32, 0.06)),
+    body: merge(bodyParts), glass, dark: merge([...dark, ...hubs, new THREE.BoxGeometry(0.52, 0.11, 0.02).translate(0, T.top[0][1] + 0.2, z(L) + 0.07)]),
+    lamp: merge([...lamp(T.lights[2], T.lights[0], 0.36, 0.07, 0.25), ...lamp(T.lights[3], T.lights[1], 0.32, 0.06, 0.75)]),
   };
 }
 
@@ -100,9 +100,9 @@ export function buildTraffic(kit) {
 
   // ---- instanced parts per type ----
   const paint = kit.memo('town:carPaint', () => new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.32, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.08 }));
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xf4f1e6, emissive: 0xfff1d6, emissiveIntensity: 0.3, roughness: 0.2 });
-  const tailMat = new THREE.MeshStandardMaterial({ color: 0x5a0e10, emissive: 0xff2418, emissiveIntensity: 0.15, roughness: 0.3 });
-  const mats = { body: paint, glass: kit.mat('darkGlass', { roughness: 0.04 }), dark: kit.mat('paint:#141517', { roughness: 0.7 }), metal: kit.mat('metal'), head: headMat, tail: tailMat };
+  const lampTex = kit.memo('town:carLampTex', () => { const t = kit.texture(kit.canvas(2, 1, (g) => { g.fillStyle = '#fff4dc'; g.fillRect(0, 0, 1, 1); g.fillStyle = '#ff2a1c'; g.fillRect(1, 0, 1, 1); }), { repeat: [1, 1] }); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; });
+  const lampMat = new THREE.MeshStandardMaterial({ map: lampTex, emissiveMap: lampTex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.25 });
+  const mats = { body: paint, glass: kit.mat('darkGlass', { roughness: 0.04 }), dark: kit.mat('paint:#141517', { roughness: 0.7 }), lamp: lampMat };
   const meshes = {}, slots = new Map();
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _z = new THREE.Vector3(0, 0, 0), _c = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0);
   for (const [type, T] of Object.entries(TYPES)) {
@@ -111,7 +111,7 @@ export function buildTraffic(kit) {
     const geo = vehicleGeo(T);
     meshes[type] = PARTS.map(part => {
       const im = new THREE.InstancedMesh(geo[part], mats[part], count);
-      im.castShadow = part === 'body' || part === 'dark'; im.receiveShadow = part !== 'head' && part !== 'tail';
+      im.castShadow = part === 'body' || part === 'dark'; im.receiveShadow = part !== 'lamp';
       im.frustumCulled = false; im.name = `car:${type}:${part}`; group.add(im); return im;
     });
     moving.forEach((c, i) => slots.set(c, i));
@@ -211,7 +211,7 @@ export function buildTraffic(kit) {
     const env = ctx.env;
     power = env !== 'blackout';
     const isNight = env === 'night' || env === 'blackout' || env === 'dusk';
-    if (isNight !== night) { night = isNight; headMat.emissiveIntensity = night ? 4 : 0.3; tailMat.emissiveIntensity = night ? 1.8 : 0.15; }
+    if (isNight !== night) { night = isNight; lampMat.emissiveIntensity = night ? 3 : 0.25; }
     beams.visible = night && mode !== 'none';
     const s = setLamps(t), pl = ctx.player;
     for (let li = 0; li < LANES.length; li++) {

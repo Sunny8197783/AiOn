@@ -65,6 +65,7 @@ export function buildEvents(kit, people, walk) {
     col.forEach((h, i) => um.setColorAt(i, c.set(h))); um.instanceColor.needsUpdate = true;
     g.add(um, kit.instanced(coneGeo, coneMat, cones));
     solids.push(...sol);
+    kit.merge(g);
     closures[id] = { group: g, solids: sol };
   }
   const guides = [person('guide', 71)];
@@ -102,7 +103,8 @@ export function buildEvents(kit, people, walk) {
     const T = 5, tx = px, tzc = tz - 0.8;
     for (const [dx, dz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) water.add(kit.box(0.06, 2.4, 0.06, kit.mat('metal'), { x: tx + dx * T / 2, y, z: tzc + dz * T / 2 }));
     const roof = new THREE.Mesh(new THREE.ConeGeometry(T * 0.72, 1.3, 4, 1, true), kit.mat('paint:#f4f4ee', { roughness: 0.8, side: THREE.DoubleSide })); roof.rotation.y = Math.PI / 4; roof.position.set(tx, y + 3.05, tzc); roof.castShadow = true; water.add(roof);
-    for (const [ry, dx, dz] of [[Math.PI, 0, -1], [0, 0, 1], [Math.PI / 2, 1, 0], [-Math.PI / 2, -1, 0]]) { const v = kit.sign(['비상급수 · 연무동'], { w: T, h: 0.32, bg: '#f4f4ee', fg: '#1f5fa8', single: true }); v.position.set(tx + dx * T / 2 * 1.002, y + 2.24, tzc + dz * T / 2 * 1.002); v.rotation.y = ry; water.add(v); }
+    const val = kit.sign(['비상급수 · 연무동'], { w: T, h: 0.32, bg: '#f4f4ee', fg: '#1f5fa8', single: true });
+    for (const [ry, dx, dz] of [[Math.PI, 0, -1], [0, 0, 1], [Math.PI / 2, 1, 0], [-Math.PI / 2, -1, 0]]) { const v = val.clone(); v.position.set(tx + dx * T / 2 * 1.002, y + 2.24, tzc + dz * T / 2 * 1.002); v.rotation.y = ry; water.add(v); }
     // table with bottles and bags, a notice
     const tbx = px - 4.2, tbz = tz + 0.4;
     water.add(kit.box(1.8, 0.05, 0.7, white, { x: tbx, y: y + 0.72, z: tbz }), ...[-0.8, 0.8].map(dx => kit.box(0.05, 0.72, 0.6, dark, { x: tbx + dx, y, z: tbz })));
@@ -125,6 +127,7 @@ export function buildEvents(kit, people, walk) {
     { x0: WATER.queue.x + 0.5, x1: WATER.queue.x + 8.8, z0: WATER.queue.z + 0.7, z1: WATER.queue.z + 0.8, y0: -1, y1: 1.2, id: 'queueBelt', off: true },
   ];
   solids.push(...waterSolids);
+  kit.merge(water);
   const setWater = (on) => { water.visible = on; for (const s of waterSolids) s.off = !on; };
 
   // ================= buses + assembly reception =================
@@ -132,6 +135,7 @@ export function buildEvents(kit, people, walk) {
   const busSolids = [];
   const dest = kit.sign(['임시 대피 버스'], { w: 1.9, h: 0.28, bg: '#120b04', fg: '#ffae2a', single: true, emissive: 1 });
   kit.lit('signs', dest.material, 1.6);
+  const side = kit.sign(['임시 대피 버스', '연무동 → 지정 대피 시설'], { w: 1.6, h: 0.5, bg: '#ffffff', fg: '#c42b25', single: true });
   for (const [i, b] of BUS.entries()) {
     const y = hy(b.x, b.z), g = new THREE.Group(); g.position.set(b.x, y, b.z); buses.add(g);
     const body = kit.mat(i ? 'paint:#2f8a4a' : 'paint:#1f5fa8', { roughness: 0.35, metalness: 0.3 });
@@ -140,7 +144,7 @@ export function buildEvents(kit, people, walk) {
     g.add(kit.box(0.04, 2.2, 1.1, kit.mat('paint:#202426'), { x: 1.25, y: 0.4, z: -4.3 }));
     for (const z of [-3.6, 3.4]) for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 18).rotateZ(Math.PI / 2), kit.mat('rubber')); w.position.set(s * 1.1, 0.5, z); w.castShadow = true; g.add(w); }
     const fd = dest.clone(); fd.position.set(0, 2.88, -5.51); fd.rotation.y = Math.PI; g.add(fd);
-    const sd = kit.sign(['임시 대피 버스', '연무동 → 지정 대피 시설'], { w: 1.6, h: 0.5, bg: '#ffffff', fg: '#c42b25', single: true }); sd.position.set(1.27, 2.0, -2.2); sd.rotation.y = Math.PI / 2; g.add(sd);
+    const sd = side.clone(); sd.position.set(1.27, 2.0, -2.2); sd.rotation.y = Math.PI / 2; g.add(sd);
     for (const s of [-0.85, 0.85]) g.add(kit.box(0.3, 0.12, 0.04, kit.mat('emit:#fff3d6'), { x: s, y: 0.75, z: -5.52, cast: false }));
     busSolids.push({ x0: b.x - 1.35, x1: b.x + 1.35, z0: b.z - 5.6, z1: b.z + 5.6, y0: -1, y1: 3.3, id: 'bus', off: true });
   }
@@ -154,6 +158,7 @@ export function buildEvents(kit, people, walk) {
     busSolids.push({ x0: ax - 0.12, x1: ax + 0.12, z0: az - 0.12, z1: az + 0.12, y0: -1, y1: 3, id: 'assemblySign', off: true }, { x0: tx - 0.8, x1: tx, z0: tz - 0.95, z1: tz + 0.95, y0: -1, y1: 1, id: 'assemblyTable', off: true });
   }
   solids.push(...busSolids);
+  kit.merge(buses);
   const setBuses = (on) => { buses.visible = on; for (const s of busSolids) s.off = !on; };
 
   // ================= per-frame =================

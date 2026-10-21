@@ -48,7 +48,8 @@ export function buildShelterSite(kit) {
   const emLamp = kit.memo('town:emLamp', () => kit.lit('emergency', new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 4, roughness: 0.3 }), 4));
   const tube = kit.memo('town:tubeLamp', () => kit.lit('indoor', new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeef6ff, emissiveIntensity: 3, roughness: 0.3 }), 3));
   const rail = (a, b, r = 0.024) => { const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 8), kit.mat('metal')); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); m.castShadow = true; stat.add(m); };
-  const shelterSign = (x, y, z, ry, w = 0.45) => { const s = kit.shelterSign({ w }); s.position.set(x, y, z); s.rotation.y = ry; stat.add(s); const back = kit.box(w + 0.04, w * 4 / 3 + 0.04, 0.03, dark, { x: x - Math.sin(ry) * 0.02, y: y - w * 2 / 3 - 0.02, z: z - Math.cos(ry) * 0.02 }); back.rotation.y = ry; stat.add(back); };
+  const signProto = {};
+  const shelterSign = (x, y, z, ry, w = 0.45) => { const s = (signProto[w] ||= kit.shelterSign({ w })).clone(); s.position.set(x, y, z); s.rotation.y = ry; stat.add(s); const back = kit.box(w + 0.04, w * 4 / 3 + 0.04, 0.03, dark, { x: x - Math.sin(ry) * 0.02, y: y - w * 2 / 3 - 0.02, z: z - Math.cos(ry) * 0.02 }); back.rotation.y = ry; stat.add(back); };
   const gates = {};
 
   // ================= A: stair kiosk =================
@@ -85,7 +86,7 @@ export function buildShelterSite(kit) {
     const fold = new THREE.Group();
     const lat = kit.box(x1 - x0, 2.1, 0.04, lattice, { x: cx, y: Y, z: zt + 0.02, cast: false }); lat.material.map.repeat.set(2.5, 2);
     const no = kit.sign(['출입 통제', '다른 출입구를 이용하세요'], { w: 1.2, h: 0.45, bg: '#c42b25', single: true }); no.position.set(cx, Y + 1.3, zt - 0.03); no.rotation.y = Math.PI;
-    fold.add(lat, no); dyn.add(fold);
+    fold.add(lat, no); dyn.add(fold); kit.merge(fold);
     gates.stairs = (open) => { fold.visible = !open; };
   }
 
@@ -159,7 +160,7 @@ export function buildShelterSite(kit) {
     const ex = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), exitMat); ex.position.set(-110.7, yb + 2.0, 15.92); ex.rotation.y = Math.PI;
     const inner = kit.box(1.0, 0.06, 0.1, emLamp, { x: -110.7, y: yb + 2.15, z: 15.9, cast: false });
     const cl = new THREE.PointLight(0xf2f6ff, 14, 7, 2); cl.position.set(-110.7, yb + 1.9, 15.1); kit.lit('emergency', cl, 14);
-    opening.add(hole, ex, inner, cl); dyn.add(opening);
+    opening.add(hole, ex, inner, cl); dyn.add(opening); kit.merge(opening);
     solid(xl, xt, 13.45, z0, 'railC', -3, 2); solid(xl - 0.3, xl, 13.45, z1, 'railC', -3, 2);
     gates.access = (open) => { shutter.visible = !open; opening.visible = open; };
   }
@@ -173,7 +174,7 @@ export function buildShelterSite(kit) {
     const back = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.5), glow); back.position.set(x - 0.01, Y + 1.25, zc); back.rotation.y = Math.PI / 2; stat.add(back);
     for (const dz of [-1.65, 1.65]) stat.add(kit.box(0.1, 2.6, 0.1, dark, { x: x + 0.03, y: Y, z: zc + dz }));
     stat.add(kit.box(0.12, 0.14, 3.4, dark, { x: x + 0.03, y: Y + 2.5, z: zc }));
-    const leaves = [-1, 1].map(s => { const g = new THREE.Group(); const p = kit.box(0.03, 2.45, 1.55, glass, { x: 0, y: 0, z: 0, cast: false }); p.userData.keep = true; g.add(p, kit.box(0.05, 2.45, 0.05, dark, { x: 0, y: 0, z: s * 0.75 }), kit.box(0.06, 0.4, 0.03, kit.mat('metal'), { x: 0.04, y: 0.95, z: -s * 0.65 })); g.position.set(x + 0.06, Y, zc + s * 0.78); dyn.add(g); return { g, s }; });
+    const leaves = [-1, 1].map(s => { const g = new THREE.Group(); const p = kit.box(0.03, 2.45, 1.55, glass, { x: 0, y: 0, z: 0, cast: false }); p.userData.keep = true; g.add(p, kit.box(0.05, 2.45, 0.05, dark, { x: 0, y: 0, z: s * 0.75 }), kit.box(0.06, 0.4, 0.03, kit.mat('metal'), { x: 0.04, y: 0.95, z: -s * 0.65 })); g.position.set(x + 0.06, Y, zc + s * 0.78); dyn.add(g); kit.merge(g); return { g, s }; });
     shelterSign(x + 0.03, Y + 1.95, 33.9, Math.PI / 2);
     const plq = kit.sign(['민방위 대피시설', '연무 생활문화센터 지하주차장', '수용 인원 1,200명'], { w: 0.9, h: 0.6, bg: '#1f4e8c', single: true }); plq.position.set(x + 0.03, Y + 1.5, 28.0); plq.rotation.y = Math.PI / 2; stat.add(plq);
     // closure: stanchions with belts, standing notice
@@ -184,14 +185,14 @@ export function buildShelterSite(kit) {
     for (let i = 1; i < posts.length; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(posts[i] - posts[i - 1], 0.06), belt); m.position.set(-67.8, Y + 0.88, (posts[i] + posts[i - 1]) / 2); m.rotation.y = Math.PI / 2; closed.add(m); }
     const note = kit.sign(['동쪽 출입구 폐쇄', 'A 계단 · B 진출입로 이용'], { w: 0.9, h: 0.6, bg: '#ffffff', fg: '#c42b25', border: '#c42b25', single: true });
     note.position.set(-66.9, Y + 1.25, 34.5); note.rotation.y = Math.PI / 2; closed.add(note, kit.box(0.05, 0.95, 0.05, dark, { x: -66.92, y: Y, z: 34.5 }), kit.box(0.4, 0.04, 0.4, dark, { x: -66.92, y: Y, z: 34.5 }));
-    dyn.add(closed);
+    dyn.add(closed); kit.merge(closed);
     const barrier = solid(-68.0, -67.55, 28.4, 33.6, 'gateEast');
     gates.east = (open) => { closed.visible = !open; barrier.off = open; for (const { g, s } of leaves) g.position.z = zc + s * (open ? 2.25 : 0.78); };
   }
 
   // ================= guide signs (유도표지판) on 2 m posts =================
   const ENT = { A: PLACES.shelterA, B: PLACES.shelterB, C: PLACES.shelterC, east: PLACES.shelterEast };
-  for (const [x, z, nx, nz, to] of [[-58.6, 9.4, 1, 0, 'A'], [-75, 9.4, 1, 0, 'A'], [-118, 9.4, -1, 0, 'C'], [-57, 26, 0, -1, 'east'], [-57, 58, 0, 1, 'B'], [-61.5, -8.8, 0, -1, 'A'], [-66, -8.8, 1, 0, 'A'], [-44.6, 26.6, 1, 0, 'east']]) {
+  for (const [x, z, nx, nz, to] of [[-58.6, 9.4, 1, 0, 'A'], [-118, 9.4, -1, 0, 'C'], [-57, 26, 0, -1, 'east'], [-57, 58, 0, 1, 'B'], [-61.5, -8.8, 0, -1, 'A'], [-44.6, 26.6, 1, 0, 'east']]) {
     const t = ENT[to], dx = t.x - x, dz = t.z - z, d = Math.hypot(dx, dz), fx = -nx, fz = -nz;
     const ahead = (dx * fx + dz * fz) / d, side = (dx * -fz + dz * fx) / d;
     const arrow = ahead > 0.7 ? 'up' : side > 0 ? 'right' : 'left', meters = Math.max(10, Math.round(d / 5) * 5);
