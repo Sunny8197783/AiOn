@@ -6,17 +6,18 @@
 // tubes and area lights off, battery emergency lights on, jet fans spin down, lift display dark),
 // fire 'none'|'large' (a camping-burner fire on stacked cartons in the north-west corner: flames reach the cable
 // tray and sprinkler main, a smoke layer spreads under the slab, nearby evacuees have moved away, a solid blocks it),
-// boardText string[]|null (lines the director pins on the notice board; no text is invented here).
+// boardText string[]|null (lines the director pins on the notice board; no text is invented here),
+// ways string[] (open entrances among stairs|ramp|access|east, default all; arrivals and leavers use only these).
 import { shelterTextures } from './shelter-tex.js';
 import { buildShell, ROOM } from './shelter-shell.js';
 import { buildServices } from './shelter-services.js';
 import { buildCamp, SPOT, RECEPTION, BOARD, RADIO } from './shelter-camp.js';
-import { buildPeople } from './shelter-people.js';
+import { buildPeople, ENTRANCES } from './shelter-people.js';
 
 const FIRE = { x: -18.6, z: -9.2 };
 const STATES = {
   crowd: ['arriving', 'settled', 'leaving'], phase: ['alert', 'calm'], power: ['grid', 'emergency'], fire: ['none', 'large'],
-  boardText: [null, ['연무 생활문화센터 지하주차장 · 민방위 대피소']],
+  boardText: [null, ['연무 생활문화센터 지하주차장 · 민방위 대피소']], ways: ENTRANCES,   // ways: any non-empty subset
 };
 // Faulty tube: steady, with a short starter stutter every 9 s (steady when reduceMotion).
 const flicker = (t) => (t % 9 < 1.1 ? (Math.sin(t * 71) * Math.sin(t * 23) > 0 ? 0.95 : 0.08) : 0.9);
@@ -94,9 +95,14 @@ export function buildShelter(kit, people, fx) {
   };
 
   // ---- states ----
-  const state = { crowd: 'settled', phase: 'calm', power: 'grid', fire: 'none', boardText: null };
+  const state = { crowd: 'settled', phase: 'calm', power: 'grid', fire: 'none', boardText: null, ways: ENTRANCES };
   function setState(key, v) {
     if (key === 'boardText') { state.boardText = Array.isArray(v) ? v.map(String) : null; camp.boardMat.map = T.drawBoard(state.boardText); return; }
+    if (key === 'ways') {
+      const w = [...new Set([].concat(v ?? []))];
+      if (!w.length || !w.every((x) => ENTRANCES.includes(x))) return void console.error(`[shelter] ways must be a non-empty array of ${ENTRANCES.join('|')}`, v);
+      state.ways = w; crowd.setWays(w); return;
+    }
     if (!STATES[key]) return void console.error('[shelter] unknown state', key, v);
     if (!STATES[key].includes(v)) return void console.error(`[shelter] ${key} must be ${STATES[key].join('|')}`, v);
     state[key] = v;

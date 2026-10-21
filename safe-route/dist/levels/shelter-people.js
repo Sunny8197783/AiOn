@@ -16,6 +16,7 @@ const WAYS = {
   ramp: [[11, 23], [11, 15.4], [11, 10.6], [10.2, AS]],
 };
 const IN = ['stairs', 'stairs', 'stairs', 'east', 'ramp', 'access'], OUT = ['stairs', 'stairs', 'east', 'access'];
+export const ENTRANCES = ['stairs', 'ramp', 'access', 'east'];
 const DESK = { x: 2.55, z: -9.5, wait: 2.6, anim: 'talk', face: Math.PI };   // arrivals by stair A write in the roster
 const COLS = [-19.3, -17.1, -14.9, -12.7, -10.5, -3.9, -1.7, 2.7, 4.9];      // gaps between mats clear of pillars, radio table, bins
 const QUOTA = { high: { seats: 26, walk: 4 }, medium: { seats: 16, walk: 3 }, low: { seats: 8, walk: 2 } };
@@ -79,7 +80,8 @@ export function buildPeople(kit, people, { seats, walk }) {
   seoyeon.group.visible = false;   // the director shows her
   const still = [manager, volunteer, ...listeners, ...queue, seoyeon];
 
-  let mode = 'settled', phase = 'calm', fire = null, timer = 1, frame = 0, last = null;
+  let mode = 'settled', phase = 'calm', fire = null, timer = 1, frame = 0, last = null, ways = ENTRANCES;
+  const open = (list) => { const l = list.filter((w) => ways.includes(w)); return l.length ? l : ways; };
   const out = (h) => !!fire && Math.hypot(h.x - fire.x, h.z - fire.z) < FIRE_CLEAR;
   const nearPlayer = (e) => !!last && Math.hypot(e.home.x - last.x, e.home.z - last.z) < 3;
   const busy = () => ev.reduce((k, e) => k + (e.mode === 'walk' || e.mode === 'away'), 0);
@@ -118,11 +120,11 @@ export function buildPeople(kit, people, { seats, walk }) {
     if (busy() >= (mode === 'settled' ? Math.min(2, Q.walk) : Q.walk)) return;
     if (mode === 'arriving') {
       const e = order.find((x) => x.mode === 'gone' && !out(x.home));
-      if (e) { e.p.setProp('backpack', r() < 0.5); go(e, seatPath(pick(IN), e.home, true), seat); }
+      if (e) { e.p.setProp('backpack', r() < 0.5); go(e, seatPath(pick(open(IN)), e.home, true), seat); }
     } else if (mode === 'leaving') {
       if (ev.reduce((k, x) => k + (x.mode === 'seat'), 0) <= Math.round(ev.length * 0.25)) return;
       const e = order.find((x) => x.mode === 'seat' && !nearPlayer(x));
-      if (e) { e.p.setProp('backpack', true); go(e, seatPath(pick(OUT), e.home).reverse(), hide, true); }
+      if (e) { e.p.setProp('backpack', true); go(e, seatPath(pick(open(OUT)), e.home).reverse(), hide, true); }
     } else if (!fire && r() < 0.6) {   // settled: now and then someone goes to the toilets by the lift hall
       const e = pick(ev.filter((x) => x.mode === 'seat' && !nearPlayer(x)));
       if (e) go(e, seatPath('toilet', e.home).reverse(), (x) => { x.mode = 'away'; x.p.group.visible = false; x.away = 10 + r() * 12; }, true);
@@ -176,7 +178,8 @@ export function buildPeople(kit, people, { seats, walk }) {
     group, npcs: { shelterManager: manager, seoyeon, volunteer },
     setCrowd(m) { mode = m; reset(); },
     setPhase(p) { phase = p; applyPhase(); },
-    setFire(pos) { fire = pos; reset(); },   // {x, z} or null: clears the seats around it and pauses toilet trips
+    setFire(pos) { fire = pos; reset(); },
+    setWays(list) { ways = list; },   // open entrances: arrivals and leavers only use these   // {x, z} or null: clears the seats around it and pauses toilet trips
     update,
   };
 }
