@@ -246,7 +246,7 @@ export function buildPark(kit, { spots } = {}) {
   // ---- outdoor exercise frames (야외 운동기구) ----
   const gx = (GYM.x0 + GYM.x1) / 2, gz = (GYM.z0 + GYM.z1) / 2;
   for (const [x, z] of [[gx - 3, gz - 2], [gx, gz - 2], [gx + 3, gz - 2]]) {
-    stat.add(kit.cyl(0.07, 0.07, 2.2, blue, { x, y: Y, z }, 10), kit.cyl(0.05, 0.05, 1.2, yel, { x, y: Y + 1.9, z, rz: Math.PI / 2 }, 8));
+    stat.add(kit.cyl(0.07, 0.07, 2.2, blue, { x, y: Y, z }, 10), kit.cyl(0.05, 0.05, 1.2, yel, { x, y: Y + 1.5, z, rz: Math.PI / 2 }, 8));
     stat.add(kit.cyl(0.05, 0.05, 0.9, yel, { x: x + 0.45, y: Y + 0.3, z, rx: 0.3 }, 8), kit.box(0.35, 0.05, 0.28, kit.mat('rubber'), { x: x + 0.45, y: Y + 0.32, z: z + 0.15 }));
     solids.push({ x0: x - 0.7, x1: x + 0.8, z0: z - 0.5, z1: z + 0.5, y0: -0.5, y1: 2.3, id: 'gym' });
   }
