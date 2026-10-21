@@ -34,9 +34,14 @@ export function buildMart(kit, people, fx) {
     top: kit.mat('paint:#3a3c40', { roughness: 0.3 }), clad: kit.mat('paint:#b9bcc0', { metalness: 0.6, roughness: 0.35 }), rubber: kit.mat('rubber'),
   };
   const add = (o, solid, pad = 0.04) => { stat.add(o); if (solid) solids.push(solidOf(o, pad)); return o; };
+  // Mains power is level-local: real lights sit in `powered`, glowing materials lose their emissive colour.
+  // (The env presets still drive the shared 'indoor' group on top of this.)
+  const powered = new THREE.Group(), glow = [], BLACK = new THREE.Color(0);
+  const onMains = (m) => { glow.push([m, m.emissive.clone()]); return m; };
   const sign = (lines, o, at, lightGroup) => {
     const s = kit.sign(lines, { single: true, ...o }); s.position.set(at.x, at.y, at.z); s.rotation.y = at.ry || 0; s.userData.keep = true;
     if (lightGroup) kit.lit(lightGroup, s.material, o.emissive || 0.6);
+    if (lightGroup === 'indoor') onMains(s.material);
     return s;
   };
 
@@ -48,7 +53,7 @@ export function buildMart(kit, people, fx) {
   stat.add(kit.slab(10, H - 2.6, 0.3, M.wall, { x: -9, y: 2.6, z: 0.15 }));
   solids.push({ x0: -16, x1: 16, y0: 0, y1: H, z0: 0, z1: 0.5, id: 'southWall' });
   for (const [x, z, w, d] of [[-15.99, -12, 0.02, 24], [15.99, -12, 0.02, 24], [0, -23.99, 32, 0.02], [6, -0.01, 20, 0.02]]) stat.add(kit.box(w, 0.25, d, M.green, { x, y: 2.05, z, cast: false }));
-  const ceil = new THREE.MeshStandardMaterial({ map: kit.texture(kit.canvas(256, 256, (g) => { g.fillStyle = '#efeeea'; g.fillRect(0, 0, 256, 256); g.fillStyle = 'rgba(0,0,0,0.04)'; for (let i = 0; i < 900; i++) g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); g.fillStyle = '#c9c8c3'; for (let i = 0; i < 256; i += 64) { g.fillRect(i, 0, 3, 256); g.fillRect(0, i, 256, 3); } }), { repeat: [1 / 2.4, 1 / 2.4] }), roughness: 0.9 });
+  const ceil = new THREE.MeshStandardMaterial({ map: kit.texture(kit.canvas(256, 256, (g) => { g.fillStyle = '#efeeea'; g.fillRect(0, 0, 256, 256); g.fillStyle = 'rgba(0,0,0,0.04)'; for (let i = 0; i < 900; i++) g.fillRect(r() * 256, r() * 256, 2, 2); g.fillStyle = '#c9c8c3'; for (let i = 0; i < 256; i += 64) { g.fillRect(i, 0, 3, 256); g.fillRect(0, i, 256, 3); } }), { repeat: [1 / 2.4, 1 / 2.4] }), roughness: 0.9 });
   for (const [x0, x1, z0, z1] of [[-16, 13.2, -24, 0], [13.2, 16, -24, -21], [13.2, 16, -14, 0]]) stat.add(kit.slab(x1 - x0, 0.25, z1 - z0, ceil, { x: (x0 + x1) / 2, y: H, z: (z0 + z1) / 2 }));
   stat.add(kit.box(2.8, 0.1, 7, M.dark, { x: 14.6, y: H + 1.6, z: -17.5 }));
   stat.add(kit.slab(33, 0.3, 25, kit.surface('concrete'), { x: 0, y: H + 1.7, z: -12 }));
@@ -79,7 +84,7 @@ export function buildMart(kit, people, fx) {
   const chill = gondola(kit, { x: -4.7, z: -23.95, len: 21.4, axis: 'x', sides: 'pos', depth: 0.62, levels: [0.3, 0.68, 1.04, 1.4], height: 2.0, color: '#f2f2f2' });
   add(chill.group, true); chill.runs.forEach((run, i) => goods.stock({ ...run, sec: 'misc', items: pick(['milk', 'yogurt', 'tofu', 'kimchi', 'soymilk', 'milk'], i), seed: 90 + i }));
   stat.add(kit.box(21.4, 0.14, 0.3, M.white, { x: -4.7, y: 1.98, z: -23.2 }));
-  dyn.add(panels(kit, [{ x: -4.7, y: 1.96, z: -23.08, sx: 21.2 }], { w: 1, d: 0.05, on: 3 }));
+  const chillStrip = panels(kit, [{ x: -4.7, y: 1.96, z: -23.08, sx: 21.2 }], { w: 1, d: 0.05, on: 3 }); onMains(chillStrip.material); dyn.add(chillStrip);
 
   // Pallet of water six-packs at the front with the purchase limit notice.
   add(kit.slab(1.2, 0.14, 1.0, M.wood, { x: -6.6, z: -4.05 }), true);
@@ -190,8 +195,8 @@ export function buildMart(kit, people, fx) {
   for (const x of AISLES.slice(0, 6)) for (const z of [-9.5, -12, -14.5, -17, -19.5]) fixtures.push({ x, y: H - 0.03, z, ry: Math.PI / 2 });
   for (let x = -14; x <= 13; x += 2.4) for (const z of [-2.2, -5.4, -22.2]) fixtures.push({ x, y: H - 0.03, z });
   for (const x of [8.3, 11.5]) for (const z of [-10, -13, -16, -19]) fixtures.push({ x, y: H - 0.03, z });
-  dyn.add(panels(kit, fixtures));
-  dyn.add(lamps(kit, [-12, -4, 4, 11].flatMap((x) => [-5.5, -16].map((z) => ({ x, y: H - 0.35, z }))), { intensity: 13 }));
+  const ceilPanels = panels(kit, fixtures); onMains(ceilPanels.material); dyn.add(ceilPanels); dyn.add(powered);
+  powered.add(lamps(kit, [-12, -4, 4, 11].flatMap((x) => [-5.5, -16].map((z) => ({ x, y: H - 0.35, z }))), { intensity: 13 }));
   const emerg = [[-9, 3.1, -0.6], [-4.7, 3.1, -23.3], [12, 3.1, -1]].map(([x, y, z]) => {
     const l = new THREE.PointLight(0xf4f7ff, 4, 12, 2); l.visible = false; l.position.set(x, y, z); dyn.add(l);
     const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0 });
@@ -204,7 +209,8 @@ export function buildMart(kit, people, fx) {
   const shoppers = Array.from({ length: nBusy }, (_, i) => {
     const cart = i % 3 === 0, x = AISLES[(r() * AISLES.length) | 0], z = r() < 0.5 ? FRONT : BACK;
     const p = npc(people, 'crowd', 300 + i, { x, z, ry: r() * 6, props: [cart ? 'cart' : 'basket'] });
-    const s = { p, cart, walk: cart ? 'walker' : 'walk', speed: 0.85 + r() * 0.35, off: (r() - 0.5) * 0.6, path: [], wait: r() * 3, blocked: false };
+    // 'walk' for everyone: the 'walker' anim would auto-show a rollator; the cart prop alone sets the grip.
+    const s = { p, cart, walk: 'walk', speed: (cart ? 0.75 : 0.85) + r() * 0.35, off: (r() - 0.5) * 0.6, path: [], wait: r() * 3, blocked: false };
     p.setSpeed(s.speed); p.setAnim('idle'); dyn.add(p.group); return s;
   });
   const queue = [[4.25, -3.8, -Math.PI / 2], [4.25, -5.4, Math.PI], [4.3, -6.0, Math.PI], [4.2, -6.6, Math.PI], [0.85, -2.2, Math.PI], [0.75, -5.8, Math.PI]]
@@ -251,7 +257,8 @@ export function buildMart(kit, people, fx) {
     } else if (key === 'power') {
       if (!['on', 'off'].includes(v)) return void console.error('[mart] power must be on|off', v);
       state.power = v; const on = v === 'on';
-      kit.setLit('indoor', on);
+      powered.visible = on;
+      for (const [m, c] of glow) m.emissive.copy(on ? c : BLACK);
       for (const e of emerg) { e.l.visible = !on; e.m.emissiveIntensity = on ? 0 : 2.5; }
     } else if (key === 'outside') { if (v !== null && !MOODS.includes(v)) return void console.error('[mart] outside must be', MOODS, v); state.outside = v; }
     else console.error('[mart] unknown state', key, v);
