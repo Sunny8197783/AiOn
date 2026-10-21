@@ -178,8 +178,8 @@ export function buildPeople(kit, people, { seats, walk }) {
     group, npcs: { shelterManager: manager, seoyeon, volunteer },
     setCrowd(m) { mode = m; reset(); },
     setPhase(p) { phase = p; applyPhase(); },
-    setFire(pos) { fire = pos; reset(); },
-    setWays(list) { ways = list; },   // open entrances: arrivals and leavers only use these   // {x, z} or null: clears the seats around it and pauses toilet trips
+    setFire(pos) { fire = pos; reset(); },   // {x, z} or null: clears the seats around it and pauses toilet trips
+    setWays(list) { ways = list; },   // open entrances: arrivals and leavers only use these
     update,
   };
 }
