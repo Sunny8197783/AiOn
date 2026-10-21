@@ -306,22 +306,24 @@ export function createKit(renderer, { quality = 'high' } = {}) {
   }
 
   // ---- Light groups: 'street' | 'windows' | 'shops' | 'indoor' | 'signs' | 'emergency' | any name ----
-  const groups = new Map();
+  // Lights are never hidden, only dimmed to 0: a changing light count recompiles every shader.
+  const groups = new Map(), itemOf = new WeakMap();
+  const put = (G, it) => { const v = G.on && !it.off ? it.base * G.scale : 0; if (it.isLight) it.obj.intensity = v; else it.obj.emissiveIntensity = v; };
   function lit(group, obj, on) {
-    if (!groups.has(group)) groups.set(group, { items: [], on: true });
+    if (!groups.has(group)) groups.set(group, { items: [], on: true, scale: 1 });
     const G = groups.get(group);
     const isLight = obj.isLight;
-    const base = on ?? (isLight ? obj.intensity : obj.emissiveIntensity);
-    G.items.push({ obj, base, isLight });
-    const v = G.on ? base : 0;
-    if (isLight) obj.intensity = v; else obj.emissiveIntensity = v;
+    const it = { obj, base: on ?? (isLight ? obj.intensity : obj.emissiveIntensity), isLight, off: false };
+    G.items.push(it); itemOf.set(obj, [G, it]); put(G, it);
     return obj;
   }
   function setLit(group, on, scale = 1) {
     const G = groups.get(group); if (!G) return;
-    G.on = on;
-    for (const it of G.items) { const v = on ? it.base * scale : 0; if (it.isLight) it.obj.intensity = v; else it.obj.emissiveIntensity = v; }
+    G.on = on; G.scale = scale;
+    for (const it of G.items) put(G, it);
   }
+  // Per-object switch on top of its group (a lamp behind a shutter, a unit on mains power).
+  function gateLit(obj, on) { const r = itemOf.get(obj); if (r) { r[1].off = !on; put(...r); } }
   const isLit = (group) => groups.get(group)?.on ?? false;
 
   // ---- Mesh helpers. o: { x, y, z, ry, rx, rz, cast=true, receive=true }. Box and cylinder y is the BOTTOM. ----
@@ -389,7 +391,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
 
   return {
     THREE, quality, rng, memo, canvas, texture, normalFrom, surface, worldUV, mat, facade,
-    signTexture, sign, shelterSign, guideSign, lit, setLit, isLit,
+    signTexture, sign, shelterSign, guideSign, lit, setLit, gateLit, isLit,
     place, box, rbox, cyl, plane, slab, instanced, merge,
   };
 }
