@@ -320,7 +320,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
   function setLit(group, on, scale = 1) {
     const G = groups.get(group); if (!G) return;
     G.on = on;
-    for (const it of G.items) { const v = on ? it.base * scale : 0; if (it.isLight) { it.obj.intensity = v; it.obj.visible = v > 0; } else it.obj.emissiveIntensity = v; }
+    for (const it of G.items) { const v = on ? it.base * scale : 0; if (it.isLight) it.obj.intensity = v; else it.obj.emissiveIntensity = v; }
   }
   const isLit = (group) => groups.get(group)?.on ?? false;
 
