@@ -112,7 +112,7 @@ export function buildGround(kit, { holes = [] } = {}) {
     quad(white, x0, x1, zLine - 0.06, zLine + 0.06);
   };
   bays(-35, 3, -22, 5); bays(6, 40, -51.5, 5); bays(6, 40, -10.5, -5); bays(6, 40, -31, 5); bays(6, 40, -31, -5);
-  bays(74.5, 82, -10.5, -5.5); bays(92, 126, -10.5, -5.5); bays(108, 126, -60, 6, 3.2); bays(-124, -90, 59.5, -5); bays(60, 126, 13.5, 5);
+  bays(74.5, 82, -10.5, -5.5); bays(92, 126, -10.5, -5.5); bays(104.4, 123.6, -60, 6, 3.2); bays(-124, -90, 59.5, -5); bays(60, 126, 13.5, 5);
   bays(62, 116, 57, -5); bays(62, 116, 85, -5); bays(14, 40, 51.5, -5); bays(14, 40, 22.5, 5);
   const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   const paint = (hex) => new THREE.MeshStandardMaterial({ color: hex, roughness: 0.62, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
