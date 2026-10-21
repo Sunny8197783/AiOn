@@ -198,7 +198,7 @@ export function buildMart(kit, people, fx) {
   const ceilPanels = panels(kit, fixtures); onMains(ceilPanels.material); dyn.add(ceilPanels); dyn.add(powered);
   powered.add(lamps(kit, [-12, -4, 4, 11].flatMap((x) => [-5.5, -16].map((z) => ({ x, y: H - 0.35, z }))), { intensity: 13 }));
   const emerg = [[-9, 3.1, -0.6], [-4.7, 3.1, -23.3], [12, 3.1, -1]].map(([x, y, z]) => {
-    const l = new THREE.PointLight(0xf4f7ff, 4, 12, 2); l.visible = false; l.position.set(x, y, z); dyn.add(l);
+    const l = new THREE.PointLight(0xf4f7ff, 0, 12, 2); l.position.set(x, y, z); dyn.add(l);
     const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0 });
     dyn.add(kit.box(0.35, 0.08, 0.12, m, { x, y: y + 0.1, z, cast: false })); return { l, m };
   });
@@ -257,9 +257,9 @@ export function buildMart(kit, people, fx) {
     } else if (key === 'power') {
       if (!['on', 'off'].includes(v)) return void console.error('[mart] power must be on|off', v);
       state.power = v; const on = v === 'on';
-      powered.visible = on;
+      powered.traverse((o) => { if (o.isLight) kit.gateLit(o, on); }); // dim, never hide: light count stays fixed
       for (const [m, c] of glow) m.emissive.copy(on ? c : BLACK);
-      for (const e of emerg) { e.l.visible = !on; e.m.emissiveIntensity = on ? 0 : 2.5; }
+      for (const e of emerg) { e.l.intensity = on ? 0 : 4; e.m.emissiveIntensity = on ? 0 : 2.5; }
     } else if (key === 'outside') { if (v !== null && !MOODS.includes(v)) return void console.error('[mart] outside must be', MOODS, v); state.outside = v; }
     else console.error('[mart] unknown state', key, v);
   }
