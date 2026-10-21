@@ -34,8 +34,18 @@ export async function buildApartment(kit, people, fx) {
   group.add(dyn);
   buildLobby(B, areas[0]); buildElevator(B, areas[0], 0, H);
   buildStairs(B, areas[1], dyn);
+  // battery emergency lamp (비상조명등) on the lobby wall beside the stair door; lit only in a blackout
+  areas[0].add(kit.box(0.32, 0.12, 0.08, B.M.white, { x: 3.2, y: 2.3, z: -0.14 }));
+  for (const dx of [-0.1, 0.1]) areas[0].add(kit.cyl(0.035, 0.03, 0.05, B.emLampMat, { x: 3.2 + dx, y: 2.25, z: -0.16, cast: false }));
+  B.sensors.push({ x: 3.2, y: 2.2, z: -0.45, kind: 'backup' });
   buildCorridor(B, areas[2], dyn, H);
-  buildHome(B, areas[3], H);
+  // live doors: merge each moving leaf (pivot) and gather their static frames into one merged group
+  const frames = new THREE.Group(); frames.name = 'apt-door-frames';
+  for (const o of [...dyn.children]) if (o.isMesh && !o.isInstancedMesh) frames.add(o);
+  dyn.add(frames); kit.merge(frames);
+  buildHome(B, areas[3], H); // after the corridor: it fits the inner lock onto H.door302's leaf
+  for (const D of [...B.doors, H.door303]) kit.merge(D.pivot);
+  kit.merge(H.fire.normal); kit.merge(H.fire.scorched);
   const props = buildProps(B, areas[3], dyn), stock = buildStock(B, areas[3], dyn), view = buildView(B);
   group.add(view.group);
   B.fixtures.push({ x: 4, y: 2.3, z: -3.3, color: 0xfff3e2, intensity: 4.5, distance: 11 }, { x: 10.75, y: 2.25, z: -4, color: 0xfff3e2, intensity: 2.5, distance: 6 });
@@ -48,7 +58,13 @@ export async function buildApartment(kit, people, fx) {
       ? { x: s.x, y: s.y, z: s.z, color: 0xe6eeff, intensity: 2.4, distance: 7, kind: 'backup' }
       : { x: s.x, y: s.y - 0.25, z: s.z, color: 0xfff1dc, intensity: 3.0, distance: 6.5, kind: 'sensor', hold: 0, ceil: s.y }),
   ];
-  for (const f of fixtures) { f.w = 0; f.on = false; }
+  // Zones keep pooled lights from shining through closed walls: a fixture lights the player's zone, or a
+  // neighbouring zone while the door between them is open.
+  const zoneOf = (x, y, z) => x > 3.3 && x < 6.7 && z > 0 ? 'stairs' : y > 4 ? (z > 0.05 && x < 0.35 ? 'home' : 'corridor') : 'lobby';
+  const stairDoor = (y) => B.doors.find((D) => Math.abs(D.x - 5) < 0.1 && Math.abs(D.y - y) < 0.1);
+  const LINKS = [['home', 'corridor', H.door302], ['corridor', 'stairs', stairDoor(F3)], ['stairs', 'lobby', stairDoor(0)]];
+  const linked = (a, b) => LINKS.some(([u, v, D]) => ((u === a && v === b) || (u === b && v === a)) && D && D.k > 0.1);
+  for (const f of fixtures) { f.w = 0; f.on = false; f.zone = zoneOf(f.x, f.y, f.z); }
   const POOL = kit.quality === 'low' ? 3 : 5;
   const pool = Array.from({ length: POOL }, () => { const l = new THREE.PointLight(0xffffff, 0, 8, 2); l.castShadow = false; dyn.add(l); return l; });
   // sensor lamp diffusers: an "off" plastic dome for every lamp, a glowing dome shown over it while lit
@@ -69,10 +85,10 @@ export async function buildApartment(kit, people, fx) {
     for (const { obj, base } of B.backup) setI(obj, power ? 0 : base);
   }
   function stepLights(dt, p) {
-    const head = p.y + 1.6;
+    const head = p.y + 1.6, pz = zoneOf(p.x, p.y + 0.5, p.z);
     let changed = false;
     sensors.forEach((f, i) => {
-      if (power && Math.hypot(p.x - f.x, p.z - f.z) < 3.4 && Math.abs(head - f.y) < 1.8) f.hold = 9;
+      if (power && f.zone === pz && Math.hypot(p.x - f.x, p.z - f.z) < 3.4 && Math.abs(head - f.y) < 1.8) f.hold = 9;
       f.hold = Math.max(0, f.hold - dt);
       const on = power && f.hold > 0;
       if (on !== f.on) { f.on = on; glowDomes.setMatrixAt(i, on ? mOn[i] : mOff); changed = true; }
@@ -80,7 +96,8 @@ export async function buildApartment(kit, people, fx) {
     if (changed) glowDomes.instanceMatrix.needsUpdate = true;
     for (const f of fixtures) {
       if (f.kind !== 'sensor') f.on = f.kind === 'backup' ? !power : power;
-      f.d = f.on ? Math.hypot(p.x - f.x, (head - f.y) * 1.6, p.z - f.z) : Infinity;
+      const d = Math.hypot(p.x - f.x, (head - f.y) * 1.6, p.z - f.z);
+      f.d = !f.on ? Infinity : f.zone === pz ? d : linked(f.zone, pz) ? d * 2 + 4 : Infinity;
     }
     const best = fixtures.filter((f) => f.on && f.d < 20).sort((a, b) => a.d - b.d).slice(0, POOL - 1);
     for (const f of fixtures) f.w += ((best.includes(f) ? 1 : 0) - f.w) * Math.min(1, dt * 4);

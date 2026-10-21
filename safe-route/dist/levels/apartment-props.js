@@ -21,7 +21,7 @@ export function buildProps(B, g, dyn) {
   radio.add(kit.cyl(0.017, 0.017, 0.02, M.black, { x: 0.065, y: 0.025, z: 0.045, rx: Math.PI / 2 }, 18), kit.cyl(0.011, 0.011, 0.016, M.black, { x: 0.105, y: 0.03, z: 0.043, rx: Math.PI / 2 }, 14));
   radio.add(kit.box(0.008, 0.008, 0.004, led, { x: 0.02, y: 0.045, z: 0.038 }));
   radio.add(kit.box(0.2, 0.014, 0.022, M.black, { y: 0.17 }), kit.box(0.014, 0.03, 0.02, M.black, { x: -0.093, y: 0.145 }), kit.box(0.014, 0.03, 0.02, M.black, { x: 0.093, y: 0.145 }));
-  B.rod(radio, [0.11, 0.15, -0.02], [0.2, 0.5, -0.09], 0.0035, M.metal);
+  B.rod(radio, [0.11, 0.15, -0.02], [0.2, 0.5, -0.09], 0.0035, M.metal); kit.merge(radio);
   const radioPt = B.point('homeRadio', '라디오', -2.0, FL, 5.95, 'radio', 1.7);
   function setRadio(v) {
     radio.visible = v !== 'none';
@@ -37,7 +37,7 @@ export function buildProps(B, g, dyn) {
     s.scale.set(sx, sy, 1); s.position.y = y; candle.add(s); return s;
   };
   const flame = sprite(B.tex('candleFlame', 64, 128, drawFlame), new THREE.Color(2.6, 1.9, 1.1), 0.026, 0.06, 0.148);
-  const halo = sprite(B.tex('candleHalo', 64, 64, drawHalo), new THREE.Color(0.55, 0.32, 0.12), 0.34, 0.34, 0.14);
+  const halo = sprite(B.tex('candleHalo', 64, 64, drawHalo), new THREE.Color(0.55, 0.32, 0.12), 0.34, 0.34, 0.14); kit.merge(candle);
   const light = new THREE.PointLight(0xff9a40, 0, 4.5, 2); light.position.set(-1.62, T + 0.2, 6.12); dyn.add(light);
   let lit = false, wasLit = false;
   function setCandle(v) { lit = v === 'lit'; wasLit ||= lit; candle.visible = lit || wasLit; flame.visible = halo.visible = lit; if (!lit) light.intensity = 0; }
@@ -49,7 +49,7 @@ export function buildProps(B, g, dyn) {
   bag.add(kit.box(0.22, 0.012, 0.004, P('#c9ccd0', 0.2, 0.6), { y: 0.3, z: 0.111 }), kit.box(0.16, 0.018, 0.004, P('#e8e8e2', 0.3), { y: 0.2, z: 0.157 }));
   for (const x of [-0.08, 0.08]) bag.add(kit.box(0.05, 0.4, 0.02, P('#1b1f26', 0.9), { x, y: 0.04, z: -0.12 }));
   B.rod(bag, [-0.04, 0.46, 0], [0.04, 0.46, 0], 0.008, P('#1b1f26', 0.9));
-  const bottle = kit.cyl(0.033, 0.033, 0.2, P('#bfe3f2', 0.12), { x: 0.185, y: 0.05 }, 14); bag.add(bottle);
+  const bottle = kit.cyl(0.033, 0.033, 0.2, P('#bfe3f2', 0.12), { x: 0.185, y: 0.05 }, 14); bottle.userData.keep = true; bag.add(bottle); kit.merge(bag);
   const bagPt = B.point('homeBag', '비상가방', -2.0, FL, 1.8, 'bag', 1.4);
   function setBag(v) {
     bag.visible = v !== 'none'; bottle.visible = v === 'packed';

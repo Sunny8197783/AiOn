@@ -16,7 +16,9 @@ export function buildHome(B, g, H) {
   const box = (w, h, d, m, x, y, z, o = {}) => { const b = kit.box(w, h, d, m, { x, y, z, ...o }); g.add(b); return b; };
   const rbox = (w, h, d, r, m, x, y, z, o = {}) => { const b = kit.rbox(w, h, d, r, m, { x, y, z, ...o }); g.add(b); return b; };
   const cyl = (rt, rb, h, m, x, y, z, o = {}, seg = 16) => { const c = kit.cyl(rt, rb, h, m, { x, y, z, ...o }, seg); g.add(c); return c; };
-  const glow = (hex, i) => B.onPower(B.glowMat(hex, i));
+  // shared power-switched glow materials (one draw call each after merging)
+  const GLOW = { lamp: ['#fff3e4', 2.2], shade: ['#ffd8a4', 0.75], red: ['#ff3a22', 1.5], amber: ['#ffa64a', 1.25], green: ['#3cff8a', 1.3], cyan: ['#8fd8ff', 1.1] }, glows = {};
+  const glow = (kind) => (glows[kind] ||= B.onPower(B.glowMat(...GLOW[kind])));
   const W = {
     cabinet: P('#f2f0eb', 0.45), counter: P('#d9d4ca', 0.22), gap: P('#9a968f', 0.8), door: P('#efece6', 0.5),
     fridge: P('#c8cbce', 0.32, 0.55), hob: P('#0d0e10', 0.08, 0.3), sofa: P('#8e8a82', 0.97), cushion: P('#9b978e', 0.97),
@@ -95,17 +97,17 @@ export function buildHome(B, g, H) {
     box(b - a, h, 0.34, W.cabinet, (a + b) / 2, y, 0.19);
     for (let x = a + 0.4; x < b - 0.1; x += 0.4) box(0.005, h - 0.02, 0.004, W.gap, x, y + 0.01, 0.362, { cast: false });
   }
-  box(0.66, 0.1, 0.46, M.metal, -4.07, FL + 1.35, 0.25); box(0.22, 0.005, 0.06, glow('#fff1d8', 1.4), -4.07, FL + 1.345, 0.42, { cast: false });
+  box(0.66, 0.1, 0.46, M.metal, -4.07, FL + 1.35, 0.25); box(0.22, 0.005, 0.06, glow('lamp'), -4.07, FL + 1.345, 0.42, { cast: false });
   B.wallZ(g, 0.02, KX0, KX1, CT, FL + 1.45, W.tile, { t: 0.012, side: 1, holes: [hKitchen], solid: false });
   box(1.3, 0.03, 0.12, M.stone, -5.55, F3 + 1.07, 0.08);
-  cyl(0.13, 0.12, 0.24, M.white, -6.9, CT, 0.32, {}, 20); box(0.06, 0.025, 0.005, glow('#ff9a3c', 1.2), -6.9, CT + 0.15, 0.452, { cast: false }); // rice cooker
+  cyl(0.13, 0.12, 0.24, M.white, -6.9, CT, 0.32, {}, 20); box(0.06, 0.025, 0.005, glow('amber'), -6.9, CT + 0.15, 0.452, { cast: false }); // rice cooker
   cyl(0.075, 0.085, 0.22, M.steel, -6.45, CT, 0.3, {}, 18); box(0.3, 0.012, 0.22, M.lightWood, -5.0, CT, 0.48, { ry: 0.12 }); // kettle, board
   B.solid(X0, KX1, 0, 0.66, FL, FL + 0.9);
   rbox(0.85, 1.82, 0.72, 0.03, W.fridge, -2.925, FL, 0.4);
   box(0.004, 1.2, 0.01, W.gap, -2.925, FL + 0.6, 0.762, { cast: false }); box(0.84, 0.004, 0.01, W.gap, -2.925, FL + 0.6, 0.762, { cast: false });
   for (const x of [-2.96, -2.89]) B.rod(g, [x, FL + 0.95, 0.79], [x, FL + 1.45, 0.79], 0.01, M.metal);
   B.rod(g, [-3.15, FL + 0.48, 0.79], [-2.7, FL + 0.48, 0.79], 0.01, M.metal);
-  box(0.07, 0.1, 0.005, glow('#7fd0ff', 1.3), -2.72, FL + 1.3, 0.763, { cast: false }); box(0.1, 0.14, 0.003, W.paper, -3.18, FL + 1.2, 0.763, { rz: 0.06 });
+  box(0.07, 0.1, 0.005, glow('cyan'), -2.72, FL + 1.3, 0.763, { cast: false }); box(0.1, 0.14, 0.003, W.paper, -3.18, FL + 1.2, 0.763, { rz: 0.06 });
   B.solid(-3.36, -2.49, 0, 0.8, FL, FL + 1.85);
   box(1.1, 0.035, 0.72, M.lightWood, -5.6, FL + 0.7, 2.2);
   for (const [dx, dz] of [[-0.5, -0.31], [0.5, -0.31], [-0.5, 0.31], [0.5, 0.31]]) box(0.04, 0.7, 0.04, M.lightWood, -5.6 + dx, FL, 2.2 + dz);
@@ -122,7 +124,7 @@ export function buildHome(B, g, H) {
     B.plate(g, label, { x: -7.21, y: FL + 0.36, z: 2.4 + i * 0.36, ry: Math.PI / 2, w: 0.2, h: 0.07, bg: '#ffffff', fg: '#333333' });
   });
   B.solid(X0, -7.2, 2.2, 3.4, FL, FL + 0.5);
-  cyl(0.22, 0.22, 0.035, glow('#fff4e6', 2.2), -5.5, CH - 0.035, 1.8, { cast: false }, 24);
+  cyl(0.22, 0.22, 0.035, glow('lamp'), -5.5, CH - 0.035, 1.8, { cast: false }, 24);
   B.fixtures.push({ x: -5.5, y: CH - 0.3, z: 1.8, color: 0xfff0dc, intensity: 3.5, distance: 8 });
 
   // ---- 현관: 신발장, mirror, shoes, umbrellas, 분전반 (두꺼비집), the inside of the door, sensor light ----
@@ -147,10 +149,10 @@ export function buildHome(B, g, H) {
   B.sensors.push({ x: -1.25, y: CH - 0.02, z: 0.65, kind: 'sensor', floor: 3 });
 
   // ---- hall: 월패드, boiler thermostat, switches, downlight; the closed bathroom door ----
-  box(0.02, 0.2, 0.28, M.white, -2.39, FL + 1.32, 2.0); box(0.004, 0.14, 0.2, glow('#9fd2ff', 0.9), -2.378, FL + 1.35, 1.98, { cast: false });
-  box(0.02, 0.12, 0.09, M.white, -2.39, FL + 1.34, 2.38); box(0.004, 0.03, 0.05, glow('#ffb35c', 1.3), -2.378, FL + 1.41, 2.38, { cast: false });
+  box(0.02, 0.2, 0.28, M.white, -2.39, FL + 1.32, 2.0); box(0.004, 0.14, 0.2, glow('cyan'), -2.378, FL + 1.35, 1.98, { cast: false });
+  box(0.02, 0.12, 0.09, M.white, -2.39, FL + 1.34, 2.38); box(0.004, 0.03, 0.05, glow('amber'), -2.378, FL + 1.41, 2.38, { cast: false });
   for (const [x, z, ry] of [[-2.39, 1.55, Math.PI / 2], [-3.99, 5.0, Math.PI / 2], [-2.51, 2.3, Math.PI / 2], [-1.108, 3.2, Math.PI / 2]]) box(0.07, 0.12, 0.012, M.white, x, FL + 1.1, z, { ry });
-  cyl(0.06, 0.06, 0.02, glow('#fff2e0', 1.8), -1.75, CH - 0.02, 2.5, { cast: false });
+  cyl(0.06, 0.06, 0.02, glow('lamp'), -1.75, CH - 0.02, 2.5, { cast: false });
   B.door(g, 'x', -1.05, 2.2, 2.95, FL, 2.05, W.door, { hinge: 'b', dir: -1, open: 0, solid: false, frameMat: M.frame });
 
   // ---- living room: sofa, rug, low table, wall TV on a stand, stand air conditioner, lamp, plant, picture, curtains ----
@@ -168,17 +170,17 @@ export function buildHome(B, g, H) {
   B.solid(-2.47, -1.43, 5.71, 6.29, FL, FL + 0.45);
   box(0.42, 0.4, 1.9, P('#e8e3da', 0.45), 0.09, FL, 6.0);
   for (const z of [5.37, 6.0, 6.63]) box(0.004, 0.36, 0.004, W.gap, -0.121, FL + 0.02, z, { cast: false });
-  box(0.08, 0.06, 0.8, M.darkMetal, 0.0, FL + 0.4, 6.0); box(0.2, 0.04, 0.2, M.black, 0.12, FL + 0.4, 6.75); box(0.004, 0.006, 0.02, glow('#3cff8a', 1.5), 0.019, FL + 0.42, 6.75, { cast: false });
+  box(0.08, 0.06, 0.8, M.darkMetal, 0.0, FL + 0.4, 6.0); box(0.2, 0.04, 0.2, M.black, 0.12, FL + 0.4, 6.75); box(0.004, 0.006, 0.02, glow('green'), 0.019, FL + 0.42, 6.75, { cast: false });
   box(0.05, 0.72, 1.26, M.black, 0.255, FL + 0.8, 6.0); box(0.004, 0.68, 1.22, W.screen, 0.228, FL + 0.82, 6.0, { cast: false });
-  box(0.004, 0.008, 0.02, glow('#ff2a1a', 1.6), 0.2255, FL + 0.806, 6.45, { cast: false });
+  box(0.004, 0.008, 0.02, glow('red'), 0.2255, FL + 0.806, 6.45, { cast: false });
   B.solid(-0.13, X1, 5.04, 6.96, FL, FL + 1.55);
-  rbox(0.36, 1.75, 0.3, 0.05, M.white, 0.08, FL, 7.55); box(0.004, 0.5, 0.22, M.darkMetal, -0.101, FL + 1.05, 7.55); box(0.004, 0.04, 0.08, glow('#5fe6ff', 1.2), -0.102, FL + 1.32, 7.55, { cast: false });
+  rbox(0.36, 1.75, 0.3, 0.05, M.white, 0.08, FL, 7.55); box(0.004, 0.5, 0.22, M.darkMetal, -0.101, FL + 1.05, 7.55); box(0.004, 0.04, 0.08, glow('cyan'), -0.102, FL + 1.32, 7.55, { cast: false });
   B.solid(-0.12, 0.28, 7.38, 7.72, FL, FL + 1.75);
   cyl(0.14, 0.16, 0.03, M.black, -3.62, FL, 7.5); B.rod(g, [-3.62, FL + 0.03, 7.5], [-3.62, FL + 1.45, 7.5], 0.012, M.black);
-  cyl(0.15, 0.2, 0.26, glow('#ffd9a8', 0.7), -3.62, FL + 1.42, 7.5, { cast: false }, 20); B.solid(-3.78, -3.46, 7.34, 7.66, FL, FL + 1.7);
-  cyl(0.17, 0.13, 0.34, W.pot, -3.55, FL, 4.25);
-  for (const [dx, dy, dz, s] of [[0, 0.6, 0, 0.3], [0.12, 0.85, 0.05, 0.22], [-0.1, 0.8, -0.08, 0.24]]) { const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), W.green); f.position.set(-3.55 + dx, FL + dy, 4.25 + dz); f.castShadow = true; g.add(f); }
-  B.solid(-3.75, -3.35, 4.05, 4.45, FL, FL + 1.0);
+  cyl(0.15, 0.2, 0.26, glow('shade'), -3.62, FL + 1.42, 7.5, { cast: false }, 20); B.solid(-3.78, -3.46, 7.34, 7.66, FL, FL + 1.7);
+  cyl(0.17, 0.13, 0.34, W.pot, 0.02, FL, 4.62);
+  for (const [dx, dy, dz, s] of [[0, 0.6, 0, 0.3], [-0.12, 0.85, 0.05, 0.22], [0.08, 0.8, -0.08, 0.24]]) { const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), W.green); f.position.set(0.02 + dx, FL + dy, 4.62 + dz); f.castShadow = true; g.add(f); }
+  B.solid(-0.2, 0.25, 4.4, 4.86, FL, FL + 1.0);
   box(0.03, 0.58, 0.84, M.darkWood, -3.985, FL + 1.25, 6.0);
   const art = new THREE.Mesh(new THREE.PlaneGeometry(0.76, 0.5), new THREE.MeshStandardMaterial({ map: B.tex('art302', 256, 168, drawArt), roughness: 0.8 }));
   art.position.set(-3.968, FL + 1.54, 6.0); art.rotation.y = Math.PI / 2; g.add(art);
@@ -188,7 +190,7 @@ export function buildHome(B, g, H) {
     for (let i = 0; i < n; i++) box(w * 1.15, CH - FL - 0.08, 0.02, W.linen, a + (i + 0.5) * w, FL + 0.02, z + (i % 2 ? 0.025 : -0.025), { ry: i % 2 ? 0.5 : -0.5 });
   };
   box(4.2, 0.03, 0.05, M.alu, -1.85, CH - 0.04, ZB - 0.17); curtain(-4.0, -3.45, ZB - 0.17); curtain(-0.12, 0.28, ZB - 0.17);
-  box(0.62, 0.05, 0.62, M.white, -1.85, CH - 0.05, 5.9); box(0.58, 0.004, 0.58, glow('#fff6ea', 2.4), -1.85, CH - 0.054, 5.9, { cast: false });
+  box(0.62, 0.05, 0.62, M.white, -1.85, CH - 0.05, 5.9); box(0.58, 0.004, 0.58, glow('lamp'), -1.85, CH - 0.054, 5.9, { cast: false });
   B.fixtures.push({ x: -1.85, y: CH - 0.35, z: 5.9, color: 0xfff2e0, intensity: 5, distance: 9 });
 
   // ---- bedroom: wardrobe, bed, nightstand + lamp, desk with laptop and lamp, office chair, curtain, ceiling light ----
@@ -202,7 +204,7 @@ export function buildHome(B, g, H) {
   box(0.06, 0.95, 1.62, M.lightWood, -7.54, FL, 6.4);
   B.solid(X0, -5.48, 5.58, 7.22, FL, FL + 0.62);
   box(0.42, 0.48, 0.38, M.lightWood, -7.34, FL, 7.5); cyl(0.06, 0.07, 0.05, M.white, -7.34, FL + 0.48, 7.5);
-  cyl(0.1, 0.13, 0.17, glow('#ffd6a0', 0.8), -7.34, FL + 0.66, 7.5, { cast: false }, 18); B.rod(g, [-7.34, FL + 0.53, 7.5], [-7.34, FL + 0.66, 7.5], 0.008, M.metal);
+  cyl(0.1, 0.13, 0.17, glow('shade'), -7.34, FL + 0.66, 7.5, { cast: false }, 18); B.rod(g, [-7.34, FL + 0.53, 7.5], [-7.34, FL + 0.66, 7.5], 0.008, M.metal);
   B.solid(X0, -7.1, 7.3, 7.72, FL, FL + 0.6);
   box(1.3, 0.03, 0.6, M.lightWood, -6.2, FL + 0.7, 4.0);
   for (const dx of [-0.62, 0.62]) box(0.03, 0.7, 0.56, M.lightWood, -6.2 + dx, FL, 4.0);
@@ -214,22 +216,22 @@ export function buildHome(B, g, H) {
   box(0.21, 0.01, 0.15, P('#e8d7a8', 0.9), -5.8, FL + 0.73, 4.12, { ry: 0.18 }); B.rod(g, [-5.7, FL + 0.742, 4.07], [-5.66, FL + 0.742, 4.2], 0.004, M.black);
   cyl(0.04, 0.036, 0.09, P('#5f7f6a', 0.35), -6.68, FL + 0.73, 4.12);
   cyl(0.07, 0.08, 0.02, M.black, -5.72, FL + 0.73, 3.85); B.rod(g, [-5.72, FL + 0.75, 3.85], [-5.78, FL + 1.12, 3.95], 0.008, M.black); B.rod(g, [-5.78, FL + 1.12, 3.95], [-5.95, FL + 1.06, 4.05], 0.008, M.black);
-  cyl(0.035, 0.06, 0.07, glow('#fff1d6', 1.0), -5.97, FL + 0.99, 4.06, { cast: false });
-  box(0.3, 0.04, 0.06, M.white, -6.7, FL, 3.8); box(0.01, 0.006, 0.01, glow('#ff4a3a', 1.4), -6.6, FL + 0.04, 3.83, { cast: false }); // 멀티탭
+  cyl(0.035, 0.06, 0.07, glow('lamp'), -5.97, FL + 0.99, 4.06, { cast: false });
+  box(0.3, 0.04, 0.06, M.white, -6.7, FL, 3.8); box(0.01, 0.006, 0.01, glow('red'), -6.6, FL + 0.04, 3.83, { cast: false }); // 멀티탭
   B.solid(-6.87, -5.53, 3.7, 4.32, FL, FL + 0.75);
   const ch = new THREE.Group(); ch.position.set(-6.15, FL, 4.78); ch.rotation.y = 0.25; g.add(ch);
   for (let i = 0; i < 5; i++) { const a = i * Math.PI * 0.4; ch.add(kit.box(0.04, 0.03, 0.3, M.black, { x: Math.sin(a) * 0.15, y: 0.04, z: Math.cos(a) * 0.15, ry: a })); }
   ch.add(kit.cyl(0.025, 0.025, 0.36, M.steel, { y: 0.06 }), kit.rbox(0.48, 0.08, 0.46, 0.03, P('#33373d', 0.9), { y: 0.42 }), kit.rbox(0.44, 0.5, 0.06, 0.03, P('#33373d', 0.9), { y: 0.58, z: 0.22, rx: -0.12 }));
   B.solid(-6.42, -5.88, 4.52, 5.04, FL, FL + 0.95);
   box(2.6, 0.03, 0.05, M.alu, -5.8, CH - 0.04, ZB - 0.17); curtain(-7.1, -6.55, ZB - 0.17); curtain(-5.05, -4.5, ZB - 0.17);
-  cyl(0.2, 0.2, 0.035, glow('#fff4e6', 2.2), -5.8, CH - 0.035, 5.8, { cast: false }, 24);
+  cyl(0.2, 0.2, 0.035, glow('lamp'), -5.8, CH - 0.035, 5.8, { cast: false }, 24);
   B.fixtures.push({ x: -5.8, y: CH - 0.3, z: 5.8, color: 0xfff0dc, intensity: 3.5, distance: 7 });
   B.door(g, 'x', -4.05, 4.0, 4.85, FL, 2.05, W.door, { hinge: 'a', dir: -1, open: 0.85, solid: false, frameMat: M.frame });
 
   // ---- 베란다: washing machine, laundry, drying poles with clothes, plants, drain, 경량칸막이 panel, bulb ----
   rbox(0.62, 0.86, 0.62, 0.04, M.white, -7.25, BF, 9.03);
   cyl(0.2, 0.2, 0.03, kit.mat('darkGlass'), -6.93, BF + 0.48, 9.03, { rz: Math.PI / 2 }, 24); cyl(0.235, 0.235, 0.02, M.metal, -6.94, BF + 0.48, 9.03, { rz: Math.PI / 2 }, 24);
-  box(0.004, 0.07, 0.5, M.black, -6.937, BF + 0.75, 9.03); box(0.004, 0.02, 0.05, glow('#3cff8a', 1.2), -6.942, BF + 0.765, 8.86, { cast: false });
+  box(0.004, 0.07, 0.5, M.black, -6.937, BF + 0.75, 9.03); box(0.004, 0.02, 0.05, glow('green'), -6.942, BF + 0.765, 8.86, { cast: false });
   B.rod(g, [-7.3, BF + 1.2, 9.36], [-7.3, BF + 0.9, 9.3], 0.012, M.metal); box(0.06, 0.06, 0.05, M.metal, -7.3, BF + 1.18, 9.34);
   B.solid(X0, -6.92, 8.7, 9.36, BF, BF + 0.9);
   cyl(0.2, 0.17, 0.34, P('#d8cdb5', 0.9), -6.55, BF, 8.35, {}, 18);
@@ -240,7 +242,7 @@ export function buildHome(B, g, H) {
   box(0.12, 0.003, 0.12, M.steel, -5.0, BF, 9.2, { cast: false });
   for (const [w, h, x, y, z] of [[0.012, 2.0, X0 + 0.006, BF + 0.05, 8.12], [0.012, 2.0, X0 + 0.006, BF + 0.05, 8.68], [0.012, 0.02, X0 + 0.006, BF + 2.05, 8.4]]) box(w, h, z === 8.4 ? 0.58 : 0.02, P('#9e988c', 0.6), x, y, z, { cast: false });
   B.plate(g, '경량칸막이', { x: X0 + 0.014, y: BF + 1.55, z: 8.4, ry: Math.PI / 2, w: 0.32, h: 0.09, bg: '#fff4d6', fg: '#8a1c1c', border: '#8a1c1c' });
-  cyl(0.06, 0.06, 0.03, glow('#fff1d8', 1.6), -4.0, CH - 0.03, 8.7, { cast: false });
+  cyl(0.06, 0.06, 0.03, glow('lamp'), -4.0, CH - 0.03, 8.7, { cast: false });
 
   // ---- points, spawns, anchors ----
   B.point('homeExitDoor', '현관문 (복도로)', -1.275, F3, 0.5, 'door', 1.3);
