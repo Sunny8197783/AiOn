@@ -15,7 +15,7 @@ const mergeAll = (list) => mergeGeometries(list.map(NG));
 // Planter boxes with shrubs; pure so the tree builder can add the shrubs to its instancing.
 export const PLANTERS = [
   [-30, -23.3, 0], [-4, -23.3, 0], [-98, -26.6, 0], [-80, -26.6, 0], [74, -20.8, 0], [100, -20.8, 0],
-  [-66, 21, Math.PI / 2], [-66, 41, Math.PI / 2], [70, 29, 0], [88, 29, 0], [-123, -14.6, 0], [18, 10.9, 0],
+  [-66, 21, Math.PI / 2], [-66, 41, Math.PI / 2], [69.5, 29, 0], [88, 29, 0], [-123, -14.6, 0], [18, 10.9, 0],
 ];
 export function shrubSpots(rand) {
   const out = [];
