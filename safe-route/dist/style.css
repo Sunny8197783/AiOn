@@ -104,6 +104,7 @@ h1, h2, h3, h4 { line-height: 1.25; letter-spacing: -.01em; }
 .stat[data-state="bad"] .icon { color: #ff9ea1; }
 .hud-prompt { position: absolute; left: 50%; bottom: 20%; transform: translateX(-50%); display: flex; align-items: center; gap: .6em; padding: .5em 1em .5em .55em; border-radius: 999px; background: rgba(10, 15, 18, .82); border: 1px solid rgba(60, 198, 181, .55); box-shadow: 0 0 24px rgba(60, 198, 181, .25); font-weight: 700; animation: rise .25s var(--ease); white-space: nowrap; }
 .hud-prompt kbd { background: var(--teal); color: #052421; border-color: var(--teal); }
+body:has(.modal-layer) .hud-prompt { opacity: 0; }
 .hud-keys { position: absolute; right: 16px; bottom: 16px; margin: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35em .8em; max-width: 380px; font-size: .74rem; color: var(--text-dim); opacity: .75; text-shadow: 0 1px 6px #000; }
 .hud-keys span { display: inline-flex; align-items: center; gap: .3em; }
 .hud-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(110, 8, 14, calc(var(--tension, 0) * .6)) 100%); }
@@ -248,7 +249,7 @@ h1, h2, h3, h4 { line-height: 1.25; letter-spacing: -.01em; }
 .alert-sheet .btn.primary { background: #121619; border-color: #121619; color: #fff; min-width: 120px; }
 
 /* ---------- Planner (paper calendar) ---------- */
-.modal.planner { width: min(1000px, 100%); padding: 0; background: none; border: 0; }
+.modal.planner { width: min(1000px, 100%); padding: 0; background: none; border: 0; box-shadow: none; }
 .planner-board { position: relative; padding: 34px 26px 24px; border-radius: var(--radius-lg); background: var(--paper); color: var(--ink); box-shadow: var(--shadow); }
 .planner-board::before { content: ''; position: absolute; inset: 0 0 auto; height: 16px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: repeating-linear-gradient(90deg, #b8312b 0 40px, #a12923 40px 44px); }
 .planner-head .eyebrow { color: #a4610a; }
