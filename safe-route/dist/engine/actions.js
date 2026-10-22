@@ -5,7 +5,7 @@
 // anyone else is pushed back and may hit back.
 // createActions(engine, { onHit(person, how, ko), onHurt(damage, why), onSound(name), onNear(label|null) })
 import * as THREE from 'three';
-import { groundAt, collide } from './controls.js';
+import { groundAt, collide } from './geom.js';
 
 const KINDS = {
   brick: { name: '벽돌', geo: () => new THREE.BoxGeometry(0.21, 0.065, 0.1), color: 0x9a4a32, rough: 0.95, r: 0.06, power: 2 },
@@ -99,7 +99,7 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
     const L = engine.level; if (!L) return;
     it.mesh.getWorldPosition(wp); L.group.add(it.mesh); it.mesh.position.copy(wp);
     const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-    it.v.copy(dir).multiplyScalar(14).add(new THREE.Vector3(0, 2.2, 0)); it.flying = true; it.from = { x: engine.player.x, z: engine.player.z };
+    it.v.copy(dir).multiplyScalar(14).add(new THREE.Vector3(0, 2.2, 0)); it.flying = true; it.byPlayer = true; it.from = { x: engine.player.x, z: engine.player.z };
     engine.act('throw', 0.4); onSound('swing');
   }
 
@@ -130,7 +130,7 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
     }
     if (v.length() > 3) for (const per of people()) {
       per.group.getWorldPosition(tmp);
-      if (Math.hypot(tmp.x - p.x, tmp.z - p.z) < 0.45 && p.y > tmp.y && p.y < tmp.y + 1.8) { hit(per, it.from.x, it.from.z, 'throw', k.power); v.multiplyScalar(-0.2); break; }
+      if (Math.hypot(tmp.x - p.x, tmp.z - p.z) < 0.45 && p.y > tmp.y && p.y < tmp.y + 1.8) { hit(per, it.from.x, it.from.z, it.byPlayer ? 'throw' : 'debris', k.power); v.multiplyScalar(-0.2); break; }
     }
   }
 
@@ -162,6 +162,12 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
   });
 
   return {
+    // A loose thing flung from (x, y, z) with velocity (vx, vy, vz): blast debris, a looter's drop.
+    spawn(kind, x, y, z, vx = 0, vy = 0, vz = 0) {
+      const L = engine.level; if (!L || !KINDS[kind]) return;
+      const mesh = meshOf(kind); mesh.position.set(x, y, z); L.group.add(mesh);
+      itemsOf(L).push({ kind, mesh, v: new THREE.Vector3(vx, vy, vz), flying: true, from: { x, z } });
+    },
     get held() { return held ? KINDS[held.kind].name : null; },
     setEnabled(on) { enabled = !!on; },
     // Leaving a level with something in hand: it is dropped where you stand.

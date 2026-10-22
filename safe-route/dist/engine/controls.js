@@ -6,78 +6,21 @@
 // A profile (setProfile) models mobility: no running, no jumping, a seated eye height, no stairs.
 // Yaw uses the three.js convention: rotation.y = yaw, yaw 0 faces north (-z), positive yaw turns left (west).
 import * as THREE from 'three';
+import { groundAt, collide, segBox, topsOf, groundNear } from './geom.js';
 
 export const PLAYER = { radius: 0.32, height: 1.72, eye: 1.62, walk: 3.0, run: 5.2 };
 const TP = { dist: 3.4, height: 1.7, shoulder: 0.45 };
 const FOV = 70, FOV_RUN = 4, D2R = Math.PI / 180, LOOK = 0.0042, LOCK_LOOK = 0.0024;
 const JUMP_V = 3.6, GRAVITY = 12, STAIR_SLOPE = 0.2;
 const FLASH = 6; // flashlight candela; dimmed further when the beam hits something close
-const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH', 'KeyG', 'KeyQ']);
+const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH', 'KeyG', 'KeyQ', 'KeyC', 'KeyX']);
 const MOVE = { KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const editable = (t) => !!t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName || ''));
 
-// Ground under (x, z): the highest walk surface within `below` m below / 0.45 m above feetY, or null.
-export function groundAt(walk, x, z, feetY, any = false, below = 0.6) {
-  let best = null, slope = 0;
-  for (const w of walk || []) {
-    if (x < w.x0 - 0.02 || x > w.x1 + 0.02 || z < w.z0 - 0.02 || z > w.z1 + 0.02) continue;
-    let y = w.y ?? 0, s = 0;
-    if (w.ramp) {
-      const r = w.ramp, span = r.axis === 'x' ? w.x1 - w.x0 : w.z1 - w.z0;
-      const k = clamp(((r.axis === 'x' ? x - w.x0 : z - w.z0) / (span || 1)), 0, 1);
-      y = r.y0 + (r.y1 - r.y0) * k; s = Math.abs(r.y1 - r.y0) / (span || 1);
-    }
-    if (!any && (y > feetY + 0.45 || y < feetY - below)) continue;
-    if (best === null || y > best) { best = y; slope = s; }
-  }
-  return best === null ? null : { y: best, slope };
-}
-
-// Tops of solids you can stand on (cars, walls, fences, crates) join the walk zones as flat surfaces.
-const topsOf = (solids) => solids.map((s) => ({ x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, y: s.y1 }));
-// Ground with a little footprint: a seam narrower than the body between two walk zones is not a hole.
-function groundNear(walk, x, z, feetY) {
-  for (const [ox, oz] of [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]]) { const g = groundAt(walk, x + ox, z + oz, feetY); if (g) return g; }
-  return null;
-}
-
-// Push a circle (radius r) out of every solid that overlaps the vertical span [feetY, feetY + height].
-export function collide(px, pz, feetY, solids, r = PLAYER.radius, h = PLAYER.height) {
-  for (let pass = 0; pass < 3; pass++) {
-    let moved = false;
-    for (const s of solids) {
-      if (s.off || s.y1 <= feetY + 0.05 || s.y0 >= feetY + h) continue;
-      const cx = clamp(px, s.x0, s.x1), cz = clamp(pz, s.z0, s.z1), dx = px - cx, dz = pz - cz, d2 = dx * dx + dz * dz;
-      if (d2 >= r * r) continue;
-      if (d2 > 1e-10) { const d = Math.sqrt(d2); px += (dx / d) * (r - d); pz += (dz / d) * (r - d); }
-      else { // centre inside the box: leave by the shallowest side
-        const l = px - s.x0, rr = s.x1 - px, f = pz - s.z0, b = s.z1 - pz, m = Math.min(l, rr, f, b);
-        if (m === l) px = s.x0 - r; else if (m === rr) px = s.x1 + r; else if (m === f) pz = s.z0 - r; else pz = s.z1 + r;
-      }
-      moved = true;
-    }
-    if (!moved) break;
-  }
-  return [px, pz];
-}
-
-// Segment o→o+d (t in 0..1) against an AABB grown by pad; returns entry t, or Infinity (also when o is inside).
-function segBox(o, d, s, pad) {
-  let t0 = 0, t1 = 1;
-  const lo = [s.x0 - pad, s.y0 - pad, s.z0 - pad], hi = [s.x1 + pad, s.y1 + pad, s.z1 + pad], O = [o.x, o.y, o.z], D = [d.x, d.y, d.z];
-  if (O[0] > lo[0] && O[0] < hi[0] && O[1] > lo[1] && O[1] < hi[1] && O[2] > lo[2] && O[2] < hi[2]) return Infinity;
-  for (let i = 0; i < 3; i++) {
-    if (Math.abs(D[i]) < 1e-9) { if (O[i] < lo[i] || O[i] > hi[i]) return Infinity; continue; }
-    let a = (lo[i] - O[i]) / D[i], b = (hi[i] - O[i]) / D[i];
-    if (a > b) [a, b] = [b, a];
-    t0 = Math.max(t0, a); t1 = Math.min(t1, b);
-    if (t0 > t1) return Infinity;
-  }
-  return t0;
-}
+export { groundAt, collide } from './geom.js';
 
 function makeBeam() {
   const LEN = 7, R = Math.tan(0.42) * LEN;
@@ -104,7 +47,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
   let bodyYaw = 0, phase = 0, bobAmp = 0, camFrac = 1, nearest = null, model = null, carrying = null, flashOn = false;
   let anim = '', lastGround = 0, snap = true, beamStrength = 1, flashK = 1;
   let shakeT = 0, shakeDur = 1, shakeA = 0;
-  let vy = 0, air = false, stamina = 1, winded = false, blocked = false, sens = 1, peakY = 0, move = null, actAnim = null, actT = 0;
+  let vy = 0, air = false, stamina = 1, winded = false, blocked = false, sens = 1, peakY = 0, move = null, actAnim = null, actT = 0, crouch = false;
   const prof = { run: true, jump: true, eye: PLAYER.eye, stairs: true };
   const blockedFns = new Set(), landFns = new Set();
 
@@ -167,6 +110,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       if (!enabled || e.repeat) return;
       if (e.code === 'Tab') { if (!keyFns.size || !inWorld(e.target)) return; e.preventDefault(); }
       if (e.code === 'KeyV') setView(view === 'first' ? 'third' : 'first');
+      if (e.code === 'KeyC' && !move) crouch = !crouch;
       emit(keyFns, { code: e.code, key: e.key });
       return;
     }
@@ -178,6 +122,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     }
     if (e.code === 'Space' && inWorld(e.target)) {
       e.preventDefault();
+      if (crouch && !e.repeat) { crouch = false; return; }
       if (!e.repeat && !air && !move && prof.jump && !override && !vault()) { vy = JUMP_V; air = true; peakY = position.y; stamina = Math.max(0, stamina - 0.06); }
       return;
     }
@@ -316,11 +261,11 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     }
     const len = Math.hypot(kx, kz); if (len > 1) { kx /= len; kz /= len; }
     // Running spends stamina (faster with a heavy bag); empty, you walk until it is back to 35 %.
-    const running = len > 0 && prof.run && !winded && enabled && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
+    const running = len > 0 && prof.run && !winded && enabled && !crouch && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
     const use = clamp(Number(player.staminaUse) || 1, 0.5, 3);
     stamina = clamp(stamina + (running ? -dt / 7 * use : dt / (len > 0 ? 11 : 5)), 0, 1);
     if (stamina <= 0) winded = true; else if (winded && stamina > 0.35) winded = false;
-    const speed = (running ? PLAYER.run : PLAYER.walk) * clamp(Number(player.speedMul) || 1, 0.2, 1.5) * (air ? 0.9 : 1);
+    const speed = (running ? PLAYER.run : PLAYER.walk) * clamp(Number(player.speedMul) || 1, 0.2, 1.5) * (air ? 0.9 : 1) * (crouch ? 0.4 : 1);
     const sy = Math.sin(look.yaw), cy = Math.cos(look.yaw);
     const tx = (-sy * kz + cy * kx) * speed, tz = (-cy * kz - sy * kx) * speed;
     const a = damp(len > 0 ? 9 : 12, dt);
@@ -387,7 +332,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     euler.set(cam.pitch, cam.yaw, roll); camera.quaternion.setFromEuler(euler);
     fwd.set(0, 0, -1).applyQuaternion(camera.quaternion); right.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
     up.set(0, 1, 0).applyQuaternion(camera.quaternion);
-    const eye = prof.eye, tpH = TP.height * (eye / PLAYER.eye);
+    const eye = prof.eye * (crouch ? 0.6 : 1), tpH = TP.height * (eye / PLAYER.eye);
     want.set(position.x, position.y + eye + (tpH - eye) * viewK, position.z);
     if (snap) pivot.copy(want);
     else {
@@ -438,6 +383,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       model.group.visible = override ? view !== 'first' : viewK > 0.35;
       let next = hs < 0.15 ? 'idle' : carrying === 'water' ? 'carry' : hs > 4 ? 'run' : 'walk';
       if (g && g.slope > 0.35 && hs > 0.15 && carrying !== 'water') next = climb >= 0 ? 'stairsUp' : 'stairsDown';
+      if (crouch) next = 'crouch';
       if (move) next = move.anim;
       if ((actT -= dt) > 0 && actAnim) next = actAnim;
       if (next !== anim) { anim = next; model.setAnim?.(next); }
@@ -487,6 +433,9 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     // Play a one-off body animation (punch, throw, hurt) for `seconds`, over whatever the legs do.
     act(name, seconds = 0.4) { actAnim = name; actT = seconds; },
     get busy() { return !!move; },
+    // Low to the ground (C): slower, smaller, safer from blasts and debris.
+    get crouching() { return crouch; },
+    set crouching(v) { crouch = !!v; },
     get locked() { return locked(); },
     // { run, jump, eye, stairs } — any subset; the rest keeps its value.
     setProfile(p = {}) { for (const k of Object.keys(prof)) if (k in p) prof[k] = p[k]; },

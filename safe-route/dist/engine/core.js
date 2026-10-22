@@ -270,6 +270,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     onBlocked: (fn) => controls.onBlocked(fn),
     onLand: (fn) => controls.onLand(fn),
     act: (name, s) => controls.act(name, s),
+    get crouching() { return controls.crouching; },
     get pointerLocked() { return controls.locked; },
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
     setView: (v) => controls.setView(v),

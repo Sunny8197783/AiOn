@@ -52,7 +52,7 @@ export function createHud(root) {
 
   const promptText = $('prompt-text', 'span');
   const prompt = el('div', { class: 'hud-prompt', hidden: true }, el('kbd', {}, 'E'), promptText);
-  const keys = el('p', { class: 'hud-keys' }, ...[['WASD', '이동'], ['Shift', '달리기'], ['Space', '점프·넘기'], ['E', '살피기'], ['Q', '주먹'], ['G', '줍기·던지기'], ['F', '불빛'], ['P', '휴대폰'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '시점'], ['H', '조작법'], ['Esc', '메뉴']]
+  const keys = el('p', { class: 'hud-keys' }, ...[['WASD', '이동'], ['Shift', '달리기'], ['Space', '점프·넘기'], ['E', '살피기'], ['Q', '주먹'], ['G', '줍기·던지기'], ['C', '엎드리기'], ['X', '구급함'], ['F', '불빛'], ['P', '휴대폰'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '시점'], ['H', '조작법'], ['Esc', '메뉴']]
     .map(([k, t]) => el('span', {}, el('kbd', {}, k), t)));
 
   // Compass strip (top centre) and minimap (top right). Yaw 0 faces north (-z); positive yaw turns west.
