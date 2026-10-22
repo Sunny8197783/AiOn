@@ -66,21 +66,6 @@
 /* shop */
 .mg-info { display: grid; gap: 6px; margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; background: var(--mg-card); }
 .mg-info li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.mg-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px 14px; }
-.mg-item { display: grid; grid-template-columns: 58px 1fr auto; grid-template-areas: 'art main price' 'art main step'; gap: 4px 10px; align-items: center; padding: 10px 12px 14px; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .02)); box-shadow: inset 0 -6px 0 #6b5a44, 0 6px 0 -2px #2e261d; }
-.mg-item.is-picked { background: linear-gradient(180deg, rgba(242, 179, 61, .12), rgba(255, 255, 255, .02)); }
-.mg-item.is-out { opacity: .6; }
-.mg-item.is-out .mg-art { filter: grayscale(1); }
-.mg-art { grid-area: art; width: 58px; height: 58px; } .mg-art svg { width: 100%; height: 100%; display: block; }
-.mg-item-main { grid-area: main; display: grid; gap: 3px; min-width: 0; }
-.mg-item-name { font-size: .98em; }
-.mg-price { grid-area: price; justify-self: end; padding: 2px 8px; border-radius: 4px; background: #fff7d6; color: #1d1a12; text-align: right; line-height: 1.15; }
-.mg-price b { color: #c4241b; font-size: 1.05em; } .mg-price small { display: block; font-size: .7em; color: #5d5440; }
-.mg-stepper { grid-area: step; justify-self: end; display: inline-flex; align-items: center; border: 1px solid var(--mg-line); border-radius: 10px; overflow: hidden; }
-.mg-step { font: inherit; width: 40px; height: 40px; border: 0; background: rgba(255, 255, 255, .07); color: var(--mg-text); font-size: 1.2em; cursor: pointer; }
-.mg-step:disabled { opacity: .35; cursor: not-allowed; }
-.mg-qty { width: 48px; height: 40px; border: 0; background: transparent; color: var(--mg-text); font: inherit; text-align: center; -moz-appearance: textfield; }
-.mg-qty::-webkit-inner-spin-button { opacity: .4; }
 .mg-sum { display: flex; gap: 22px; flex-wrap: wrap; flex: 1; }
 .mg-sum > div { display: grid; gap: 3px; min-width: 200px; }
 
@@ -200,8 +185,26 @@
 }
 @media (max-width: 560px) {
   .mg-backdrop { padding: 8px; } .mg-panel { padding: 16px; max-height: calc(100dvh - 16px); }
-  .mg-item { grid-template-columns: 48px 1fr; grid-template-areas: 'art main' 'price step'; } .mg-art { width: 48px; height: 48px; }
-  .mg-price { justify-self: start; }
 }
 @media (prefers-reduced-motion: reduce) { .mg-panel *, .mg-backdrop { transition: none !important; animation: none !important; } }
 .reduce-motion .mg-panel *, .reduce-motion .mg-backdrop { transition: none !important; animation: none !important; }
+
+/* ---- grab3d: taking things by hand (ui/grab3d.js) ---- */
+.grab3d { --mg-amber: #ffb23f; --mg-text: #f2f2f2; position: fixed; inset: 0; z-index: 40; pointer-events: none; color: var(--mg-text); font-size: calc(15px * var(--text-scale, 1)); }
+.grab3d-top { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: min(720px, calc(100% - 32px)); padding: 10px 18px; border-radius: 12px; background: rgba(16, 18, 22, .78); text-align: center; }
+.grab3d-top ul { margin: 6px 0 0; padding: 0; list-style: none; font-size: .9em; opacity: .85; }
+.grab3d-foot { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(880px, calc(100% - 32px)); padding: 12px 16px; border-radius: 14px; background: rgba(16, 18, 22, .84); pointer-events: auto; display: grid; gap: 8px; }
+.grab3d-held { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.grab3d-chip { font: inherit; color: inherit; padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); cursor: pointer; }
+.grab3d-chip:hover { background: rgba(255, 90, 70, .25); }
+.grab3d-empty { opacity: .6; }
+.grab3d-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; font-weight: 700; }
+.grab3d-sum [data-state="warn"] { color: #ffc04d; } .grab3d-sum [data-state="over"] { color: #ff6b5a; }
+.grab3d-goals { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; list-style: none; font-weight: 400; font-size: .9em; }
+.grab3d-goals .is-done { color: #4cc38a; }
+.grab3d-foot .mg-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.grab3d-toast { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); padding: 8px 16px; border-radius: 10px; background: rgba(140, 30, 20, .9); opacity: 0; transition: opacity .2s; }
+.grab3d-toast.on { opacity: 1; }
+html.grab3d-open .hud, html.grab3d-open .lock-hint { visibility: hidden; }
+.grab3d-foot .mg-keys { margin: 0; font-size: .8em; opacity: .7; }
+@media (max-width: 600px) { .grab3d-foot .mg-keys { display: none; } }

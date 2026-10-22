@@ -1,6 +1,7 @@
 // 〈경보 이전〉 shell: boot, settings, save/continue, the chapter runner with soft-fail retries, global keys.
 import { createEngine } from './engine/core.js';
 import { createActions } from './engine/actions.js';
+import { shop3d, bag3d } from './ui/grab3d.js';
 import { createDanger } from './story/danger.js';
 import { createHud } from './ui/hud.js';
 import { talk, card, timeSkip } from './ui/dialog.js';
@@ -9,8 +10,6 @@ import { failCard, chapterCard, ending as endingCard } from './ui/debrief.js';
 import { phone, emergencyAlert } from './ui/phone.js';
 import { notebook, inventory } from './ui/notebook.js';
 import { planner } from './ui/planner.js';
-import { shop } from './ui/shop.js';
-import { bag } from './ui/bag.js';
 import { radio } from './ui/radio.js';
 import { extinguisher } from './ui/extinguisher.js';
 import { docs } from './ui/docs.js';
@@ -108,7 +107,8 @@ function speak(text) {
 }
 { const rawCaption = hud.caption; hud.caption = (text, o) => { speak(text); return rawCaption(text, o); }; }
 engine.onNearest((p) => { if (p) speak(p.label); });
-const ui = { talk, card, timeSkip, phone, emergencyAlert, notebook, inventory, planner, shop, bag, radio, extinguisher, docs, routemap, failCard, chapterCard, ending: endingCard };
+// Shopping and packing happen by hand in the 3D scene (ui/grab3d.js).
+const ui = { talk, card, timeSkip, phone, emergencyAlert, notebook, inventory, planner, shop: shop3d(engine), bag: bag3d(engine), radio, extinguisher, docs, routemap, failCard, chapterCard, ending: endingCard };
 
 let G = null;
 const progress = { index: 0 };
