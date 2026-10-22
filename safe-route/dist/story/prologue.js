@@ -63,7 +63,8 @@ export async function prologue(ctx) {
           const pick = await ctx.ui.talk({ speaker: s.from, role: s.meta, lines: [s.text], choices: Object.entries(LABELS).map(([id, label]) => ({ id, label })) });
           const ok = pick === s.answer;
           ctx.event('signal_sorted', { id: s.id, pick, ok });
-          await ctx.ui.talk({ speaker: ok ? '맞아요' : `"${LABELS[s.answer]}"에 가깝습니다`, role: LABELS[s.answer], lines: [s.why] });
+          if (ok) ctx.toast(`맞아요 · ${LABELS[s.answer]}`, 'self', 2200); // only a miss stops to explain
+          else await ctx.ui.talk({ speaker: `"${LABELS[s.answer]}"에 가깝습니다`, role: LABELS[s.answer], lines: [s.why] });
           if (s.answer === 'fact') ctx.note(s.text, 'site');
         }
         sorted = SIGNALS.length;

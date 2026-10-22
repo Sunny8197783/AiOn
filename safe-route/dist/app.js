@@ -246,12 +246,6 @@ async function intro() {
   await card({ kind: 'info', title: '주인공 · 정민', meta: '31세 · 한결물류 연무센터 운영팀 (배송 운영 담당)',
     body: ['연무동 한빛아파트 103동 302호에 혼자 산다. 회사는 걸어서 10분 거리의 물류센터.', '꼼꼼하지만 비상용품은 "언젠가 사야지" 하고 미뤄 둔 평범한 직장인. 손전등은 있는데 건전지가 없다.',
       '이 이야기는 전쟁 직전 사흘과 그 뒤 열이틀 동안, 정민이 무엇을 확인하고 누구와 함께 버티는지를 따라갑니다.'],
-    actions: [{ id: 'ok', label: '주변 사람들', primary: true }] });
-  await card({ kind: 'info', title: '정민의 주변 사람들', meta: '나이와 인물은 모두 가상 설정입니다',
-    body: ['오서연 (36세) · 옆집 303호. 보행 보조기를 쓴다. 평지와 완만한 경사로는 혼자 다니지만 계단은 어렵다.',
-      '박영수 소장 (58세) · 한빛아파트 관리사무소장. 1층 창구에 있다. 단지 사정을 가장 잘 안다.',
-      '이수아 (24세) · 단지 앞 바로편의점 직원. 본가가 지방이다.', '윤 팀장 · 정민의 회사 팀장. 확인된 것만 말하라고 늘 강조한다.',
-      '304호 어르신 · 같은 층에 혼자 사는 노인.'],
     actions: [{ id: 'ok', label: '다음', primary: true }] });
   const pick = await card({ kind: 'info', title: '체험 모드', meta: '설정(Esc)에서 언제든 바꿀 수 있습니다',
     body: ['같은 재난도 몸과 감각에 따라 전혀 다른 길이 됩니다. 정민의 조건을 골라 보세요.',
@@ -261,7 +255,7 @@ async function intro() {
     actions: [{ id: 'none', label: '기본', primary: true }, { id: 'mobility', label: '보행 장애' }, { id: 'wheelchair', label: '휠체어' },
       { id: 'lowvision', label: '저시력' }, { id: 'deaf', label: '청각 장애' }, { id: 'guardian', label: '보호자 동반' }] });
   if (PROFILES[pick]) { settings.profile = pick; if (pick === 'deaf') settings.captions = true; applySettings(); }
-  await controlsCard();
+  setTimeout(() => hud.toast('조작법은 언제든 H 키로 볼 수 있습니다.', { label: 'self', ms: 5000 }), 1500);
 }
 
 // ---- P: the phone (recent official texts, FM radio app) ----

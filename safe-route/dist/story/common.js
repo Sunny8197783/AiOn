@@ -1,5 +1,5 @@
 // Scenes several chapters reuse: the radio, the phone, emergency texts, the light in your hand.
-import { check, recordEvent, use } from '../game/state.js';
+import { check, recordEvent, use, note } from '../game/state.js';
 import { ladderStage, recordEncounter } from '../game/drills.js';
 import { fact } from '../game/facts.js';
 import { RADIO_FREQ } from './prep-actions.js';
@@ -84,8 +84,12 @@ export async function emergencyText(ctx, { kind = '위급재난문자', time, te
   await ctx.modal(() => ctx.ui.emergencyAlert({ kind, text, time }));
 }
 
-export const factCard = (ctx, title, ids, meta = '공식 행동요령') => ctx.card({ kind: 'info', title, meta,
-  body: ids.map(id => fact(id)?.text).filter(Boolean), actions: [{ id: 'ok', label: '확인', primary: true }] });
+// Official guidance arrives as notices that do not stop play, and lands in the phone's messages (P) to reread.
+export function factCard(ctx, title, ids) {
+  const lines = ids.map(id => fact(id)?.text).filter(Boolean);
+  lines.forEach((t, i) => { note(ctx.G, t, 'official', ctx.engine.level?.id ?? null); setTimeout(() => ctx.toast(i ? t : `${title} — ${t}`, 'official', 6500), i * 2600); });
+  return Promise.resolve();
+}
 
 export const drainBattery = (G, n) => { G.phone.battery = Math.max(0, G.phone.battery - n); };
 export { has };
