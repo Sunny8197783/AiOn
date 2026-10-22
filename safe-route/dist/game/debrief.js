@@ -44,8 +44,9 @@ const FAIL = {
       fire: ['불길 속에서 쓰러졌습니다', '연기가 짙어지기 전에 빠져나갈 길이 있었습니다.', '불이 번진 곳은 자세를 낮추고 바람이 불어오는 쪽으로 빠져나가기'],
       hurt: ['더 이상 버틸 수 없을 만큼 다쳤습니다', '쉬면서 상처를 돌볼 수 있는 순간이 있었습니다.', '구급함을 챙기고, 다쳤을 때는 안전한 곳에서 먼저 처치하기'],
     }[why] ?? null;
-    const [title, seen, next] = W ?? ['더 이상 버틸 수 없을 만큼 다쳤습니다', '', '다친 뒤에는 먼저 안전한 곳에서 처치하기'];
-    return { title, seen, missed: G.injury?.length ? '이미 다친 몸으로 움직이고 있었습니다.' : '몸 상태를 살필 여유가 없었습니다.', next, facts: [] };
+    const [title, seen, next] = W ?? ['더 이상 버틸 수 없을 만큼 다쳤습니다', '쉬면서 상처를 돌볼 수 있는 순간이 있었습니다.', '다친 뒤에는 먼저 안전한 곳에서 처치하기'];
+    const facts = { blast: ['alert_airraid', 'shelter_near'], debris: ['alert_airraid', 'shelter_near'], fire: ['fire_big'] }[why] ?? ['mind_breath'];
+    return { title, seen, missed: G.injury?.length ? '이미 다친 몸으로 움직이고 있었습니다.' : '몸 상태를 살필 여유가 없었습니다.', next, facts };
   },
   late(G) {
     const k = G.know;

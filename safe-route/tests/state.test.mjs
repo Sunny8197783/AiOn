@@ -247,3 +247,10 @@ test('checkpoint and restore roll back in place', () => {
   assert.throws(() => restore(createGame({ seed: 1 })), /no checkpoint/);
   assert.throws(() => checkpoint(G, ''));
 });
+
+test('a broken leg slows the run for good', () => {
+  const G = createGame({ seed: 4 }), base = speedMul(G);
+  G.injury = ['leg'];
+  assert.equal(speedMul(G), Math.round(base * 0.7 * 100) / 100);
+  assert.deepEqual(load(save(G)).injury, ['leg']);
+});

@@ -35,7 +35,7 @@ test('every FACTS sourceId exists; SOURCES are unique https links', () => {
 });
 
 test('failDebrief gives three calm Korean lines and real sources for every type', () => {
-  assert.deepEqual(FAIL_TYPES, ['late', 'exhausted', 'fire', 'missedBus', 'lostWay']);
+  assert.deepEqual(FAIL_TYPES, ['dead', 'late', 'exhausted', 'fire', 'missedBus', 'lostWay']);
   const fresh = createGame({ seed: 9 });
   const ready = alertReadyGame();
   for (const G of [fresh, ready]) for (const type of FAIL_TYPES) {
