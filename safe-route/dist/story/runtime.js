@@ -110,9 +110,20 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   // deadline: { minute, day, type } -> Fail(type) when the clock passes it
   ctx.roam = ({ on = {}, doors = true, deadline = null, rate = ctx.rate, tick = null, shelter = null } = {}) => new Promise((resolve, reject) => {
     const prevRate = ctx.rate; ctx.rate = rate; ctx.roaming = true;
-    let busy = false, done = false;
+    let busy = false, done = false, armed = new Set();
     const finish = (fnRes, value) => { if (done) return; done = true; offI(); offF(); ctx.rate = prevRate; ctx.roaming = false; fnRes(value); };
-    const offI = engine.onInteract(async (point) => {
+    // Walk-through doors: stepping into a plain door (no handler of the chapter's own) goes through it, no key.
+    // A door arms only once you have been more than 1.6 m from it, so arriving next to one never bounces you back.
+    const walkDoor = () => {
+      const L = engine.level; if (!doors || busy || !L) return;
+      for (const p of L.points || []) {
+        const key = `${L.id}:${p.id}`;
+        if (!DOORS[key] || on[p.id] || on[key] || p.enabled === false) continue;
+        const d = Math.hypot(engine.player.x - p.x, engine.player.z - p.z);
+        if (d > 1.6) armed.add(key); else if (d < 0.75 && armed.has(key)) { armed = new Set(); interact(p); return; }
+      }
+    };
+    const interact = async (point) => {
       if (busy || done) return;
       busy = true;
       try {
@@ -126,10 +137,12 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
         else if (on['*']) value = await modal(() => on['*'](point));
         if (value !== undefined) finish(resolve, value);
       } catch (err) { finish(reject, err); } finally { busy = false; }
-    });
+    };
+    const offI = engine.onInteract(interact);
     const offF = engine.onFrame((dt) => {
       if (done || !engine.controlsEnabled) return; // a menu or dialog pauses timers and deadlines too
       try {
+        walkDoor();
         if (tick) { const v = tick(dt); if (v !== undefined) finish(resolve, v); }
         const G = ctx.G;
         if (G.stats.health <= 0) return void finish(reject, new Fail('dead', { why: ctx.deathCause ?? 'hurt' }));

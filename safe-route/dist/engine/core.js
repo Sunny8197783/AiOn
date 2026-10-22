@@ -146,14 +146,14 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   }
 
   // ---- levels ----
-  const built = new Map();
+  const built = new Map(), done = new Set();
   function getLevel(id) {
     if (!built.has(id)) {
       const make = levels[id];
       if (typeof make !== 'function') return Promise.reject(new Error(`[engine] unknown level "${id}"; known: ${Object.keys(levels).join(', ')}`));
       const p = (async () => { await ready; return normalizeLevel(await make(kit, people, fx), id); })();
       built.set(id, p);
-      p.catch(() => built.delete(id)); // a failed build may be retried
+      p.then(() => done.add(id), () => built.delete(id)); // a failed build may be retried
     }
     return built.get(id);
   }
@@ -163,7 +163,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   function enter(levelId, spawn, { prepare } = {}) {
     const run = queue.catch(() => {}).then(async () => {
       busy = true;
-      const fadeS = RM ? 0 : 0.35;
+      const fadeS = RM ? 0 : done.has(levelId) ? 0.1 : 0.35; // a level already built swaps in a blink
       try {
         await post.fadeTo(0, fadeS);
         let L;
@@ -181,6 +181,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
         if (prepare) { try { await prepare(L); } catch (err) { console.error(`[engine] prepare for level "${levelId}" failed (continuing)`, err); } }
         try { await Promise.race([renderer.compileAsync(scene, camera), new Promise((r) => setTimeout(r, 4000))]); }
         catch (err) { console.warn('[engine] shader precompile failed (continuing)', err); }
+        prewarm();
         return L;
       } finally {
         await post.fadeTo(1, fadeS);
@@ -189,6 +190,25 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     });
     queue = run;
     return run;
+  }
+
+  // Build and precompile the other levels while the player is busy elsewhere, so a door never waits on a
+  // build. Idle callbacks keep each build between frames; one level at a time.
+  let warming = false; const tried = new Set();
+  function prewarm() {
+    if (warming) return; warming = true;
+    const idle = (fn) => (globalThis.requestIdleCallback ? requestIdleCallback(fn, { timeout: 8000 }) : setTimeout(fn, 1500));
+    const next = () => {
+      const id = Object.keys(levels).find((k) => !built.has(k) && !tried.has(k));
+      if (!id) return;
+      tried.add(id);
+      idle(async () => {
+        try { const L = await getLevel(id); await renderer.compileAsync(L.group, camera, scene); }
+        catch (err) { console.warn(`[engine] prewarm of "${id}" failed (it loads at the door instead)`, err); }
+        setTimeout(next, 800);
+      });
+    };
+    setTimeout(next, 4000);
   }
 
   // ---- quality, motion, size ----
