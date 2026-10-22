@@ -290,6 +290,20 @@ export function createAudio() {
     s.stop(t + 4);
   }
 
+  // Body and object hits: punches, thrown things landing, breaking glass, a swing through the air.
+  const SFX = {
+    punch: () => { burst({ freq: 900, Q: 0.8, dur: 0.06, vol: 0.5 }); tone({ freq: 120, to: 60, dur: 0.12, vol: 0.25, dest: sfx }); },
+    thud: () => { burst({ freq: 400, Q: 1, dur: 0.09, vol: 0.35 }); tone({ freq: 90, to: 50, dur: 0.1, vol: 0.18, dest: sfx }); },
+    land: () => { burst({ freq: 300, Q: 0.7, type: 'lowpass', dur: 0.18, vol: 0.7 }); tone({ freq: 70, to: 40, dur: 0.2, vol: 0.35, dest: sfx }); },
+    glass: () => { for (let i = 0; i < 6; i++) tone({ freq: rnd(2500, 5200), dur: rnd(0.05, 0.25), vol: 0.05, at: now() + i * rnd(0.01, 0.04), dest: sfx, type: 'triangle' }); burst({ freq: 5000, Q: 0.5, type: 'highpass', dur: 0.2, vol: 0.25 }); },
+    swing: () => burst({ freq: 700, Q: 0.5, dur: 0.16, vol: 0.12 }),
+    pick: () => tone({ freq: 500, to: 700, dur: 0.06, vol: 0.05, dest: sfx }),
+    // An incoming shell: a falling whistle over `s` seconds (the blast itself is boom()).
+    whistle: (s = 2.2) => tone({ freq: 2400, to: 500, type: 'sine', dur: s, vol: 0.12, dest: sfx }),
+    collapse: () => { const t = now(); for (let i = 0; i < 14; i++) burst({ freq: rnd(150, 700), Q: 0.6, type: 'lowpass', dur: rnd(0.2, 0.6), vol: rnd(0.3, 0.8), at: t + i * rnd(0.05, 0.2), wet: 0.4 }); },
+  };
+  function hit(name, ...a) { if (ctx) (SFX[name] || SFX.thud)(...a); }
+
   function unlock() {
     if (!AC) return;
     if (!ctx) {
@@ -310,7 +324,7 @@ export function createAudio() {
     setVolume(v) { volume = clamp01(v); applyMaster(); },
     setMute(b) { muted = !!b; applyMaster(); },
     setBus(name, v) { if (!(name in busVol)) return; busVol[name] = clamp01(v); const n = ctx && busNode()[name]; if (n) ramp(n.gain, BUS_BASE[name] * busVol[name], 0.1); },
-    boom,
+    boom, hit,
     ambience, siren, phoneAlert, radio, footstep, ui, fire, spray, crowd,
     get state() { return ctx?.state ?? 'locked'; },
   };

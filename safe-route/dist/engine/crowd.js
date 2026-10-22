@@ -87,11 +87,15 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     if (p.mesh) p.mesh.onBeforeRender = hook;
     p.group.visible = false;
     group.add(p.group);
-    agents.push({
+    const a = {
       p, i, x: 0, z: 0, vx: 0, vz: 0, yaw: 0, face: null, on: false, placed: false, state: 'stand', path: -1, s: 0, dir: 1,
       lane: 0, speed: 1.2, goal: null, timer: 0, stopT: 0, anim: '', standAnim: 'idle', moveAnim: 'walk', moving: false,
       acc: 0, sh: true, dy: 0, props: new Set(), jit: 0, slow: (p.spec?.stoop ?? 0) > 0.1 ? 0.72 : 1,
-    });
+      hurtT: 0, fleeT: 0, downT: 0, fx: 0, fz: 0,
+    };
+    agents.push(a);
+    // Hit by the player (engine/actions.js): flinch, then run from (x, z); ko = knocked down for a while.
+    p.onHit = (x, z, ko) => { a.hurtT = 0.45; a.fx = x; a.fz = z; if (ko) a.downT = 14; else a.fleeT = 7; };
   }
 
   const show = (a, on) => { a.p.group.visible = on; };
@@ -272,6 +276,15 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
 
   function tick(a, dt, pl) {
     if (a.state === 'gone') { respawn(a, dt); return; }
+    if (a.hurtT > 0 || a.downT > 0 || a.fleeT > 0) { // ponytail: flees in a straight line, through walls; navmesh if it shows
+      a.hurtT = Math.max(0, a.hurtT - dt);
+      if (a.downT > 0) a.downT -= dt;
+      if (a.hurtT > 0 || a.downT > 0) { steer(a, a.x, a.z, 0, dt, pl); return; }
+      a.fleeT -= dt;
+      const dx = a.x - a.fx, dz = a.z - a.fz, d = Math.hypot(dx, dz) || 1;
+      steer(a, a.x + (dx / d) * 4, a.z + (dz / d) * 4, 4.2, dt, pl);
+      return;
+    }
     let goal = null, v = a.speed;
     if (mode === 'stroll' || mode === 'brisk') {
       if (a.state === 'stand') {
@@ -315,7 +328,7 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
   function pose(a, dt = 0) {
     const sp = Math.hypot(a.vx, a.vz);
     if (sp > 0.25) a.moving = true; else if (sp < 0.12) a.moving = false;
-    const anim = a.moving ? a.moveAnim : a.standAnim;
+    const anim = a.downT > 0 ? 'down' : a.hurtT > 0 ? 'hurt' : a.moving ? (a.fleeT > 0 ? 'run' : a.moveAnim) : a.standAnim;
     if (anim !== a.anim) { a.p.setAnim?.(anim); a.anim = anim; }
     a.p.setSpeed?.(a.moving ? sp : null);
     const target = a.moving ? Math.atan2(-a.vx, -a.vz) : a.face ?? a.yaw;

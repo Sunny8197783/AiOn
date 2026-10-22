@@ -132,6 +132,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
       try {
         if (tick) { const v = tick(dt); if (v !== undefined) finish(resolve, v); }
         const G = ctx.G;
+        if (G.stats.health <= 0) return void finish(reject, new Fail('dead', { why: ctx.deathCause ?? 'hurt' }));
         if (deadline && (G.day > deadline.day || (G.day === deadline.day && G.minute >= deadline.minute))) finish(reject, new Fail(deadline.type));
       } catch (err) { finish(reject, err); }
     });

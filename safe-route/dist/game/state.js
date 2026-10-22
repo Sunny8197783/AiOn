@@ -226,7 +226,8 @@ export function speedMul(G) {
   const weightKg = G.know?.bagOn ? bagLoad(G).weightKg : 0, lim = BAG_LIMIT.weightKg;
   const tired = Math.max(0, G.stats.fatigue - 50) / 50 * 0.25;
   const load = weightKg <= lim ? 0.12 * weightKg / lim : 0.12 + (weightKg - lim) / lim * 0.4;
-  return round2(Math.min(1, Math.max(0.6, 1 - tired - load)));
+  const leg = G.injury?.includes('leg') ? 0.7 : 1; // a broken leg from a fall stays for the rest of the run
+  return round2(Math.min(1, Math.max(0.6, 1 - tired - load)) * leg);
 }
 
 export const save = (G) => JSON.stringify(G);

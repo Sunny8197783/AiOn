@@ -12,7 +12,7 @@ const TP = { dist: 3.4, height: 1.7, shoulder: 0.45 };
 const FOV = 70, FOV_RUN = 4, D2R = Math.PI / 180, LOOK = 0.0042, LOCK_LOOK = 0.0024;
 const JUMP_V = 3.6, GRAVITY = 12, STAIR_SLOPE = 0.2;
 const FLASH = 6; // flashlight candela; dimmed further when the beam hits something close
-const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH']);
+const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH', 'KeyG', 'KeyQ']);
 const MOVE = { KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -34,6 +34,14 @@ export function groundAt(walk, x, z, feetY, any = false, below = 0.6) {
     if (best === null || y > best) { best = y; slope = s; }
   }
   return best === null ? null : { y: best, slope };
+}
+
+// Tops of solids you can stand on (cars, walls, fences, crates) join the walk zones as flat surfaces.
+const topsOf = (solids) => solids.map((s) => ({ x0: s.x0, x1: s.x1, z0: s.z0, z1: s.z1, y: s.y1 }));
+// Ground with a little footprint: a seam narrower than the body between two walk zones is not a hole.
+function groundNear(walk, x, z, feetY) {
+  for (const [ox, oz] of [[0, 0], [0.25, 0], [-0.25, 0], [0, 0.25], [0, -0.25]]) { const g = groundAt(walk, x + ox, z + oz, feetY); if (g) return g; }
+  return null;
 }
 
 // Push a circle (radius r) out of every solid that overlaps the vertical span [feetY, feetY + height].
@@ -96,9 +104,9 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
   let bodyYaw = 0, phase = 0, bobAmp = 0, camFrac = 1, nearest = null, model = null, carrying = null, flashOn = false;
   let anim = '', lastGround = 0, snap = true, beamStrength = 1, flashK = 1;
   let shakeT = 0, shakeDur = 1, shakeA = 0;
-  let vy = 0, air = false, stamina = 1, winded = false, blocked = false, sens = 1;
+  let vy = 0, air = false, stamina = 1, winded = false, blocked = false, sens = 1, peakY = 0, move = null, actAnim = null, actT = 0;
   const prof = { run: true, jump: true, eye: PLAYER.eye, stairs: true };
-  const blockedFns = new Set();
+  const blockedFns = new Set(), landFns = new Set();
 
   const emit = (set, arg) => { for (const fn of [...set]) { try { fn(arg); } catch (err) { console.error('[engine/controls] listener failed', err); } } };
   const sub = (set, fn) => { set.add(fn); return () => set.delete(fn); };
@@ -138,7 +146,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       const g = groundAt(L?.walk, s.x, s.z, s.y ?? 0, s.y === undefined);
       position.set(s.x, s.y ?? g?.y ?? 0, s.z);
       if (Number.isFinite(s.yaw)) player.yaw = s.yaw;
-      look.pitch = cam.pitch = -0.05; vel.set(0, 0); lastGround = position.y; snap = true; vy = 0; air = false;
+      look.pitch = cam.pitch = -0.05; vel.set(0, 0); lastGround = position.y; snap = true; vy = 0; air = false; move = null;
       return true;
     },
   };
@@ -170,7 +178,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     }
     if (e.code === 'Space' && inWorld(e.target)) {
       e.preventDefault();
-      if (!e.repeat && !air && prof.jump && !override) { vy = JUMP_V; air = true; stamina = Math.max(0, stamina - 0.06); }
+      if (!e.repeat && !air && !move && prof.jump && !override && !vault()) { vy = JUMP_V; air = true; peakY = position.y; stamina = Math.max(0, stamina - 0.06); }
       return;
     }
     if (MOVE[e.code] || e.code.startsWith('Shift') || e.code.startsWith('Alt')) {
@@ -189,6 +197,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     if (!enabled || e.button > 2 || e.button === 1) return;
     canvas.focus?.({ preventScroll: true });
     if (e.pointerType === 'mouse' && !locked()) lock();
+    else if (locked() && e.button === 0) emit(keyFns, { code: 'Mouse0', key: '' });
     if (locked()) return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
     try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
@@ -254,6 +263,44 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     return best;
   }
 
+  function shake(amount = 0.15, seconds = 1.2) { shakeA = amount; shakeDur = shakeT = Math.max(0.05, seconds); }
+
+  // ---- vault / climb (Space in front of a low solid) ----
+  // A solid 0.3..1.5 m tall and up to 1 m thick with a free landing behind it is vaulted; anything up to
+  // 2.3 m with room on top is climbed onto. Returns false when there is nothing to get over (a plain jump).
+  function vault() {
+    const L = getLevel(); if (!L || !prof.jump) return false;
+    const yaw = Math.hypot(vel.x, vel.y) > 0.3 ? Math.atan2(-vel.x, -vel.y) : view === 'first' ? cam.yaw : bodyYaw;
+    const dx = -Math.sin(yaw), dz = -Math.cos(yaw), feet = position.y, solids = (L.solids || []).filter((s) => s && !s.off);
+    so.x = position.x; so.y = feet + 0.25; so.z = position.z; sd.x = dx; sd.y = 0; sd.z = dz;
+    let best = null, bt = Infinity;
+    for (const s of solids) {
+      const h = s.y1 - feet; if (h < 0.3 || h > 2.3 || s.y0 > feet + 0.3) continue;
+      const t = segBox(so, sd, s, PLAYER.radius * 0.6); if (t < bt) { bt = t; best = s; }
+    }
+    if (!best) return false;
+    const exitT = Math.min(dx > 1e-6 ? (best.x1 - position.x) / dx : dx < -1e-6 ? (best.x0 - position.x) / dx : Infinity,
+      dz > 1e-6 ? (best.z1 - position.z) / dz : dz < -1e-6 ? (best.z0 - position.z) / dz : Infinity);
+    const h = best.y1 - feet, thick = exitT - bt, walk = L.walk || [];
+    const free = (x, z, y) => { const [cx, cz] = collide(x, z, y, solids); return Math.hypot(cx - x, cz - z) < 0.05; };
+    const surf = walk.concat(topsOf(solids.filter((s) => s !== best)));
+    if (h <= 1.5 && thick <= 1.0) { // over it
+      const lx = position.x + dx * (exitT + 0.5), lz = position.z + dz * (exitT + 0.5);
+      const gl = groundAt(surf, lx, lz, best.y1, false, 60);
+      if (gl && free(lx, lz, gl.y)) {
+        move = { t: 0, dur: 0.5 + h * 0.15, x0: position.x, z0: position.z, y0: feet, x1: lx, z1: lz, y1: Math.max(gl.y, feet - 0.4), arc: best.y1 + 0.2 - (feet + Math.max(gl.y, feet - 0.4)) / 2, anim: 'run' };
+        stamina = Math.max(0, stamina - 0.08); return true;
+      }
+    }
+    if (thick >= 0.4) { // onto it
+      const k = bt + Math.min(0.45, thick / 2), lx = position.x + dx * k, lz = position.z + dz * k;
+      if (!free(lx, lz, best.y1)) return false;
+      move = { t: 0, dur: 0.35 + h * 0.3, x0: position.x, z0: position.z, y0: feet, x1: lx, z1: lz, y1: best.y1, arc: 0.2, anim: h > 1 ? 'stairsUp' : 'run' };
+      stamina = Math.max(0, stamina - 0.05 - h * 0.05); return true;
+    }
+    return false;
+  }
+
   // ---- per frame ----
   const fwd = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3(), want = new THREE.Vector3(), seg = new THREE.Vector3();
   const euler = new THREE.Euler(0, 0, 0, 'YXZ'), handLocal = new THREE.Vector3(), origin = new THREE.Vector3(), tmp = new THREE.Vector3();
@@ -282,31 +329,46 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
 
     // move in sub-steps (no tunnelling through thin walls), slide along solids
     const near = allSolids.filter((s) => s && !s.off && s.x0 - 3 < position.x && s.x1 + 3 > position.x && s.z0 - 3 < position.z && s.z1 + 3 > position.z);
-    const steps = Math.max(1, Math.ceil((Math.hypot(vel.x, vel.y) * dt) / 0.12));
-    let px = position.x, pz = position.z;
-    for (let i = 0; i < steps; i++) [px, pz] = collide(px + (vel.x * dt) / steps, pz + (vel.y * dt) / steps, position.y, near);
-    // Without stairs (wheelchair) a stair flight is a wall; the director may offer help (onBlocked).
-    if (!prof.stairs && !air) {
-      const ng = groundAt(walk, px, pz, position.y);
-      const stop = !!ng && ng.slope > STAIR_SLOPE && !(groundAt(walk, position.x, position.z, position.y)?.slope > STAIR_SLOPE);
-      if (stop) { if (!blocked) emit(blockedFns, { kind: 'stairs', x: position.x, y: position.y, z: position.z, toX: px, toZ: pz }); px = position.x; pz = position.z; vel.set(0, 0); }
-      blocked = stop;
-    }
-    if (dt > 0) { // never keep pushing into a wall
-      const ax = (px - position.x) / dt, az = (pz - position.z) / dt;
-      if (Math.abs(ax) < Math.abs(vel.x)) vel.x = ax;
-      if (Math.abs(az) < Math.abs(vel.y)) vel.y = az;
-    }
-    position.x = px; position.z = pz;
-    const g = groundAt(walk, px, pz, position.y, false, air ? 50 : 0.6);
-    let climb = 0;
-    if (air) { // jump arc; land on the highest surface under the feet
-      vy -= GRAVITY * dt; position.y += vy * dt;
-      if (vy <= 0 && g && position.y <= g.y) { position.y = lastGround = g.y; air = false; vy = 0; }
-      else if (!g && position.y < lastGround - 3) { position.y = lastGround; air = false; vy = 0; } // no floor at all: never fall forever
-    } else if (g) {
-      climb = g.y - lastGround; lastGround = g.y;
-      position.y = snap || Math.abs(g.y - position.y) < 0.002 ? g.y : position.y + (g.y - position.y) * damp(g.y > position.y ? 22 : 15, dt);
+    const surf = near.length ? walk.concat(topsOf(near)) : walk;
+    let g = null, climb = 0;
+    if (move) { // scripted vault / climb: ease along, with an arc over the top
+      move.t = Math.min(1, move.t + dt / move.dur);
+      const k = move.t, e = k * k * (3 - 2 * k);
+      position.set(move.x0 + (move.x1 - move.x0) * e, move.y0 + (move.y1 - move.y0) * e + Math.sin(Math.PI * k) * move.arc, move.z0 + (move.z1 - move.z0) * e);
+      vel.set(0, 0);
+      if (k >= 1) { move = null; lastGround = peakY = position.y; air = true; vy = 0; }
+    } else {
+      const steps = Math.max(1, Math.ceil((Math.hypot(vel.x, vel.y) * dt) / 0.12));
+      let px = position.x, pz = position.z;
+      for (let i = 0; i < steps; i++) [px, pz] = collide(px + (vel.x * dt) / steps, pz + (vel.y * dt) / steps, position.y, near);
+      // Without stairs (wheelchair) a stair flight is a wall; the director may offer help (onBlocked).
+      if (!prof.stairs && !air) {
+        const ng = groundAt(walk, px, pz, position.y);
+        const stop = !!ng && ng.slope > STAIR_SLOPE && !(groundAt(walk, position.x, position.z, position.y)?.slope > STAIR_SLOPE);
+        if (stop) { if (!blocked) emit(blockedFns, { kind: 'stairs', x: position.x, y: position.y, z: position.z, toX: px, toZ: pz }); px = position.x; pz = position.z; vel.set(0, 0); }
+        blocked = stop;
+      }
+      if (dt > 0) { // never keep pushing into a wall
+        const ax = (px - position.x) / dt, az = (pz - position.z) / dt;
+        if (Math.abs(ax) < Math.abs(vel.x)) vel.x = ax;
+        if (Math.abs(az) < Math.abs(vel.y)) vel.y = az;
+      }
+      position.x = px; position.z = pz;
+      g = groundAt(surf, px, pz, position.y, false, air ? 50 : 0.6);
+      // Walked off a ledge (a floor further down, and no floor within a body width): fall.
+      if (!air && !g && groundAt(surf, px, pz, position.y, false, 60) && !groundNear(surf, px, pz, position.y)) { air = true; vy = 0; peakY = position.y; }
+      if (air) { // jump / fall arc; land on the highest surface under the feet
+        vy -= GRAVITY * dt; position.y += vy * dt; peakY = Math.max(peakY, position.y);
+        if (!g) g = groundAt(surf, px, pz, position.y, false, 60);
+        if (vy <= 0 && g && position.y <= g.y) {
+          const drop = peakY - g.y;
+          position.y = lastGround = g.y; air = false; vy = 0;
+          if (drop > 1.2) { shake(Math.min(0.35, drop * 0.03), 0.4); emit(landFns, { drop, x: px, y: g.y, z: pz }); }
+        } else if (!g && position.y < lastGround - 3) { position.y = lastGround; air = false; vy = 0; } // no floor at all: never fall forever
+      } else if (g) {
+        climb = g.y - lastGround; lastGround = g.y;
+        position.y = snap || Math.abs(g.y - position.y) < 0.002 ? g.y : position.y + (g.y - position.y) * damp(g.y > position.y ? 22 : 15, dt);
+      }
     }
     const hs = Math.hypot(vel.x, vel.y);
 
@@ -376,6 +438,8 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       model.group.visible = override ? view !== 'first' : viewK > 0.35;
       let next = hs < 0.15 ? 'idle' : carrying === 'water' ? 'carry' : hs > 4 ? 'run' : 'walk';
       if (g && g.slope > 0.35 && hs > 0.15 && carrying !== 'water') next = climb >= 0 ? 'stairsUp' : 'stairsDown';
+      if (move) next = move.anim;
+      if ((actT -= dt) > 0 && actAnim) next = actAnim;
       if (next !== anim) { anim = next; model.setAnim?.(next); }
       model.setSpeed?.(hs);
       try { model.update?.(dt); } catch (err) { console.error('[engine/controls] player model update failed', err); model.update = null; }
@@ -419,10 +483,14 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     get view() { return view; }, get enabled() { return enabled; }, get nearest() { return nearest; },
     onKey: (fn) => sub(keyFns, fn), onInteract: (fn) => sub(interactFns, fn), onNearest: (fn) => sub(nearestFns, fn),
     onBlocked: (fn) => sub(blockedFns, fn),
+    onLand: (fn) => sub(landFns, fn),
+    // Play a one-off body animation (punch, throw, hurt) for `seconds`, over whatever the legs do.
+    act(name, seconds = 0.4) { actAnim = name; actT = seconds; },
+    get busy() { return !!move; },
     get locked() { return locked(); },
     // { run, jump, eye, stairs } — any subset; the rest keeps its value.
     setProfile(p = {}) { for (const k of Object.keys(prof)) if (k in p) prof[k] = p[k]; },
-    shake(amount = 0.15, seconds = 1.2) { shakeA = amount; shakeDur = shakeT = Math.max(0.05, seconds); },
+    shake,
     setSensitivity(v) { sens = clamp(Number(v) || 1, 0.3, 3); },
     setBeamStrength(v) { beamStrength = v; },
     setQuality(q) { spot.castShadow = q === 'high'; spot.shadow.autoUpdate = flashOn && spot.castShadow; },

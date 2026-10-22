@@ -108,6 +108,10 @@ body:has(.modal-layer) .hud-prompt { opacity: 0; }
 .hud-keys { position: absolute; right: 16px; bottom: 16px; margin: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35em .8em; max-width: 380px; font-size: .74rem; color: var(--text-dim); opacity: .75; text-shadow: 0 1px 6px #000; }
 .hud-keys span { display: inline-flex; align-items: center; gap: .3em; }
 .hud-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(110, 8, 14, calc(var(--tension, 0) * .6)) 100%); }
+.hud-hurt { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 35%, rgba(170, 0, 0, calc(var(--k, .5) * .85)) 100%); }
+.hud-hurt.on { animation: hurt .7s ease-out; }
+@keyframes hurt { 0% { opacity: 1; } 100% { opacity: 0; } }
+.reduce-motion .hud-hurt.on { animation-duration: .01s; }
 .hud-vignette.pulse { animation: pulse 2.4s ease-in-out infinite; }
 .letterbox { position: absolute; left: 0; right: 0; height: 11vh; background: #000; transform: scaleY(0); transition: transform .7s var(--ease); }
 .letterbox.top { top: 0; transform-origin: top; } .letterbox.bottom { bottom: 0; transform-origin: bottom; }

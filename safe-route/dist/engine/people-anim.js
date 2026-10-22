@@ -5,7 +5,7 @@ import { B } from './people-body.js';
 
 export const NB = 18, OFF = NB * 3, PLEN = OFF + 3;
 const { sin, cos, max, min, PI, acos } = Math;
-export const ANIMS = ['idle', 'walk', 'run', 'brisk', 'carry', 'walker', 'sit', 'sitChair', 'talk', 'phone', 'wave', 'point', 'crouch', 'stairsUp', 'stairsDown'];
+export const ANIMS = ['idle', 'walk', 'run', 'brisk', 'carry', 'walker', 'sit', 'sitChair', 'talk', 'phone', 'wave', 'point', 'crouch', 'stairsUp', 'stairsDown', 'punch', 'throw', 'hurt', 'down'];
 // Locomotion: nominal speed (m/s), metres per full gait cycle at that speed (for a 1.72 m adult), shape.
 export const GAIT = {
   walk: { v: 1.3, stride: 1.42, A: 0.36, K: 1.0, load: 0.14, As: 0.3, el: 0.2, bob: 0.022, lean: 0.03 },
@@ -112,6 +112,25 @@ const POSES = {
     idle(P, c, 0.4);
     P[B.rArm * 3] = 1.42 + 0.05 * sin(c.t * 2.2); P[B.rArm * 3 + 2] = 0.18; P[B.rFore * 3] = 0.08; P[B.rFore * 3 + 1] = -0.3;
     add(P, B.chest, 0, -0.12); add(P, B.head, 0.03, -0.15);
+  },
+  punch(P, c) { // right straight, left hand guarding the face
+    idle(P, c, 0.3);
+    P[B.rArm * 3] = 1.5; P[B.rArm * 3 + 2] = 0.1; P[B.rFore * 3] = 0.05; P[B.lArm * 3] = 0.7; P[B.lArm * 3 + 2] = -0.2; P[B.lFore * 3] = 1.9;
+    add(P, B.chest, 0, -0.4); add(P, B.spine, 0.08, -0.15); add(P, B.head, 0.05, 0.3);
+  },
+  throw(P, c) { // release: arm high in front, body turned through
+    idle(P, c, 0.3);
+    P[B.rArm * 3] = 2.1; P[B.rArm * 3 + 2] = 0.25; P[B.rFore * 3] = 0.35; P[B.lArm * 3] = 0.5; P[B.lArm * 3 + 2] = -0.4;
+    add(P, B.chest, 0.1, -0.45); add(P, B.spine, 0.12, -0.2); add(P, B.head, 0, 0.35);
+  },
+  hurt(P, c) { // knocked back: torso thrown back, arms flung out
+    idle(P, c, 0.2);
+    add(P, B.spine, 0.28); add(P, B.chest, 0.2); add(P, B.neck, 0.15); add(P, B.head, 0.25);
+    for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 0.4, 0, s * 0.75); add(P, a + 1, 0.5); }
+  },
+  down(P, c) { // on the ground: crouched low, head down, arms over the head
+    POSES.crouch(P, c); add(P, B.spine, -0.25); add(P, B.head, 0.35);
+    for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 1.2, 0, s * 0.2); add(P, a + 1, 1.6); }
   },
   crouch(P, c) {
     const d = c.d, th = 1.9, ccw = -0.35, hy = d.ankleY + d.L1 * cos(th) + d.L2 * cos(ccw);

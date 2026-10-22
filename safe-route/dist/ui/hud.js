@@ -52,7 +52,7 @@ export function createHud(root) {
 
   const promptText = $('prompt-text', 'span');
   const prompt = el('div', { class: 'hud-prompt', hidden: true }, el('kbd', {}, 'E'), promptText);
-  const keys = el('p', { class: 'hud-keys' }, ...[['WASD', '이동'], ['Shift', '달리기'], ['Space', '점프'], ['E', '살피기'], ['F', '불빛'], ['P', '휴대폰'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '시점'], ['H', '조작법'], ['Esc', '메뉴']]
+  const keys = el('p', { class: 'hud-keys' }, ...[['WASD', '이동'], ['Shift', '달리기'], ['Space', '점프·넘기'], ['E', '살피기'], ['Q', '주먹'], ['G', '줍기·던지기'], ['F', '불빛'], ['P', '휴대폰'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '시점'], ['H', '조작법'], ['Esc', '메뉴']]
     .map(([k, t]) => el('span', {}, el('kbd', {}, k), t)));
 
   // Compass strip (top centre) and minimap (top right). Yaw 0 faces north (-z); positive yaw turns west.
@@ -63,11 +63,11 @@ export function createHud(root) {
   const staminaFill = $('stamina-fill', 'span');
   const stamina = el('div', { class: 'hud-stamina', hidden: true, 'aria-hidden': 'true' }, el('span', { class: 'stamina-label' }, '기력'), el('span', { class: 'stamina-bar' }, staminaFill));
 
-  const vignette = $('hud-vignette', 'div', { 'aria-hidden': 'true' });
+  const vignette = $('hud-vignette', 'div', { 'aria-hidden': 'true' }), hurtEl = $('hud-hurt', 'div', { 'aria-hidden': 'true' });
   const banner = $('hud-banner', 'div', { 'aria-hidden': 'true' });
   const bars = [$('letterbox top', 'div', { 'aria-hidden': 'true' }), $('letterbox bottom', 'div', { 'aria-hidden': 'true' })];
 
-  const hud = el('div', { class: 'hud', hidden: true }, vignette, ...bars, banner, compassCv, mapBox, topLeft, topRight, stats, stamina, prompt, keys);
+  const hud = el('div', { class: 'hud', hidden: true }, vignette, hurtEl, ...bars, banner, compassCv, mapBox, topLeft, topRight, stats, stamina, prompt, keys);
   root.append(hud);
 
   // Toasts and captions float above modals, so they live directly on <body>.
@@ -164,6 +164,9 @@ export function createHud(root) {
         captionDone = finish;
       });
     },
+
+    // A red flash at the screen edge when the body takes a hit; k 0..1 is how hard.
+    hurt(k = 0.5) { hurtEl.style.setProperty('--k', String(Math.max(0.2, Math.min(1, k)))); hurtEl.classList.remove('on'); void hurtEl.offsetWidth; hurtEl.classList.add('on'); },
 
     setTension(level) {
       const k = Math.max(0, Math.min(1, Number(level) || 0));

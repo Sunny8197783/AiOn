@@ -1,5 +1,6 @@
 // 〈경보 이전〉 shell: boot, settings, save/continue, the chapter runner with soft-fail retries, global keys.
 import { createEngine } from './engine/core.js';
+import { createActions } from './engine/actions.js';
 import { createHud } from './ui/hud.js';
 import { talk, card, timeSkip } from './ui/dialog.js';
 import { landing, pause, settings as settingsMenu, about } from './ui/menu.js';
@@ -54,6 +55,7 @@ const PROFILES = {
   guardian: { run: false, jump: false, eye: 1.62, stairs: true, speed: 0.72 },    // 지체 장애: a guardian walks along
 };
 const profile = () => PROFILES[settings.profile] ? settings.profile : 'none';
+function hasLeg() { return !!G?.injury?.includes('leg'); }
 function applySettings() {
   const p = PROFILES[profile()];
   document.documentElement.style.setProperty('--text-scale', String(settings.textScale));
@@ -64,7 +66,7 @@ function applySettings() {
   engine.setView(settings.view);
   engine.setQuality(settings.quality); engine.setReduceMotion(settings.reduceMotion);
   engine.setSensitivity(settings.sensitivity);
-  engine.setProfile(p);
+  engine.setProfile({ ...p, run: p.run && !hasLeg() }); // a broken leg ends running for the rest of the run
   ctx.profileSpeed = p.speed; if (G) ctx.refresh();
   store.set(SETTINGS_KEY, JSON.stringify(settings));
 }
@@ -138,6 +140,38 @@ applySettings();
 // ?debug exposes the game for automated play-throughs (teleport to a point, read state).
 if (DEBUG) window.__game = { ctx, engine, hud, get G() { return G; } };
 
+// ---- the body: falls, fights, thrown things (engine/actions.js) ----
+const OUCH = ['“아악! 왜 이래요!”', '“뭐 하는 거야!”', '“사람 살려요!”', '“그만해요, 제발!”', '“미쳤어?!”'];
+let itemLabel = null;
+function hurt(n, why) {
+  if (!G || !(n > 0)) return;
+  ctx.deathCause = why; ctx.stat('health', -n); hud.hurt(n / 40);
+}
+const actions = createActions(engine, {
+  onHit(p, how, ko) {
+    if (!G) return;
+    G.karma = (G.karma ?? 0) - (ko ? 3 : 1);
+    ctx.event('violence', { how, ko });
+    const who = Object.entries(engine.level?.npcs || {}).find(([, v]) => v === p)?.[0];
+    if (who && G.rel[who]) G.rel[who].trust -= 2;
+    ctx.toast(ko ? '상대가 바닥에 쓰러졌다.' : OUCH[Math.floor(Math.random() * OUCH.length)], 'site', 2600);
+  },
+  onHurt: hurt,
+  onSound: (n) => audio.hit(n),
+  onNear(label) { itemLabel = label; if (!engine.nearest) hud.prompt(label); },
+});
+engine.onNearest((p) => { if (!p && itemLabel) hud.prompt(itemLabel); });
+engine.onLand(({ drop }) => {
+  audio.hit('land');
+  if (!G || drop < 3.2) return;
+  if (drop > 5.5 && !hasLeg()) {
+    (G.injury ||= []).push('leg'); applySettings(); ctx.event('injury', { part: 'leg', drop: Math.round(drop) });
+    ctx.toast('착지하는 순간 다리가 꺾였다. 뼈가 부러진 것 같다 — 이제 달릴 수 없다.', 'self', 6500);
+  }
+  hurt(drop > 10 ? 200 : Math.round((drop - 3) * 15), 'fall');
+});
+{ const goto = ctx.goto; ctx.goto = (...a) => { actions.drop(); return goto(...a); }; }
+
 // Global keys while roaming. Menus open only during free roam, so no scripted step runs behind them.
 let flashOn = false, flashT = 0;
 engine.onKey(async ({ code }) => {
@@ -164,6 +198,7 @@ function resetTransient() {
   ctx.speedOverride = null; engine.player.carrying = null;
   flashOn = false; engine.player.setFlashlight(false);
   ctx.setPlayer('jeongmin'); hud.setCinematic(false); engine.setControls(true);
+  actions.drop(); ctx.deathCause = null; applySettings();
 }
 function resetRun(snap) {
   for (const k of ['lightSource', 'seoyeonAsk', 'trail', 'snap']) delete ctx[k];
@@ -185,7 +220,8 @@ function nearestNode() {
 
 // ---- controls card (start of a new game, and H while roaming) ----
 const KEYS = [['W A S D · 방향키', '이동'], ['마우스', '둘러보기 — 화면을 한 번 클릭하면 마우스만 움직여도 시점이 돕니다 (Esc로 커서 되찾기)'],
-  ['Shift', '달리기 (기력이 줄어듭니다. 가방이 무거우면 더 빨리 지칩니다)'], ['Space', '점프'], ['E · Enter', '살피기 · 대화 · 사용'],
+  ['Shift', '달리기 (기력이 줄어듭니다. 가방이 무거우면 더 빨리 지칩니다)'], ['Space', '점프 · 낮은 담/차/난간 앞에서 누르면 넘거나 올라감'],
+  ['클릭 · Q', '주먹 (손에 든 게 있으면 던지기)'], ['G', '바닥의 돌·병 줍기 / 던지기'], ['E · Enter', '살피기 · 대화 · 사용'],
   ['F', '손전등 켜기/끄기 (정전 후)'], ['V', '1인칭 / 3인칭 전환'], ['P', '휴대폰 (문자 · FM 라디오)'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['H', '이 조작법 다시 보기'], ['Esc', '일시정지 · 설정']];
 const controlsCard = () => card({ kind: 'info', title: '조작법', meta: '언제든 H 키로 다시 볼 수 있습니다',
   body: KEYS.map(([k, t]) => `${k} — ${t}`), actions: [{ id: 'ok', label: '확인', primary: true }] });

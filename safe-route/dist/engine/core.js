@@ -56,9 +56,14 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   const controls = createControls({ camera, canvas, scene, getLevel: () => level, reduceMotion: RM, quality });
 
   // ---- people + fx (dynamic, optional) ----
-  const people = { createPerson: capsulePerson, createCrowd: emptyCrowd, fallback: true };
+  const people = { createPerson: capsulePerson, createCrowd: emptyCrowd, fallback: true }, persons = new Set();
   const peopleReady = Promise.allSettled([import('./people.js'), import('./crowd.js')]).then(([p, c]) => {
-    if (p.status === 'fulfilled' && typeof p.value.createPerson === 'function') { Object.assign(people, p.value); people.fallback = false; }
+    // Every person made from here on is known to engine/actions.js (punches, thrown things); the player models too,
+    // which actions skips.
+    if (p.status === 'fulfilled' && typeof p.value.createPerson === 'function') {
+      Object.assign(people, p.value); people.fallback = false;
+      const make = people.createPerson; people.createPerson = (o) => { const m = make(o); if (m?.group) persons.add(m); return m; };
+    }
     else console.error('[engine] engine/people.js unavailable; using capsule people', p.reason ?? 'no createPerson export');
     if (c.status === 'fulfilled' && typeof c.value.createCrowd === 'function') people.createCrowd = c.value.createCrowd;
     else console.error('[engine] engine/crowd.js unavailable; crowds stay empty', c.reason ?? 'no createCrowd export');
@@ -240,7 +245,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   renderer.setAnimationLoop(frame);
 
   return {
-    THREE, renderer, scene, camera, kit, people, ready,
+    THREE, renderer, scene, camera, kit, people, persons, ready,
     get fx() { return fx; },
     get quality() { return quality; },
     get level() { return level; },
@@ -263,6 +268,8 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     shake: (a, s) => controls.shake(a, s),
     setSensitivity: (v) => controls.setSensitivity(v),
     onBlocked: (fn) => controls.onBlocked(fn),
+    onLand: (fn) => controls.onLand(fn),
+    act: (name, s) => controls.act(name, s),
     get pointerLocked() { return controls.locked; },
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
     setView: (v) => controls.setView(v),
