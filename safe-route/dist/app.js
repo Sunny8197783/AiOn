@@ -3,6 +3,7 @@ import { createEngine } from './engine/core.js';
 import { createActions } from './engine/actions.js';
 import { shop3d, bag3d } from './ui/grab3d.js';
 import { createDanger } from './story/danger.js';
+import { createEcho } from './story/echo.js';
 import { createHud } from './ui/hud.js';
 import { talk, card, timeSkip } from './ui/dialog.js';
 import { landing, pause, settings as settingsMenu, about } from './ui/menu.js';
@@ -172,6 +173,7 @@ engine.onLand(({ drop }) => {
   hurt(drop > 10 ? 200 : Math.round((drop - 3) * 15), 'fall');
 });
 const danger = createDanger({ ctx, actions, hurt });
+const echo = createEcho({ engine, ctx, store });
 // X: the first-aid kit (in the bag, or at home) patches you up; a broken leg stays broken.
 function firstAid() {
   const e = G.items.first_aid, atHome = engine.level?.id === 'apartment';
@@ -195,6 +197,7 @@ engine.onKey(async ({ code }) => {
   else if (code === 'KeyI') await ctx.modal(() => inventory({ home: G.items, bag: G.items, catalog: CATALOG, load: bagLoad(G), limit: BAG_LIMIT }));
   else if (code === 'KeyH') await ctx.modal(() => controlsCard());
   else if (code === 'KeyX') firstAid();
+  else if (code === 'KeyB') await echo.chalk();
   else if (code === 'KeyP') await ctx.modal(() => openPhone());
   else if (code === 'KeyM') await ctx.modal(() => routemap({ mode: 'view', from: nearestNode(), to: 'shelter', options: [], closures: knownClosures(), gates: {}, known: { closures: [] }, playerAt: engine.level?.id === 'town' ? { x: engine.player.x, z: engine.player.z } : null }));
   else if (code === 'Escape') await openPause();
@@ -232,7 +235,8 @@ function nearestNode() {
 // ---- controls card (start of a new game, and H while roaming) ----
 const KEYS = [['W A S D · 방향키', '이동'], ['마우스', '둘러보기 — 화면을 한 번 클릭하면 마우스만 움직여도 시점이 돕니다 (Esc로 커서 되찾기)'],
   ['Shift', '달리기 (기력이 줄어듭니다. 가방이 무거우면 더 빨리 지칩니다)'], ['Space', '점프 · 낮은 담/차/난간 앞에서 누르면 넘거나 올라감'],
-  ['클릭 · Q', '주먹 (손에 든 게 있으면 던지기)'], ['G', '바닥의 돌·병 줍기 / 던지기'], ['C', '엎드리기/웅크리기 (폭발·파편 피해가 줄어듭니다. Space로 일어서기)'], ['X', '구급함 쓰기'], ['E · Enter', '살피기 · 대화 · 사용'],
+  ['클릭 · Q', '주먹 (손에 든 게 있으면 던지기)'], ['G', '바닥의 돌·병 줍기 / 던지기'], ['C', '엎드리기/웅크리기 (폭발·파편 피해가 줄어듭니다. Space로 일어서기)'], ['X', '구급함 쓰기'],
+  ['B', '분필로 바닥에 적기 — 다음 회차의 내가 보게 됩니다'], ['E · Enter', '살피기 · 대화 · 사용'],
   ['F', '손전등 켜기/끄기 (정전 후)'], ['V', '1인칭 / 3인칭 전환'], ['P', '휴대폰 (문자 · FM 라디오)'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['H', '이 조작법 다시 보기'], ['Esc', '일시정지 · 설정']];
 const controlsCard = () => card({ kind: 'info', title: '조작법', meta: '언제든 H 키로 다시 볼 수 있습니다',
   body: KEYS.map(([k, t]) => `${k} — ${t}`), actions: [{ id: 'ok', label: '확인', primary: true }] });
@@ -349,6 +353,7 @@ async function run(start, resumeKey) {
       try { const r = await fn(ctx); if (id === 'ending') return r; break; }
       catch (err) {
         if (!(err instanceof Fail)) throw err;
+        if (err.type === 'dead') echo.death(err.detail?.why);
         engine.setControls(false); audio.siren(false); audio.fire(0); hud.setCinematic(false);
         const d = failDebrief(G, err.type, err.detail);
         const pick = await failCard({ ...d, sources: (d.sourceIds || []).map(s => SOURCES.find(x => x.id === s)).filter(Boolean) });
@@ -378,6 +383,7 @@ async function boot() {
     if (G?.checkpoint) { const key = G.checkpoint.key; restore(G); start = Number.isInteger(saved.index) && saved.index >= 0 && saved.index < CHAPTERS.length ? saved.index : 0; resume = CHAPTERS[start][0] === key ? null : key; }
     else G = createGame({ seed: (crypto.getRandomValues(new Uint32Array(1))[0]) >>> 1 });
     const fresh = !G.checkpoint;
+    if (fresh) echo.begin(); else echo.resume();
     resetRun(G.checkpoint && saved.snap);
     engine.setView(settings.view);
     if (fresh) { engine.setControls(false); await intro(); engine.setControls(true); }

@@ -13,7 +13,7 @@ const TP = { dist: 3.4, height: 1.7, shoulder: 0.45 };
 const FOV = 70, FOV_RUN = 4, D2R = Math.PI / 180, LOOK = 0.0042, LOCK_LOOK = 0.0024;
 const JUMP_V = 3.6, GRAVITY = 12, STAIR_SLOPE = 0.2;
 const FLASH = 6; // flashlight candela; dimmed further when the beam hits something close
-const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH', 'KeyG', 'KeyQ', 'KeyC', 'KeyX']);
+const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH', 'KeyG', 'KeyQ', 'KeyC', 'KeyX', 'KeyB']);
 const MOVE = { KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
