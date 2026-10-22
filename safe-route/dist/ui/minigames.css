@@ -63,9 +63,6 @@
 .mg-fill-anim { animation: mg-fill linear forwards; }
 @keyframes mg-fill { from { width: 0; } to { width: 100%; } }
 
-/* shop */
-.mg-info { display: grid; gap: 6px; margin-bottom: 12px; padding: 10px 12px; border-radius: 10px; background: var(--mg-card); }
-.mg-info li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .mg-sum { display: flex; gap: 22px; flex-wrap: wrap; flex: 1; }
 .mg-sum > div { display: grid; gap: 3px; min-width: 200px; }
 
