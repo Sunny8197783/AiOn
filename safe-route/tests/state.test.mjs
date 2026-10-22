@@ -204,6 +204,8 @@ test('speedMul stays within 0.6..1 and falls with fatigue and load', () => {
   assert.ok(tired < fresh && tired >= 0.6);
   buy(G, { water_2l: 20 }, martPrices);
   pack(G, 'water_2l', 22);
+  assert.equal(speedMul(G), tired, 'a bag left by the door slows nobody');
+  G.know.bagOn = true;
   assert.equal(speedMul(G), 0.6);
 });
 

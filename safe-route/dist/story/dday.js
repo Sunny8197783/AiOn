@@ -12,6 +12,25 @@ import { seoyeonRelay } from './seoyeon.js';
 
 const ALERT = 20 * 60 + 5, LATE = 20 * 60 + 30;
 
+// A few seconds after 정민 steps outside, a missile hits a villa south of the park (no story place):
+// the blast, the shake, then fire and a smoke column that stay for the rest of the war.
+function strike(ctx) {
+  const G = ctx.G;
+  G.know.strikeSeen = true;
+  ctx.audio.boom(0.55);
+  ctx.engine.shake(0.3, 1.6);
+  ctx.setLevelState('town', 'strike', 'hit');
+  recordEvent(G, 'strike', { minute: G.minute });
+  ctx.stat('tension', 18);
+  ctx.caption('쾅— 땅이 울렸다. 공원 너머 남쪽 빌라 한 동이 무너져 내리고, 불길과 검은 연기가 치솟는다.', null, 5200);
+  ctx.toast('멈추지 말고 대피소로. 무너진 건물 쪽으로 가지 않는다.', 'self', 5200);
+}
+// Later, more blasts far away: a dull boom and a slight tremor every half minute or so.
+function farBlasts(ctx) {
+  let t = 18 + Math.random() * 20;
+  return (dt) => { if ((t -= dt) > 0) return; t = 25 + Math.random() * 35; ctx.audio.boom(1); ctx.engine.shake(0.05, 0.8); };
+}
+
 export async function dday(ctx) {
   const G = ctx.G;
   G.chapter = 'dday';
@@ -120,11 +139,13 @@ async function alert(ctx) {
 
   // What is still open depends on this run's closures; nobody names a road that is closed tonight.
   const detour = [['danji', '단지길'], ['sijang', '시장길']].filter(([id]) => !closures.includes(id)).map(([, n]) => n).join('이나 ');
-  let left = false, inStairs = false;
+  let left = false, inStairs = false, outT = 0;
+  const blasts = farBlasts(ctx);
   const trail = ctx.trail = [];
   const steps = () => [{ text: '배낭 챙기기', done: !!G.know.bagOn || left }, { text: '계단으로 1층까지', done: inStairs }, { text: '가까운 대피소로', done: false }];
   const show = () => ctx.objective('대피하기', '지하시설이나 유리창 없는 건물 안으로. 엘리베이터는 쓰지 않습니다.', steps());
   show();
+  if (!G.know.idTaken) ctx.toast('지갑과 신분증은 거실 탁자 위에 있다. 나가기 전에 챙기자. (E)', 'self', 5000);
 
   const takeBag = async () => {
     if (G.know.bagOn) return;
@@ -145,9 +166,11 @@ async function alert(ctx) {
 
   await ctx.roam({
     rate: 3, deadline: { day: 0, minute: LATE, type: 'late' },
-    tick: () => {
+    tick: (dt) => {
       const p = ctx.engine.player;
       if (ctx.engine.level?.id === 'town') { const last = trail.at(-1); if (!last || Math.hypot(last.x - p.x, last.z - p.z) > 1.5) trail.push({ x: p.x, z: p.z }); }
+      if (ctx.engine.level?.id === 'town' && !G.know.strikeSeen && (outT += dt) > 4) strike(ctx);
+      else if (G.know.strikeSeen) blasts(dt);
       if (!inStairs && ctx.engine.level?.id === 'apartment' && p.y < 1 && left) { inStairs = true; show(); if (ctx.lightSource === 'flashlight') ctx.payoff('flashlight', '손전등으로 어두운 계단을 내려갔다'); }
     },
     on: {
@@ -216,7 +239,8 @@ async function shelter(ctx) {
   ctx.engine.setEnv('underground', { seconds: 0.8 });
   let signed = false;
   ctx.objective('대피소 안에서', '접수대에서 명부를 쓰고 자리를 잡습니다.', [{ text: '명부 쓰기 (접수대)', done: false }, { text: '자리 잡기', done: false }]);
-  await ctx.roam({ rate: 0, doors: false, on: {
+  const thuds = farBlasts(ctx);
+  await ctx.roam({ rate: 0, doors: false, tick: thuds, on: {
     shelterExit: async () => { ctx.toast('경보가 해제될 때까지 대피소 안에 머뭅니다.', 'site'); },
     reception: async () => {
       if (signed) return void ctx.toast('명부를 썼다.');

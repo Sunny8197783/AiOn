@@ -48,7 +48,7 @@ export const BAG_GOALS = {
     { id: 'food', label: '조리 없이 먹을 음식 3개 이상', items: FOOD, min: 3, facts: ['bag_days', 'bag_nocook'] },
     LIGHT, INFO, MEDS,
     { id: 'contacts', label: '비상연락처 카드', items: ['contact_card'], facts: ['contact_card', 'contact_fields'] },
-    { id: 'docs', label: '신분증·중요 서류 사본', items: ['doc_copies'], facts: ['bag_copies', 'docs_take'] },
+    { id: 'docs', label: '신분증·중요 서류 사본', items: ['id_card', 'doc_copies'], facts: ['bag_copies', 'docs_take'] },
     { id: 'cash', label: '현금', items: ['cash'], facts: ['bag_cash'] },
     WARMTH,
     { id: 'hygiene', label: '위생용품', items: ['hygiene_kit', 'wipes', 'tissue', 'masks'], facts: ['bag_days'] },

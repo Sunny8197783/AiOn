@@ -116,7 +116,7 @@
 .mg-dial { border-radius: 8px; cursor: ew-resize; touch-action: none; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, .5); }
 .mg-dial[aria-disabled="true"] { cursor: not-allowed; }
 .mg-knobrow { display: flex; align-items: center; justify-content: flex-end; gap: 10px; color: #8d9296; font-size: .72em; letter-spacing: .2em; }
-.mg-knob { width: 46px; height: 46px; border-radius: 50%; background: conic-gradient(from 0deg, #55595d, #2d3033, #55595d, #2d3033, #55595d); box-shadow: 0 3px 6px rgba(0, 0, 0, .5), inset 0 0 0 5px #3a3d40; position: relative; transition: transform .12s; }
+.mg-knob { width: 46px; height: 46px; border-radius: 50%; background: conic-gradient(from 0deg, #55595d, #2d3033, #55595d, #2d3033, #55595d); box-shadow: 0 3px 6px rgba(0, 0, 0, .5), inset 0 0 0 5px #3a3d40; position: relative; }
 .mg-knob::after { content: ''; position: absolute; left: 50%; top: 5px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px; background: #f2b33d; }
 .mg-radio-status { margin-top: 10px !important; color: #ffd58a; display: flex; gap: 10px; align-items: center; }
 .mg-radio-status .mg-bar { width: 140px; }

@@ -1,5 +1,6 @@
 // Extinguisher encounter: decide first (끈다 / 대피하며 알린다), then work the extinguisher by pressing the
-// steps in order — press-and-hold for 손잡이, ←/→ strokes for 쓸듯이 — over a live canvas of the fire.
+// steps in order — press-and-hold for 손잡이, then sweep the nozzle by moving the mouse left and right over the
+// fire (←/→ strokes from the keyboard) — over a live canvas of the fire.
 // Retreat is always available. Resolves { sequence, result } (result from game/drills.js evalExtinguisher).
 import { el, put, modal, header, ladderHelp, reduced, announce } from './mini-dom.js';
 import { EXT_STEPS, EXT_CHOICES, evalExtinguisher } from '../game/drills.js';
@@ -31,7 +32,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
   const m = modal({ className: 'mg-ext', label: '소화기', onKey });
 
   // --- layout ---
-  const cv = el('canvas', { width: 640, height: 360, class: 'mg-ext-canvas', role: 'img' });
+  const cv = el('canvas', { width: 640, height: 360, class: 'mg-ext-canvas', role: 'img', style: 'touch-action:none' });
   const feedback = el('p', { class: 'mg-feedback', 'aria-live': 'polite' });
   const dangerBar = el('span', { class: 'mg-bar-fill' }), dangerText = el('b');
   const danger = el('div', { class: 'mg-meter mg-danger', hidden: practice }, el('small', {}, el('span', { 'aria-hidden': 'true' }, '▲ '), large ? '버틸 수 있는 시간' : '불이 번지기까지'), dangerText, el('span', { class: 'mg-bar', 'aria-hidden': 'true' }, dangerBar));
@@ -46,7 +47,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
     el('div', { class: 'mg-ext-grid' },
       el('div', { class: 'mg-ext-stage' }, cv, danger),
       el('div', { class: 'mg-ext-side' }, helpBox, actions, feedback, retreatBtn)),
-    el('p', { class: 'mg-keys' }, 'Tab으로 고르기 · Enter/Space 누르기 · 손잡이는 길게 누르기 · 쓸 때는 ←/→ 번갈아 · Esc 물러나기'));
+    el('p', { class: 'mg-keys' }, 'Tab으로 고르기 · Enter/Space 누르기 · 손잡이는 길게 누르기 · 쓸 때는 불 위에서 마우스를 좌우로 (←/→도 됨) · Esc 물러나기'));
   m.root.setAttribute('aria-labelledby', 'mg-ext-title');
 
   // --- decision ---
@@ -72,7 +73,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
     if (!practice) retreatBtn.replaceChildren(el('span', { 'aria-hidden': 'true' }, '⤺ '), '물러나 알린다 (계단 · 119)');
     actions.replaceChildren(el('p', { class: 'mg-q' }, '순서대로 누르세요'), el('div', { class: 'mg-steps' }, order.map((s) => {
       const b = el('button', { type: 'button', class: 'mg-btn mg-step-btn', 'data-step': s.id }, el('span', { class: 'mg-check', 'aria-hidden': 'true' }, '○'), el('span', {}, s.label),
-        s.id === 'squeeze' ? el('small', { class: 'mg-holdtip' }, '길게 누르기') : s.id === 'sweep' ? el('small', { class: 'mg-holdtip' }, '←/→ 번갈아') : null);
+        s.id === 'squeeze' ? el('small', { class: 'mg-holdtip' }, '길게 누르기') : s.id === 'sweep' ? el('small', { class: 'mg-holdtip' }, '마우스로 좌우로 쓸기') : null);
       btns.set(s.id, b);
       if (s.id === 'squeeze') {
         b.addEventListener('pointerdown', (e) => { b.setPointerCapture?.(e.pointerId); startHold(); });
@@ -114,7 +115,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
       return say('"불이야!" 소리에 이웃들이 문을 열고 내다본다.');
     }
     if (S.done.has(id) && id !== 'sweep') return say('이미 했다.');
-    if (id === 'sweep' && S.done.has('squeeze')) return stroke(S.lastDir === 1 ? -1 : 1);
+    if (id === 'sweep' && S.done.has('squeeze')) return say('불 그림 위에서 마우스를 좌우로 크게 움직여 쓸어 주세요. (키보드: ←/→)');
     if (id !== nextOp()) return mistake(MISTAKE[id]?.[nextOp()] || '순서가 맞지 않는다.');
     S.done.add(id); seq.push(id);
     if (id === 'pin') { S.pinOut = true; say('안전핀을 뽑았다.'); }
@@ -133,7 +134,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
   }
   function squeezed() {
     S.holding = false; S.done.add('squeeze'); seq.push('squeeze'); S.spraying = true;
-    say('손잡이를 움켜쥐자 하얀 분말이 뿜어져 나온다. ←/→로 쓸듯이!');
+    say('손잡이를 움켜쥐자 하얀 분말이 뿜어져 나온다. 불 위에서 마우스를 좌우로 움직여 쓸듯이!');
     refreshSteps(); btns.get('sweep')?.focus();
   }
   function stroke(dir) {
@@ -144,6 +145,23 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
     if (!alt && !large) say('한쪽으로만 뿌리고 있다. 좌우로 쓸듯이.');
     if (!large && S.fireLv <= 0.02) { S.fireLv = 0; seq.push('sweep'); S.done.add('sweep'); end('out'); }
   }
+  // Mouse sweep: the nozzle follows the pointer across the canvas; every swing of ~1/6 of the width that
+  // turns back counts as one stroke (alternating strokes are what put the fire out).
+  let swing = 0, swingDir = 0, lastX = null;
+  cv.addEventListener('pointermove', (e) => {
+    if (!S.done.has('squeeze') || S.ended) { lastX = null; return; }
+    const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+    S.sweepDir = Math.max(-1, Math.min(1, (x - 0.76) * 4));
+    if (lastX !== null) {
+      const dx = x - lastX, dir = Math.sign(dx);
+      if (dir && dir !== swingDir) { swingDir = dir; swing = 0; }
+      swing += Math.abs(dx);
+      if (swing > 0.16) { swing = -10; stroke(swingDir); } // one stroke per swing until it turns back
+    }
+    lastX = x;
+  });
+  cv.addEventListener('pointerleave', () => { lastX = null; });
+
   function mistake(text) {
     S.danger = Math.min(1, S.danger + (practice ? 0 : 0.12)); S.shake = rm ? 0 : 0.35;
     say(text);

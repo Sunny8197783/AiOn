@@ -308,7 +308,14 @@ export function createKit(renderer, { quality = 'high' } = {}) {
   // ---- Light groups: 'street' | 'windows' | 'shops' | 'indoor' | 'signs' | 'emergency' | any name ----
   // Lights are never hidden, only dimmed to 0: a changing light count recompiles every shader.
   const groups = new Map(), itemOf = new WeakMap();
-  const put = (G, it) => { const v = G.on && !it.off ? it.base * G.scale : 0; if (it.isLight) it.obj.intensity = v; else it.obj.emissiveIntensity = v; };
+  // userData.unlitColor: a backlit panel (vending machine) also darkens its colour when its power is off.
+  const put = (G, it) => {
+    const v = G.on && !it.off ? it.base * G.scale : 0;
+    if (it.isLight) { it.obj.intensity = v; return; }
+    it.obj.emissiveIntensity = v;
+    const dim = it.obj.userData?.unlitColor;
+    if (dim !== undefined) it.obj.color.setScalar(dim + (1 - dim) * Math.min(1, v / (it.base || 1)));
+  };
   function lit(group, obj, on) {
     if (!groups.has(group)) groups.set(group, { items: [], on: true, scale: 1 });
     const G = groups.get(group);

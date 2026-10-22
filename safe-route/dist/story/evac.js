@@ -162,8 +162,12 @@ async function depart(ctx) {
   recordEvent(G, 'arrived_assembly', { minute: G.minute });
   if (G.know.routeChecked) ctx.payoff('route', '동네 길을 미리 알아 둔 덕분에 통제 구간을 돌아 집결지에 닿았다');
   const card = (G.items.contact_card?.bag ?? 0) + (G.items.doc_copies?.bag ?? 0) > 0;
-  await ctx.say('집결지 접수', ['이름, 연락처, 복용약을 적어 주세요. 신분증 있으세요?', card ? '(가방 앞주머니의 연락처 카드와 서류 사본을 보여 주었다.)' : '(기억나는 대로 적었다. 신분증 원본만 있었다.)'], null, '임시 집결지');
-  if (card) ctx.payoff('docs', '연락처 카드와 서류 사본으로 접수를 바로 마쳤다');
+  const id = (G.items.id_card?.bag ?? 0) + (G.items.id_card?.home ?? 0) > 0; // picked up from the wallet (story/world.js)
+  await ctx.say('집결지 접수', ['이름, 연락처, 복용약을 적어 주세요. 신분증 있으세요?',
+    id ? '(지갑에서 신분증을 꺼내 보여 주었다.)' : '(신분증을 집에 두고 나왔다. 이름과 주소, 생년월일로 본인 확인을 하느라 한참 걸렸다.)',
+    card ? '(가방 앞주머니의 연락처 카드와 서류 사본도 함께 건넸다.)' : '(연락처는 기억나는 대로 적었다.)'], null, '임시 집결지');
+  if (!id) { ctx.pass(15); ctx.toast(fact('docs_take').text, 'official', 5000); }
+  if (card || id) ctx.payoff('docs', id ? '챙겨 나온 신분증으로 접수를 바로 마쳤다' : '연락처 카드와 서류 사본으로 접수를 바로 마쳤다');
   await ctx.caption('버스 창밖으로 연무동이 멀어진다.', null, 3500);
 }
 

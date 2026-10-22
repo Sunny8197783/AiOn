@@ -263,7 +263,9 @@ export function buildProps(kit, { avoid = [] } = {}) {
       g.fillStyle = '#ffffff'; g.font = `800 26px sans-serif`; g.textAlign = 'center'; g.fillText('시원한 음료', w / 2, 30);
       g.fillStyle = '#222'; g.fillRect(w * 0.6, h * 0.72, w * 0.3, h * 0.12); g.fillStyle = '#111'; g.fillRect(30, h * 0.88, w - 60, h * 0.07);
     }));
-    return kit.lit('shops', new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.35 }), 0.9);
+    const m = new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.35 });
+    m.userData.unlitColor = 0.22; // unpowered: the backlit front goes dark, not just unlit
+    return kit.lit('shops', m, 0.9);
   });
   for (const [x, z, ry] of [[-60.6, 37.6, -Math.PI / 2], [43.4, 15.2, -Math.PI / 2], [7.2, 11.3, 0]]) {
     stat.add(kit.box(0.95, 1.83, 0.72, kit.mat('paint:#b82028', { roughness: 0.4 }), { x, y: Y, z, ry }));

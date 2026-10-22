@@ -81,8 +81,12 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
 
   // ---- environment presets (tweened) ----
   let envName = null, envFrom = null, envTo = null, envK = 1, envDur = 0, rainFx = null, beam = 1;
-  let litFrom = {}, litTo = {};
+  let litFrom = {}, litTo = {}, power = true;
   const litNow = {};
+  // Grid power off (blackout): street lamps, lit windows, shop fronts and signs stay dark whatever the sky
+  // preset says; battery-backed 'emergency' and 'indoor' (interiors pick their own preset) are untouched.
+  const GRID = new Set(['street', 'windows', 'shops', 'signs']);
+  const litTarget = (preset) => Object.fromEntries(Object.entries(PRESETS[preset].lit).map(([g, v]) => [g, !power && GRID.has(g) ? 0 : v]));
   function stepEnv(dt) {
     envK = envDur > 0 ? Math.min(1, envK + dt / envDur) : 1;
     const e = ease(envK), S = mixState(envFrom, envTo, e);
@@ -102,7 +106,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     envTo = envState(THREE, preset, rain);
     envFrom = sky.state ? { ...sky.state } : envTo;
     envDur = Math.max(0, Number(seconds) || 0); envK = 0;
-    litFrom = { ...litNow }; litTo = { ...litNow, ...PRESETS[preset].lit };
+    litFrom = { ...litNow }; litTo = { ...litNow, ...litTarget(preset) };
     envName = preset;
     try { scene.environment = sky.environment(preset, rain); } catch (err) { console.error('[engine] PMREM environment failed', err); }
     post.setGrade(gradeFor(preset, rain), envDur);
@@ -225,7 +229,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     const dt = Math.min(raw, 0.1); t += dt;
     try { controls.update(dt); } catch (err) { logOnce('player update failed', err); }
     if (envK < 1) stepEnv(dt);
-    if (level?.update) { try { level.update(dt, t, { camera, player: controls.player, env: envName }); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
+    if (level?.update) { try { level.update(dt, t, { camera, player: controls.player, env: envName, power }); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
     sky.update(dt, camera, controls.player.position, RM);
     if (rainFx) { try { rainFx.update(dt, camera); } catch (err) { logOnce('rain update failed', err); } }
     for (const fn of [...frameFns]) { try { fn(dt, t); } catch (err) { logOnce('onFrame listener failed', err); } }
@@ -247,6 +251,19 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     get env() { return envName; },
     get reduceMotion() { return RM; },
     enter, setEnv, setPlayerPreset,
+    get power() { return power; },
+    // Grid power for the current scene; re-applies the lit groups of the current preset at once.
+    setPower(on) {
+      power = !!on;
+      if (!envName) return;
+      litTo = { ...litTo, ...litTarget(envName) };
+      if (envK >= 1) { for (const [g, v] of Object.entries(litTo)) { litNow[g] = v; kit.setLit(g, v > 0.0005, v); } }
+    },
+    setProfile: (p) => controls.setProfile(p),
+    shake: (a, s) => controls.shake(a, s),
+    setSensitivity: (v) => controls.setSensitivity(v),
+    onBlocked: (fn) => controls.onBlocked(fn),
+    get pointerLocked() { return controls.locked; },
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
     setView: (v) => controls.setView(v),
     setControls: (on) => controls.setEnabled(on),

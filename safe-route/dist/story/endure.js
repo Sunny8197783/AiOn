@@ -29,6 +29,7 @@ export async function endure(ctx) {
   ctx.power = false; ctx.outdoorEnv = 'day'; ctx.indoorEnv = 'interior';
   ctx.setLevelState('apartment', 'power', 'off');
   ctx.setLevelState('store', 'power', 'off');
+  ctx.setLevelState('store', 'clerk', 'out'); // 이수아 left town the morning after the alert
   if (ctx.resume !== 'fire') {
     await ctx.skip('D-day 금 밤', 'D+1 토 07:00', '전기는 밤새 돌아오지 않았다. 아침에는 수도꼭지에서도 물이 나오지 않았다.');
     G.day = 1; G.minute = 7 * 60;
@@ -154,6 +155,7 @@ async function evening(ctx) {
   const G = ctx.G;
   G.minute = 17 * 60 + 30;
   ctx.outdoorEnv = 'dusk';
+  ctx.setLevelState('town', 'waterPoint', 'off'); // closed at 17:00: tank, table and E all go
   ctx.setLevelState('apartment', 'windowView', 'dusk');
   ctx.refresh();
   let visited = false;
@@ -163,9 +165,9 @@ async function evening(ctx) {
     homeDoor: async () => { await ctx.goto('apartment', 'homeEntry'); },
     homeStock: async () => { drink(ctx); },
     storeCounter: async () => {
-      if (visited) return void ctx.toast('"조심히 들어가세요."', 'neighbor');
+      if (visited) return void ctx.toast('계산대에는 아무도 없다.');
       visited = true;
-      await clerkEvening(ctx);
+      await storeEvening(ctx);
       ctx.objective('저녁 · 할 수 있는 일', '집으로 돌아가 침대에서 하루를 마칩니다.', [{ text: '바로편의점 (선택)', done: true }, { text: '침대에서 쉬기', done: false }]);
     },
     homeBed: async () => 'sleep',
@@ -174,12 +176,15 @@ async function evening(ctx) {
   G.day = 2; G.minute = 21 * 60;
 }
 
-async function clerkEvening(ctx) {
+// Nobody is behind the counter: 이수아 has gone to her family and left a note and a cash box.
+async function storeEvening(ctx) {
   const G = ctx.G;
-  await ctx.ui.talk({ speaker: '이수아', role: '바로편의점 · 비상등만 켜져 있다', lines: ['정전이라 카드 단말기가 안 돼요. 현금만 받아요.'] });
+  await ctx.ui.card({ kind: 'notice', title: '계산대 위 쪽지', meta: '바로편의점 · 비상등만 켜져 있다',
+    body: ['정전으로 영업을 멈춥니다. 본가에 다녀올게요. — 이수아', '급하신 분은 남은 건전지·생수를 가져가시고, 현금은 계산대 옆 통에 넣어 주세요. 카드 단말기는 안 됩니다.'],
+    actions: [{ id: 'ok', label: '둘러본다', primary: true }] });
   const cash = (G.items.cash?.home ?? 0) + (G.items.cash?.bag ?? 0);
   if (cash > 0) {
-    const pick = await ctx.ui.talk({ speaker: '이수아', role: '현금 결제', lines: ['건전지랑 작은 생수는 조금 남았어요.'], choices: [{ id: 'buy', label: '건전지 한 팩과 생수 두 병 (현금)' }, { id: 'no', label: '괜찮아요' }] });
+    const pick = await ctx.ui.talk({ speaker: '계산대 옆 현금 통', role: '현금만', lines: ['선반에 건전지 한 팩과 작은 생수 몇 병이 남아 있다.'], choices: [{ id: 'buy', label: '건전지 한 팩과 생수 두 병을 챙기고 현금을 넣는다' }, { id: 'no', label: '그냥 둔다' }] });
     if (pick === 'buy') {
       consume(G, 'cash', 1, G.items.cash.home > 0 ? 'home' : 'bag');
       const cart = { batteries_aa: 1, water_500: 2 };
@@ -187,19 +192,18 @@ async function clerkEvening(ctx) {
       recordEvent(G, 'buy', { cart, total: STORE_ITEMS.batteries_aa + STORE_ITEMS.water_500 * 2, paid: 'cash' });
       ctx.payoff('cash', '카드가 안 되는 편의점에서 현금으로 건전지와 물을 샀다');
     }
-  } else await ctx.ui.talk({ speaker: '정민', role: '지갑', lines: ['현금이 없다. 카드뿐이다.'] });
-  const pick = await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['참, 손님들이 그러는데 생활문화센터 대피소가 폐쇄됐대요. SNS에 돌던데… 저도 확실한 건 모르겠어요.'],
+  } else await ctx.ui.talk({ speaker: '정민', role: '지갑', lines: ['현금이 없다. 카드뿐이다. 카드로는 아무것도 살 수 없다.'] });
+  const pick = await ctx.ui.talk({ speaker: '102동 주민', role: '바로편의점 앞', lines: ['여기 주인도 떠났나 봐요. 참, 그 얘기 들었어요? 생활문화센터 대피소가 폐쇄됐대요. SNS에 돌던데… 저도 확실한 건 모르겠어요.'],
     choices: [{ id: 'spread', label: '큰일이네요. 다른 이웃들한테도 알려야겠어요' }, { id: 'check', label: '어디서 나온 말인지 먼저 확인해 볼게요' }] });
   recordEvent(G, pick === 'check' ? 'rumor_checked' : 'rumor_spread', {});
   ctx.note('SNS: 생활문화센터 대피소 폐쇄? (출처 불명)', 'rumor', 'store');
   if (pick === 'check') {
     const heard = usable(G, 'radio') ? await radioScene(ctx, 'rumor') : null;
-    await ctx.ui.talk({ speaker: heard ? '재난방송' : '행정복지센터 게시판(수아의 휴대폰 사진)', role: '공식 안내', lines: ['생활문화센터 대피소는 정상 운영 중입니다. 확인되지 않은 정보에 주의해 주십시오. (가상 안내)'] });
+    await ctx.ui.talk({ speaker: heard ? '재난방송' : '행정복지센터 게시판(주민의 휴대폰 사진)', role: '공식 안내', lines: ['생활문화센터 대피소는 정상 운영 중입니다. 확인되지 않은 정보에 주의해 주십시오. (가상 안내)'] });
     ctx.note('생활문화센터 대피소 정상 운영 (공식 안내로 확인)', 'official');
   }
   await factCard(ctx, '소문을 만났을 때', ['info_rumor', 'shelter_rumor', 'info_harm']);
-  await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['저 내일 본가 내려가요. 가게는 당분간 닫을 것 같아요. 다들 조심하세요.'] });
-  recordEvent(G, 'help', { who: 'clerk', what: '현장 소식을 나눠 주고, 가게를 닫기 전 인사를 했다' });
+  recordEvent(G, 'help', { who: 'clerk', what: '가게를 닫으며 쪽지와 현금 통을 남겨 이웃이 필요한 물건을 가져가게 했다' });
   G.know.clerkLeft = true;
 }
 

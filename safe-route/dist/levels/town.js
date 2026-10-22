@@ -13,6 +13,7 @@ import { buildFronts } from './town-fronts.js';
 import { buildShelterSite, SHELTER_HOLES, FACADE_HOLE, GUIDE_SPOTS } from './town-shelter.js';
 import { buildEvents } from './town-events.js';
 import { buildTraffic } from './town-traffic.js';
+import { buildStrike } from './town-strike.js';
 import { createTownCrowd, CROWD_MODES } from './town-crowd.js';
 
 const GATE_VALUES = ['open', 'closed'];
@@ -56,7 +57,8 @@ export async function buildTown(kit, people, fx) {
   const walk = [...ground.walk, ...site.walk, ...fronts.walk, ...park.walk];
   const events = buildEvents(kit, people, walk);
   const traffic = buildTraffic(kit);
-  for (const m of [ground, buildings, park, props, fences, fronts, site, events, traffic]) group.add(m.group);
+  const strike = buildStrike(kit, fx, buildings.strike);
+  for (const m of [ground, buildings, park, props, fences, fronts, site, events, traffic, strike]) group.add(m.group);
   const solids = [buildings, site, fronts, park, props, fences, events, traffic].flatMap(m => m.solids);
   const hy = (x, z) => heightAt(walk, x, z);
 
@@ -64,6 +66,9 @@ export async function buildTown(kit, people, fx) {
   const R = { door: 1.8, shelter: 2.2, notice: 1.9, place: 2.4 };
   const points = Object.entries(PLACES).map(([id, p]) => ({ id, label: p.label, x: p.x, y: hy(p.x, p.z), z: p.z, r: id === 'assembly' ? 4.5 : R[p.kind] ?? 1.8, kind: p.kind, to: p.to }));
   points.push(...events.closurePoints);
+  // Street furniture the player can use (story/world.js): the vending machines (town-props) and the bus stop.
+  points.push(...[[-60.6, 37.6], [43.4, 15.2], [7.2, 11.3]].map(([x, z], i) => ({ id: `vending${i}`, label: '음료 자판기', x, y: hy(x, z), z, r: 1.5, kind: 'vending' })),
+    { id: 'busStop', label: '버스 정류장', x: 11.5, y: hy(11.5, -8.4), z: -8.4, r: 2.2, kind: 'busStop' });
   const spawn = (x, z, yaw) => ({ x, y: hy(x, z), z, yaw });
   const spawns = Object.fromEntries(Object.entries(SPAWNS).map(([k, s]) => [k, spawn(s.x, s.z, s.yaw)]));
   Object.assign(spawns, { // extra spawns (documented in the report)
@@ -90,7 +95,7 @@ export async function buildTown(kit, people, fx) {
   const crowd = createTownCrowd({ people, group, walk, quality });
 
   // ---- states ----
-  const state = { traffic: 'normal', crowd: 'none', closures: [], gates: { ...DEFAULT_GATES }, waterPoint: 'off', buses: 'off', notices: 'none', noticeText: {}, season: 'autumn' };
+  const state = { traffic: 'normal', crowd: 'none', closures: [], gates: { ...DEFAULT_GATES }, waterPoint: 'off', buses: 'off', notices: 'none', noticeText: {}, season: 'autumn', strike: 'none' };
   function drawNotices() {
     const set = NOTICES[state.notices] || NOTICES.none, g = state.gates;
     for (const [id, bd] of Object.entries(fronts.boards)) {
@@ -126,7 +131,12 @@ export async function buildTown(kit, people, fx) {
         state.gates = next; site.setGates(next); crowd.setContext({ gates: next }); drawNotices();
         break;
       }
-      case 'waterPoint': if (!['on', 'off'].includes(value)) { console.error(`[town] waterPoint "${value}" invalid; use on | off`); return; } state.waterPoint = value; events.setWater(value === 'on'); break;
+      case 'waterPoint': {
+        if (!['on', 'off'].includes(value)) { console.error(`[town] waterPoint "${value}" invalid; use on | off`); return; }
+        state.waterPoint = value; events.setWater(value === 'on');
+        const wp = points.find(p => p.id === 'water'); if (wp) wp.enabled = value === 'on'; // gone from view = gone from E
+        break;
+      }
       case 'buses': if (!['on', 'off'].includes(value)) { console.error(`[town] buses "${value}" invalid; use on | off`); return; } state.buses = value; events.setBuses(value === 'on'); break;
       case 'notices': if (!NOTICES[value]) { console.error(`[town] notices "${value}" invalid; use ${Object.keys(NOTICES).join(' | ')}`); return; } state.notices = value; drawNotices(); break;
       case 'noticeText': {
@@ -137,6 +147,7 @@ export async function buildTown(kit, people, fx) {
         drawNotices();
         break;
       }
+      case 'strike': if (!['none', 'hit'].includes(value)) { console.error(`[town] strike "${value}" invalid; use none | hit`); return; } state.strike = value; strike.setHit(value === 'hit'); break;
       case 'season': if (value !== 'autumn') console.warn(`[town] season "${value}" not built; the town is autumn only`); break;
       default: console.warn(`[town] unknown state "${key}"`); return;
     }
@@ -154,7 +165,10 @@ export async function buildTown(kit, people, fx) {
       reduced = !!(globalThis.document?.documentElement?.classList?.contains('reduce-motion') || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
     }
     WIND.uTime.value = t; WIND.uWind.value = reduced ? 0 : 1;
+    // No grid power after the blackout: dead signals, and nobody drives through town any more.
+    if (ctx.power === false && traffic.mode !== 'none') setState('traffic', 'none');
     traffic.update(dt, t, ctx);
+    strike.update(dt, t, ctx.camera, ['night', 'blackout', 'dusk'].includes(ctx.env));
     events.update(dt, t, { ...ctx, reduced });
     crowd.update(dt, ctx);
     nt += dt;
@@ -176,7 +190,7 @@ export async function buildTown(kit, people, fx) {
     states: {
       traffic: ['normal', 'light', 'none'], crowd: CROWD_MODES, closures: Object.keys(CLOSURES),
       gates: { east: ['open', 'closed'], stairs: ['open', 'closed'], ramp: ['open', 'closed'], access: ['closed', 'open'] },
-      waterPoint: ['off', 'on'], buses: ['off', 'on'], notices: Object.keys(NOTICES), noticeText: [], season: ['autumn'],
+      waterPoint: ['off', 'on'], buses: ['off', 'on'], strike: ['none', 'hit'], notices: Object.keys(NOTICES), noticeText: [], season: ['autumn'],
     },
     setState, update,
     get state() { return { ...state, gates: { ...state.gates }, closures: [...state.closures] }; },

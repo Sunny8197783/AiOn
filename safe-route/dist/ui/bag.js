@@ -11,7 +11,7 @@ const WARN = new Set(['fire', 'spoil']);
 // mentions has something in the bag. ponytail: keyword match; pass goal objects if wording drifts.
 const GOAL_WORDS = [
   [/물(?!통)/, ['water_500', 'water_2l']], [/음식|식량/, ['bars', 'canned', 'rice_instant']], [/빛|손전등/, ['flashlight']],
-  [/정보|라디오/, ['radio', 'powerbank']], [/약|구급/, ['meds', 'first_aid']], [/연락/, ['contact_card']], [/서류|사본/, ['doc_copies']],
+  [/정보|라디오/, ['radio', 'powerbank']], [/약|구급/, ['meds', 'first_aid']], [/연락/, ['contact_card']], [/신분증|서류|사본/, ['id_card', 'doc_copies']],
   [/현금/, ['cash']], [/보온|담요|여벌/, ['blanket', 'clothes', 'raincoat']], [/위생/, ['hygiene_kit', 'wipes', 'tissue', 'masks']], [/물통/, ['water_jug']],
 ];
 

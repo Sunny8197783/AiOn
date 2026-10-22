@@ -3,6 +3,7 @@ import { PLACES, SPAWNS } from '../game/townmap.js';
 import { recordEvent, note, advance, adjust, fmtClock, speedMul, bagLoad, load } from '../game/state.js';
 import { BAG_LIMIT } from '../game/items.js';
 import { cite } from '../game/facts.js';
+import { isCommon, common } from './world.js';
 
 export class Fail extends Error {
   constructor(type, detail = {}) { super(`fail:${type}`); this.type = type; this.detail = detail; }
@@ -25,9 +26,13 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     get G() { return getG(); },
     resume: null,          // checkpoint key a retry resumes from
     rate: 0,               // game seconds per real second while roaming (0 = clock stopped)
-    outdoorEnv: 'day', indoorEnv: 'interior', power: true,
+    outdoorEnv: 'day', indoorEnv: 'interior',
+    // Grid power. The shelter runs on its own generator, so the engine sees power there either way.
+    get power() { return power; },
+    set power(v) { power = !!v; engine.setPower(power || engine.level?.id === 'shelter'); },
     levelStates: {},       // levelId -> { key: value } re-applied on every enter
   };
+  let power = true;
   let acc = 0;
 
   engine.onNearest((p) => hud.prompt(p ? p.label : null));
@@ -44,7 +49,9 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     hud.setBattery(G.phone.battery);
     const load = bagLoad(G);
     hud.setBag(G.know.bagOn ? { weightKg: load.weightKg, limitKg: BAG_LIMIT.weightKg } : null);
-    engine.player.speedMul = ctx.speedOverride ?? speedMul(G);
+    // Experience mode (settings.profile) slows on top of the story's speed; a heavy bag on the back tires faster.
+    engine.player.speedMul = (ctx.speedOverride ?? speedMul(G)) * (ctx.profileSpeed ?? 1);
+    engine.player.staminaUse = 1 + (G.know.bagOn ? load.weightKg / BAG_LIMIT.weightKg : 0);
     hud.setTension(Math.max(0, (G.stats.tension - 40) / 60));
   }
   ctx.refresh = refresh;
@@ -60,6 +67,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     let prepared = false;
     const prepare = (level) => {
       prepared = true;
+      engine.setPower(ctx.power || levelId === 'shelter');
       for (const [k, v] of Object.entries(ctx.levelStates[levelId] || {})) level.setState(k, v);
       engine.setEnv(env || (OUTDOOR.has(levelId) ? ctx.outdoorEnv : levelId === 'shelter' ? 'underground' : ctx.power ? ctx.indoorEnv : 'interiorDark'), { seconds: 0 });
     };
@@ -76,7 +84,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   ctx.objective = (title, body = '', steps = []) => hud.setObjective(title, body, steps);
   ctx.toast = (text, label = 'self', ms = 3800) => hud.toast(text, { label, ms });
   // Captions off: same timing, nothing drawn, so story pacing does not change.
-  ctx.caption = (text, speaker, ms) => (settings.captions === false ? new Promise(r => setTimeout(r, ms ?? Math.min(7000, 1500 + text.length * 60))) : hud.caption(text, { speaker, ms }));
+  ctx.caption = (text, speaker, ms) => (settings.captions === false && settings.profile !== 'deaf' ? new Promise(r => setTimeout(r, ms ?? Math.min(7000, 1500 + text.length * 60))) : hud.caption(text, { speaker, ms }));
   ctx.event = (type, details = {}) => recordEvent(ctx.G, type, details);
   ctx.note = (text, label = 'self', place = engine.level?.id) => { note(ctx.G, text, label, place); ctx.toast(`메모: ${text}`, label); };
   ctx.payoff = (prep, moment) => { recordEvent(ctx.G, 'payoff', { prep, moment }); ctx.toast(`준비가 도움이 됐습니다 · ${moment}`, 'self', 4600); };
@@ -114,6 +122,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
         else if (on[key]) value = await modal(() => on[key](point));
         else if (shelter && point.kind === 'shelter' && engine.level.id === 'town') value = await modal(() => shelter(point));
         else if (doors && DOORS[key]) { const [lv, sp] = DOORS[key]; await ctx.goto(lv, sp); }
+        else if (isCommon(ctx, point)) await modal(() => common(ctx, point));
         else if (on['*']) value = await modal(() => on['*'](point));
         if (value !== undefined) finish(resolve, value);
       } catch (err) { finish(reject, err); } finally { busy = false; }

@@ -13,6 +13,7 @@ import { buildStock } from './apartment-stock.js';
 import { buildView } from './apartment-view.js';
 
 const STATES = {
+  wallet: ['home', 'taken'],
   power: ['on', 'off'],
   stock: { water_2l: [0, 2, 6, 12, 24, 40], water_500: [0, 4, 12], rice_instant: [0, 2, 6, 12], canned: [0, 1, 4, 12], ramen: [0, 5, 10, 20],
     batteries_aa: [0, 1, 3], candles: [0, 1, 2], gas_stove: [0, 1], butane: [0, 1, 3], first_aid: [0, 1], tissue: [0, 2, 6], blanket: [0, 2], wipes: [0, 1, 2], water_jug: [0, 1] },
@@ -144,11 +145,11 @@ export async function buildApartment(kit, people, fx) {
     stairWell: { x: 5.0, y: F3 + 2.2, z: 4.6, target: { x: 5.0, y: 1.0, z: 1.0 } },
   });
 
-  const S = { power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day' };
+  const S = { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day' };
   const apply = {
     power: setPower, stock: (v) => stock.setStock(v), bag: props.setBag, radio: props.setRadio, hallFire: setFire,
     smoke: (v) => { smoke.setDensity(v); haze.setDensity(v * 0.5); }, seoyeonDoor: (v) => { seoyeon.group.visible = v === 'open'; },
-    candles: props.setCandle, windowView: view.setView,
+    candles: props.setCandle, windowView: view.setView, wallet: props.setWallet,
   };
   function setState(key, value) {
     if (!apply[key]) { console.warn(`[apartment] unknown state "${key}"; known: ${Object.keys(apply).join(', ')}`); return; }

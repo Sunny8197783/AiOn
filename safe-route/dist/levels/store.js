@@ -269,7 +269,7 @@ export function buildStore(kit, people) {
   stat.add(kit.cyl(0.057, 0.057, 0.006, M.white, { x: -2.5, y: 1.14, z: -0.42 }, 14));
 
   // ---- state ----
-  const state = { soldOut: [], power: 'on', outside: null };
+  const state = { soldOut: [], power: 'on', outside: null, clerk: 'in' };
   function applyPower(on) {
     powered.traverse((o) => { if (o.isLight) kit.gateLit(o, on); }); // dim, never hide: light count stays fixed
     for (const [m, c] of glow) m.emissive.copy(on ? c : BLACK);
@@ -286,14 +286,27 @@ export function buildStore(kit, people) {
     } else if (key === 'power') {
       if (!['on', 'off'].includes(v)) return void console.error('[store] power must be on|off', v);
       state.power = v; applyPower(v === 'on');
+    } else if (key === 'clerk') { // 'out': 이수아 has left town; nobody behind the counter
+      if (!['in', 'out'].includes(v)) return void console.error('[store] clerk must be in|out', v);
+      state.clerk = v; clerk.group.visible = v === 'in';
+      const c = points.find((p) => p.id === 'storeCounter'); c.label = v === 'in' ? '계산대 · 이수아' : '계산대 (아무도 없다)';
     } else if (key === 'outside') { if (v !== null && !MOODS.includes(v)) return void console.error('[store] outside must be null or', MOODS, v); state.outside = v; }
     else console.error('[store] unknown state', key, v);
   }
 
-  const P = (id, label, x, z, kind, rad = 1.6) => ({ id, label, x, y: 0, z, r: rad, kind });
+  const P = (id, label, x, z, kind, rad = 1.6, desc) => ({ id, label, x, y: 0, z, r: rad, kind, ...(desc && { desc }) });
+  // desc: what E shows when no chapter handles the point (story/world.js). A function gets the run context.
+  const dark = (ctx) => ctx.power === false;
   const points = [
     P('storeExit', '밖으로 나가기', DOOR, -0.75, 'door', 1.4), P('storeCounter', '계산대 · 이수아', 2.1, -3.3, 'npc', 1.7),
     P('storeShelf', '진열대 살펴보기', -1.1, -4.6, 'shelf', 2.4), P('storeFridge', '음료 냉장고', -1.6, -7.5, 'shelf', 2.2),
+    P('storeAtm', 'ATM (자동화기기)', 4.05, -0.62, 'atm', 1.2),
+    P('storeCoffee', '셀프 커피머신', 4.0, -1.75, 'look', 1.0, (c) => dark(c) ? '전원이 꺼져 있다. 버튼을 눌러도 아무 반응이 없다.' : '원두커피 셀프 머신. 컵은 계산대에서 받는다.'),
+    P('storeSteamer', '찐빵 찜기', 2.5, -2.25, 'look', 0.9, (c) => dark(c) ? '찜기가 식어 있다. 안의 찐빵도 차갑다.' : '김이 서린 유리 너머로 찐빵이 따뜻하게 데워지고 있다.'),
+    P('storeRack', '건전지 진열대', 2.4, -4.3, 'look', 0.9, ['AA·AAA 건전지와 휴대폰 충전 케이블이 걸려 있다.', '라디오와 손전등은 건전지가 들어 있어야 쓸 수 있다.']),
+    P('storeRamen', '라면 조리대', -4.35, -2.15, 'look', 1.2, (c) => dark(c) ? '온수기가 꺼져 있다. 정전에는 컵라면도 끓는 물이 없으면 못 먹는다.' : '온수기, 전자레인지, 분리수거함. 컵라면 국물은 여기 버린다.'),
+    P('storeIce', '아이스크림 냉동고', 2.2, -7.9, 'look', 1.2, (c) => dark(c) ? '냉동고가 멈췄다. 뚜껑 안쪽에 물방울이 맺혀 있다. 열지 않는 게 낫겠다.' : '하드와 콘이 가득하다. 가을인데도 잘 팔린다고 한다.'),
+    P('storeWindowBar', '창가 자리', -2.5, -1.4, 'look', 1.4, ['창밖으로 단지 앞 도로가 보인다. 플라스틱 의자가 몇 개 놓여 있다.']),
   ];
 
   kit.merge(stat);

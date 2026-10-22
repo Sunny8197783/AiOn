@@ -49,9 +49,13 @@ export function treeSpots(rand) {
     if (p[0] < -40 || p[0] > 10.5 || p[1] < 14 || p[1] > 50.5) continue;
     add(p[0], p[1], rand() < 0.6 ? 'zelkova' : 'maple');
   }
-  for (const z of [48.5, 77, 105]) for (let x = 64; x <= 124; x += 7.5) add(x + (rand() - 0.5), z, (x / 7.5 | 0) % 3 === 0 ? 'maple' : 'zelkova');
+  // Rows between the apartment blocks keep a zelkova crown (up to ~5.7 m wide) clear of the south balconies.
+  for (const z of [49.5, 77.5, 105]) for (let x = 64; x <= 124; x += 7.5) add(x + (rand() - 0.5), z, (x / 7.5 | 0) % 3 === 0 ? 'maple' : 'zelkova');
   for (let x = 63; x <= 125; x += 9) add(x, 11.6, 'zelkova');
-  for (const [x, z] of [[61, 32], [61, 37], [61, 41], [114, 32], [114, 40], [-127, 20], [-122, 27], [-127, 34], [-118, 41], [-121, 44]]) add(x, z, 'zelkova');
+  // By 103동's west gable only small maples fit (a zelkova crown went through the balconies); none in the
+  // 4 m gap between 103동 and the management building.
+  for (const [x, z] of [[60, 32], [60, 37]]) add(x, z, 'maple');
+  for (const [x, z] of [[-127, 20], [-122, 27], [-127, 34], [-118, 41], [-121, 44]]) add(x, z, 'zelkova');
   return out;
 }
 

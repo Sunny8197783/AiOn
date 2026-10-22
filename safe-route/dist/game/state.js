@@ -220,11 +220,12 @@ export function note(G, text, label, place = null) {
   return n;
 }
 
-// Walking speed multiplier 0.6..1 from fatigue (above 50) and bag weight against BAG_LIMIT.
+// Walking and running speed multiplier 0.6..1 from fatigue (above 50) and, once the bag is on the back,
+// its weight against BAG_LIMIT (up to -12 % at the limit, steeply more above it).
 export function speedMul(G) {
-  const { weightKg } = bagLoad(G), lim = BAG_LIMIT.weightKg;
+  const weightKg = G.know?.bagOn ? bagLoad(G).weightKg : 0, lim = BAG_LIMIT.weightKg;
   const tired = Math.max(0, G.stats.fatigue - 50) / 50 * 0.25;
-  const load = weightKg <= lim ? 0.05 * weightKg / lim : 0.05 + (weightKg - lim) / lim * 0.4;
+  const load = weightKg <= lim ? 0.12 * weightKg / lim : 0.12 + (weightKg - lim) / lim * 0.4;
   return round2(Math.min(1, Math.max(0.6, 1 - tired - load)));
 }
 
