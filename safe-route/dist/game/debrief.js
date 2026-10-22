@@ -3,6 +3,7 @@
 import { CATALOG, BAG_LIMIT, itemName } from './items.js';
 import { fact } from './facts.js';
 import { bagLoad, hhmm } from './state.js';
+import { pickEnding } from './endings.js';
 import { EXT_STEPS } from './drills.js';
 
 const PEOPLE = { manager: '박영수 소장', clerk: '이수아', seoyeon: '오서연' };
@@ -105,17 +106,6 @@ const FAIL = {
       facts: [factId, 'fire_small', 'ext_1'],
     };
   },
-  missedBus(G) {
-    const packed = Object.values(G.items).some(e => e.bag > 0);
-    return {
-      title: '임시 대피 버스를 놓쳤습니다',
-      seen: `공식 대피 안내는 ${hhmm(G.cond.evacNoticeAt)}에 나와 있었습니다.`,
-      missed: !packed ? '가방을 그 자리에서 꾸리느라 출발이 늦어졌습니다.'
-        : !G.know.routeChecked ? '새로 통제된 길이 집결지로 가는 길과 겹쳤습니다.' : '집결지까지 걸리는 시간이 예상보다 길었습니다.',
-      next: !packed ? "'비상가방 꾸리기'로 미리 꾸린 가방을 현관에 두기" : '출발 전에 지도에서 새 통제 구간과 집결지 경로를 다시 보기',
-      facts: ['evac_kit', 'bag_door', 'evac_note'],
-    };
-  },
   lostWay(G) {
     const k = G.know;
     return {
@@ -193,5 +183,5 @@ export function endingRecord(G) {
   const people = G.events.filter(e => e.type === 'help').map(e => ({ who: PEOPLE[e.details.who] ?? e.details.who, what: e.details.what }));
   for (const [k, r] of Object.entries(G.rel)) if (r.contact) people.push({ who: PEOPLE[k] ?? k, what: `비상 연락 방법을 정했습니다 (${CONTACT[r.contact] ?? r.contact})` });
   const f = fact(PRACTICE.find(([k]) => !G.know[k])?.[1] ?? 'shelter_know');
-  return { helped, unused, unchecked, people, practice: { text: f.text, sourceId: f.sourceId } };
+  return { fate: pickEnding(G), helped, unused, unchecked, people, practice: { text: f.text, sourceId: f.sourceId } };
 }

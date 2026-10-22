@@ -35,7 +35,7 @@ test('every FACTS sourceId exists; SOURCES are unique https links', () => {
 });
 
 test('failDebrief gives three calm Korean lines and real sources for every type', () => {
-  assert.deepEqual(FAIL_TYPES, ['dead', 'late', 'exhausted', 'fire', 'missedBus', 'lostWay']);
+  assert.deepEqual(FAIL_TYPES, ['dead', 'late', 'exhausted', 'fire', 'lostWay']);
   const fresh = createGame({ seed: 9 });
   const ready = alertReadyGame();
   for (const G of [fresh, ready]) for (const type of FAIL_TYPES) {
@@ -102,15 +102,8 @@ test('fire: the last extinguisher encounter picks the FACTS line', () => {
   assert.match(failDebrief(G, 'fire').seen, /알고 있었습니다/);
 });
 
-test('missedBus and lostWay use the seed\'s times', () => {
-  const G = createGame({ seed: 11 });
-  let d = failDebrief(G, 'missedBus');
-  assert.ok(d.seen.includes(hhmm(G.cond.evacNoticeAt)));
-  assert.match(d.missed, /가방을/);
-  pack(G, 'water_2l');
-  assert.match(failDebrief(G, 'missedBus').missed, /새로 통제된 길/);
-  G.know.routeChecked = true;
-  assert.match(failDebrief(G, 'missedBus').missed, /예상보다/);
+test('lostWay uses the seed times', () => {
+  let d;
   const L = createGame({ seed: 11 });
   d = failDebrief(L, 'lostWay');
   assert.ok(d.seen.includes(hhmm(L.cond.commsWeakAt)));
