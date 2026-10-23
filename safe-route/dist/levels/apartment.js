@@ -107,7 +107,7 @@ export async function buildApartment(kit, people, fx) {
     pool.forEach((l, i) => {
       const f = lit[i];
       if (!f) { l.intensity = 0; return; }
-      l.position.set(f.x, f.y, f.z); l.color.setHex(f.color); l.distance = f.distance; l.intensity = f.intensity * f.w;
+      l.position.set(f.x, f.y - 0.4, f.z); l.color.setHex(f.color); // a point light this close to the ceiling would blow it out l.distance = f.distance; l.intensity = f.intensity * f.w;
     });
   }
 

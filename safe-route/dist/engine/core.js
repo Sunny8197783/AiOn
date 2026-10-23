@@ -265,7 +265,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   renderer.setAnimationLoop(frame);
 
   return {
-    THREE, renderer, scene, camera, kit, people, persons, ready,
+    THREE, renderer, scene, camera, kit, people, persons, ready, post,
     get fx() { return fx; },
     get quality() { return quality; },
     get level() { return level; },
@@ -301,7 +301,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     onKey: (fn) => controls.onKey(fn),
     onFrame: (fn) => { frameFns.add(fn); return () => frameFns.delete(fn); },
     setQuality, setReduceMotion,
-    stats: () => ({ fps: Math.round(fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles }),
+    stats: () => ({ fps: Math.round(fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles, adapt: +post.adaptValue().toFixed(2) }),
     dispose() { renderer.setAnimationLoop(null); controls.dispose(); renderer.dispose(); },
   };
 }
