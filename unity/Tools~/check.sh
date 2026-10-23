@@ -15,6 +15,8 @@ DEFS="UNITY_6000_0_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2022_3_OR_NEWER;ENABLE_L
 WARN=(-nologo -nostdlib -utf8output -langversion:9.0 -nowarn:1701,1702,0649,0414)
 NETSTD="-r:$(win "$UNITY/NetStandard/ref/2.1.0/netstandard.dll")"
 ENGINE=(); for f in "$UNITY/Managed/UnityEngine/"UnityEngine.*Module.dll; do ENGINE+=("-r:$(win "$f")"); done
+# RuntimeInitializeOnLoadMethod derives from PreserveAttribute, which Unity 6.5 keeps in Unity.Scripting.dll.
+for f in "$UNITY/Managed/UnityEngine/Unity.Scripting.dll"; do [ -f "$f" ] && ENGINE+=("-r:$(win "$f")"); done
 EDITOR=(); for f in "$UNITY/Managed/UnityEngine/"UnityEditor.*Module.dll; do EDITOR+=("-r:$(win "$f")"); done
 NEWTON="-r:$(win "$UNITY/Managed/Newtonsoft.Json.dll")"
 LOGIC="-r:$(win "$OUT/Gyeongbo.Logic.dll")"
