@@ -73,8 +73,8 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
 
   function punch() {
     if (punchT > 0 || engine.player.busy) return;
-    punchT = 0.5; engine.act('punch', 0.35); onSound('swing');
-    setTimeout(() => {
+    punchT = 0.5; engine.act('punch'); setTimeout(() => onSound('swing'), 90);
+    setTimeout(() => { // the fist arrives ~0.19 s in (people-clips.js punch)
       const P = engine.player, yaw = P.model?.group?.rotation.y ?? P.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw);
       let best = null, bd = REACH;
       for (const p of people()) {
@@ -83,24 +83,36 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
         if (d < bd && Math.abs(wp.y - P.y) < 1 && (dx * fx + dz * fz) / (d || 1) > 0.55) { bd = d; best = p; }
       }
       if (best) hit(best, P.x, P.z, 'punch', 1);
-    }, 150);
+    }, 190);
   }
 
+  // Bend down for it; the hand closes on it at the bottom of the reach (~0.4 s into people-clips.js pickup)
+  // and it comes up held ready in front of the chest.
+  let busyT = 0;
   function pick(it) {
-    held = it; it.flying = false;
-    engine.act('throw', 0.25);
-    const hand = engine.player.model?.bones?.rHand;
-    if (hand) { hand.add(it.mesh); it.mesh.position.set(0, -0.08, 0.02); it.mesh.rotation.set(0, 0, 0); it.mesh.scale.setScalar(1); }
-    else scene.add(it.mesh);
-    onNear(null); onSound('pick');
+    held = it; it.flying = false; busyT = 0.8;
+    engine.act('pickup'); onNear(null);
+    setTimeout(() => {
+      if (held !== it) return;
+      const hand = engine.player.model?.bones?.rHand;
+      if (hand) { hand.add(it.mesh); it.mesh.position.set(0, -0.08, -0.02); it.mesh.rotation.set(0, 0, 0); it.mesh.scale.setScalar(1); }
+      else scene.add(it.mesh);
+      onSound('pick'); engine.setHold(true);
+    }, 400);
   }
+  // Wind up and let go at the top of the whip (~0.3 s into people-clips.js throw), along the line of sight.
   function toss() {
-    const it = held; held = null;
-    const L = engine.level; if (!L) return;
-    it.mesh.getWorldPosition(wp); L.group.add(it.mesh); it.mesh.position.copy(wp);
-    const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
-    it.v.copy(dir).multiplyScalar(14).add(new THREE.Vector3(0, 2.2, 0)); it.flying = true; it.byPlayer = true; it.from = { x: engine.player.x, z: engine.player.z };
-    engine.act('throw', 0.4); onSound('swing');
+    if (busyT > 0) return;
+    const it = held; busyT = 0.6;
+    engine.act('throw'); engine.setHold(false);
+    setTimeout(() => {
+      held = null;
+      const L = engine.level; if (!L) return;
+      it.mesh.getWorldPosition(wp); L.group.add(it.mesh); it.mesh.position.copy(wp);
+      const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+      it.v.copy(dir).multiplyScalar(14).add(new THREE.Vector3(0, 2.2, 0)); it.flying = true; it.byPlayer = true; it.from = { x: engine.player.x, z: engine.player.z };
+      onSound('swing');
+    }, 300);
   }
 
   engine.onKey(({ code }) => {
@@ -135,7 +147,7 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
   }
 
   engine.onFrame((dt) => {
-    punchT = Math.max(0, punchT - dt);
+    punchT = Math.max(0, punchT - dt); busyT = Math.max(0, busyT - dt);
     const L = engine.level; if (!L) return;
     const items = itemsOf(L), P = engine.player;
     for (const it of items) if (it.flying && it !== held) fly(it, L, dt);
@@ -171,6 +183,6 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
     get held() { return held ? KINDS[held.kind].name : null; },
     setEnabled(on) { enabled = !!on; },
     // Leaving a level with something in hand: it is dropped where you stand.
-    drop() { if (!held) return; const it = held; held = null; it.mesh.getWorldPosition(wp); (engine.level?.group ?? scene).add(it.mesh); it.mesh.position.copy(wp); it.v.set(0, 0, 0); it.flying = true; it.from = { x: wp.x, z: wp.z }; },
+    drop() { if (!held) return; const it = held; held = null; engine.setHold(false); it.mesh.getWorldPosition(wp); (engine.level?.group ?? scene).add(it.mesh); it.mesh.position.copy(wp); it.v.set(0, 0, 0); it.flying = true; it.from = { x: wp.x, z: wp.z }; },
   };
 }

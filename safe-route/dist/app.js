@@ -283,6 +283,18 @@ engine.onFrame((dt) => {
   hud.setMap(settings.minimap === false || !L ? null : { x: p.x, y: p.y, z: p.z, yaw: p.yaw, walk: L.walk, solids: L.solids, points: L.points, scale: L.id === 'town' ? 2 : 9 });
 });
 
+// ---- footsteps: one per heel strike of the player's walk / run cycle ----
+const STEP_FLOOR = { town: 'concrete', shelter: 'concrete', apartment: 'tile', office: 'tile', mart: 'tile', store: 'tile' };
+let stepN = null;
+engine.onFrame(() => {
+  const m = engine.player.model;
+  if (!G || !m?.phase || !ctx.roaming) { stepN = null; return; }
+  const n = Math.floor((m.phase - Math.PI / 2) / Math.PI);
+  if (stepN !== null && n !== stepN && m.stride > 0.25 && m.anim !== 'air' && m.anim !== 'crouch' && !engine.player.busy)
+    audio.footstep(m.anim === 'stairsUp' || m.anim === 'stairsDown' ? 'stairs' : STEP_FLOOR[engine.level?.id] ?? 'concrete');
+  stepN = n;
+});
+
 // ---- wheelchair: a stair flight is a wall; ask for help to be carried across it ----
 let helpBusy = false, helpedAt = -1e9;
 const steep = (w) => w.ramp && Math.abs(w.ramp.y1 - w.ramp.y0) / ((w.ramp.axis === 'x' ? w.x1 - w.x0 : w.z1 - w.z0) || 1) > 0.2;

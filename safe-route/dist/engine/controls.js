@@ -10,6 +10,7 @@ import { groundAt, collide, segBox, topsOf, groundNear } from './geom.js';
 
 export const PLAYER = { radius: 0.32, height: 1.72, eye: 1.62, walk: 3.0, run: 5.2 };
 const TP = { dist: 3.4, height: 1.7, shoulder: 0.45 };
+const EYE_FWD = 0.1, EYE_UP = 0.07; // first person: where the eyes sit relative to the head joint
 const FOV = 70, FOV_RUN = 4, D2R = Math.PI / 180, LOOK = 0.0042, LOCK_LOOK = 0.0024;
 const JUMP_V = 3.6, GRAVITY = 12, STAIR_SLOPE = 0.2;
 const FLASH = 6; // flashlight candela; dimmed further when the beam hits something close
@@ -48,6 +49,15 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
   let anim = '', lastGround = 0, snap = true, beamStrength = 1, flashK = 1;
   let shakeT = 0, shakeDur = 1, shakeA = 0;
   let vy = 0, air = false, stamina = 1, winded = false, blocked = false, sens = 1, peakY = 0, move = null, actAnim = null, actT = 0, crouch = false;
+  let airT = 0, accel = 0, lastFwd = 0, lastYaw = 0, lookOff = 0;
+  const headW = new THREE.Vector3(), neckW = new THREE.Vector3();
+  // First person: the own head would fill the lens, so the camera sees the body through a copy of its material
+  // that clips everything above the neck. Shadows use the uncut body (clipShadows off): no headless shadow.
+  const neckClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0);
+  function fpMaterial(m) {
+    const base = m.mesh.material;
+    return (m.userData ||= {}).fpMat ||= Object.assign(base.clone(), { onBeforeCompile: base.onBeforeCompile, customProgramCacheKey: base.customProgramCacheKey, clippingPlanes: [neckClip], clipShadows: false, side: THREE.DoubleSide }); // the cut torso shows its inside, not a hole
+  }
   const prof = { run: true, jump: true, eye: PLAYER.eye, stairs: true };
   const blockedFns = new Set(), landFns = new Set();
 
@@ -67,6 +77,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     get y() { return position.y; }, set y(v) { position.y = v; },
     get z() { return position.z; }, set z(v) { position.z = v; },
     get yaw() { return look.yaw; }, set yaw(v) { look.yaw = cam.yaw = bodyYaw = v; },
+    get pitch() { return look.pitch; }, set pitch(v) { look.pitch = cam.pitch = clamp(v, -1.25, 1.1); },
     position, speedMul: 1, staminaUse: 1, radius: PLAYER.radius, height: PLAYER.height, eye: PLAYER.eye,
     get model() { return model; },
     get stamina() { return stamina; },
@@ -233,15 +244,15 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       const lx = position.x + dx * (exitT + 0.5), lz = position.z + dz * (exitT + 0.5);
       const gl = groundAt(surf, lx, lz, best.y1, false, 60);
       if (gl && free(lx, lz, gl.y)) {
-        move = { t: 0, dur: 0.5 + h * 0.15, x0: position.x, z0: position.z, y0: feet, x1: lx, z1: lz, y1: Math.max(gl.y, feet - 0.4), arc: best.y1 + 0.2 - (feet + Math.max(gl.y, feet - 0.4)) / 2, anim: 'run' };
-        stamina = Math.max(0, stamina - 0.08); return true;
+        move = { t: 0, dur: 0.5 + h * 0.15, x0: position.x, z0: position.z, y0: feet, x1: lx, z1: lz, y1: Math.max(gl.y, feet - 0.4), arc: best.y1 + 0.2 - (feet + Math.max(gl.y, feet - 0.4)) / 2, clip: 'vault' };
+        stamina = Math.max(0, stamina - 0.08); model?.play?.(move.clip, { seconds: move.dur }); return true;
       }
     }
     if (thick >= 0.4) { // onto it
       const k = bt + Math.min(0.45, thick / 2), lx = position.x + dx * k, lz = position.z + dz * k;
       if (!free(lx, lz, best.y1)) return false;
-      move = { t: 0, dur: 0.35 + h * 0.3, x0: position.x, z0: position.z, y0: feet, x1: lx, z1: lz, y1: best.y1, arc: 0.2, anim: h > 1 ? 'stairsUp' : 'run' };
-      stamina = Math.max(0, stamina - 0.05 - h * 0.05); return true;
+      move = { t: 0, dur: 0.35 + h * 0.3, x0: position.x, z0: position.z, y0: feet, x1: lx, z1: lz, y1: best.y1, arc: 0.2, clip: h > 1 ? 'climb' : 'vault' };
+      stamina = Math.max(0, stamina - 0.05 - h * 0.05); model?.play?.(move.clip, { seconds: move.dur }); return true;
     }
     return false;
   }
@@ -308,6 +319,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
         if (vy <= 0 && g && position.y <= g.y) {
           const drop = peakY - g.y;
           position.y = lastGround = g.y; air = false; vy = 0;
+          if (drop > 0.35) model?.play?.('land', { seconds: 0.3 + Math.min(0.35, drop * 0.06), power: Math.min(1, drop / 4) });
           if (drop > 1.2) { shake(Math.min(0.35, drop * 0.03), 0.4); emit(landFns, { drop, x: px, y: g.y, z: pz }); }
         } else if (!g && position.y < lastGround - 3) { position.y = lastGround; air = false; vy = 0; } // no floor at all: never fall forever
       } else if (g) {
@@ -321,6 +333,36 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     if (view === 'first' && viewK < 0.5) bodyYaw = cam.yaw;
     else if (hs > 0.25) bodyYaw += wrap(Math.atan2(-vel.x, -vel.y) - bodyYaw) * damp(10, dt);
 
+    // model: posed before the camera, which in first person rides on its head
+    const headDriven = !!model?.bones?.head && prof.eye === PLAYER.eye;
+    if (model?.group) {
+      model.group.position.copy(position); model.group.rotation.y = bodyYaw;
+      model.group.visible = override ? view !== 'first' : headDriven || viewK > 0.35;
+      airT = air && !move ? airT + dt : 0;
+      let next = hs < 0.15 ? 'idle' : carrying === 'water' ? 'carry' : 'walk'; // walk..run is one blend by speed
+      if (g && g.slope > 0.35 && hs > 0.15 && carrying !== 'water') next = climb >= 0 ? 'stairsUp' : 'stairsDown';
+      if (crouch) next = 'crouch';
+      if (airT > 0.12) next = 'air';
+      if (move) next = 'idle'; // the vault / climb clip owns the body
+      if ((actT -= dt) > 0 && actAnim) next = actAnim;
+      if (next !== anim) { anim = next; model.setAnim?.(next); }
+      model.setSpeed?.(hs);
+      // Lean into speeding up and into turns; look up/down with the upper body.
+      const bf = -Math.sin(bodyYaw) * vel.x - Math.cos(bodyYaw) * vel.y, turn = dt > 0 ? wrap(bodyYaw - lastYaw) / dt : 0;
+      accel += ((dt > 0 ? (bf - lastFwd) / dt : 0) - accel) * damp(8, dt); lastFwd = bf; lastYaw = bodyYaw;
+      model.setLean?.(RM ? 0 : clamp(accel * 0.035, -0.22, 0.22), RM ? 0 : clamp(turn * hs * 0.035, -0.3, 0.3));
+      model.setAim?.(cam.pitch * (view === 'first' && cam.pitch < 0 ? 0.35 : 0.5));
+      try { model.update?.(dt); } catch (err) { console.error('[engine/controls] player model update failed', err); model.update = null; }
+      if (headDriven) {
+        model.group.updateMatrixWorld(true); model.bones.head.getWorldPosition(headW); model.bones.neck.getWorldPosition(neckW);
+        const fp = viewK < 0.5 && !override, mesh = model.mesh;
+        if (mesh) {
+          if (fp) { const fm = fpMaterial(model); fm.userData.base ||= mesh.material; mesh.material = fm; neckClip.constant = neckW.y - 0.02; } // cut at the collar
+          else if (mesh.material.userData.base) mesh.material = mesh.material.userData.base;
+        }
+      }
+    }
+
     // camera rig
     cam.yaw += wrap(look.yaw - cam.yaw) * damp(24, dt); cam.pitch += (look.pitch - cam.pitch) * damp(24, dt);
     viewK += ((view === 'third' ? 1 : 0) - viewK) * (snap || RM ? 1 : damp(7, dt));
@@ -329,11 +371,17 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     phase += (hs * dt * Math.PI * 2) / 1.44; // one stride (two steps) per 1.44 m
     bobAmp += ((RM ? 0 : Math.min(1, hs / PLAYER.walk) * (running ? 1.3 : 1)) - bobAmp) * damp(6, dt);
     const roll = Math.sin(phase) * 0.004 * bobAmp * (1 - viewK);
-    euler.set(cam.pitch, cam.yaw, roll); camera.quaternion.setFromEuler(euler);
+    // The eyes follow what the body is doing (look down at what you pick up, at the wall you vault).
+    lookOff += ((model?.clipLook ?? 0) * (1 - viewK * 0.8) - lookOff) * (RM ? 1 : damp(14, dt));
+    euler.set(clamp(cam.pitch + lookOff, -1.4, 1.2), cam.yaw, roll); camera.quaternion.setFromEuler(euler);
     fwd.set(0, 0, -1).applyQuaternion(camera.quaternion); right.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
     up.set(0, 1, 0).applyQuaternion(camera.quaternion);
     const eye = prof.eye * (crouch ? 0.6 : 1), tpH = TP.height * (eye / PLAYER.eye);
-    want.set(position.x, position.y + eye + (tpH - eye) * viewK, position.z);
+    if (headDriven) { // first person: the eyes are on the head the animation moves (bob, landing dip, vault arc)
+      // Looking down the eyes lean out past the (cut) collar: legs and feet in view, never the inside of the shirt.
+      const fx = -Math.sin(bodyYaw), fz = -Math.cos(bodyYaw), k = 1 - viewK, ef = EYE_FWD + 0.08 * Math.max(0, -cam.pitch);
+      want.set(position.x + ((headW.x - position.x) * 0.6 + fx * ef) * k, (headW.y + EYE_UP) * k + (position.y + tpH) * viewK, position.z + ((headW.z - position.z) * 0.6 + fz * ef) * k);
+    } else want.set(position.x, position.y + eye + (tpH - eye) * viewK, position.z);
     if (snap) pivot.copy(want);
     else {
       const kxz = damp(60 + (13 - 60) * viewK, dt), kyy = damp(60 + (9 - 60) * viewK, dt);
@@ -357,8 +405,10 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       camera.position.addScaledVector(seg, camFrac);
       camera.position.y = Math.max(camera.position.y, position.y + 0.3);
     }
-    const bob = 1 - viewK; // gentle first-person head bob
+    const bob = headDriven ? 0 : 1 - viewK; // gentle first-person head bob (the animated head bobs by itself)
     camera.position.addScaledVector(up, Math.sin(phase * 2) * 0.028 * bobAmp * bob).addScaledVector(right, Math.sin(phase) * 0.018 * bobAmp * bob);
+    const nearZ = viewK < 0.5 ? 0.05 : 0.08; // first person: the own chest and hands come close to the lens
+    if (camera.near !== nearZ) { camera.near = nearZ; camera.updateProjectionMatrix(); }
     const fov = FOV + (running && hs > 3.6 && !RM ? FOV_RUN : 0);
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov += (fov - camera.fov) * damp(6, dt); camera.updateProjectionMatrix(); }
 
@@ -377,24 +427,10 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     }
     camera.updateMatrixWorld();
 
-    // model
-    if (model?.group) {
-      model.group.position.copy(position); model.group.rotation.y = bodyYaw;
-      model.group.visible = override ? view !== 'first' : viewK > 0.35;
-      let next = hs < 0.15 ? 'idle' : carrying === 'water' ? 'carry' : hs > 4 ? 'run' : 'walk';
-      if (g && g.slope > 0.35 && hs > 0.15 && carrying !== 'water') next = climb >= 0 ? 'stairsUp' : 'stairsDown';
-      if (crouch) next = 'crouch';
-      if (move) next = move.anim;
-      if ((actT -= dt) > 0 && actAnim) next = actAnim;
-      if (next !== anim) { anim = next; model.setAnim?.(next); }
-      model.setSpeed?.(hs);
-      try { model.update?.(dt); } catch (err) { console.error('[engine/controls] player model update failed', err); model.update = null; }
-    }
-
     // flashlight: at the right hand in third person, just below the camera in first person; hand-held lag
     if (flashOn) {
       handLocal.set(0.26, 1.05, -0.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP, bodyYaw).add(position);
-      origin.copy(camera.position).addScaledVector(right, 0.2).addScaledVector(up, -0.24).addScaledVector(fwd, 0.15);
+      origin.copy(camera.position).addScaledVector(right, 0.16).addScaledVector(up, -0.2).addScaledVector(fwd, 0.32); // ahead of the own body, which would shadow it
       origin.lerp(handLocal, viewK);
       tmp.copy(camera.position).addScaledVector(fwd, 16);
       if (snap) aim.copy(tmp); else aim.lerp(tmp, damp(RM ? 30 : 14, dt));
@@ -431,8 +467,9 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     onBlocked: (fn) => sub(blockedFns, fn),
     onLand: (fn) => sub(landFns, fn),
     // Play a one-off body animation (punch, throw, hurt) for `seconds`, over whatever the legs do.
-    act(name, seconds = 0.4) { actAnim = name; actT = seconds; },
+    act(name, seconds) { if (!model?.play?.(name, { seconds })) { actAnim = name; actT = seconds ?? 0.4; } },
     get busy() { return !!move; },
+    setHold(on) { model?.setHold?.(on); },
     // Low to the ground (C): slower, smaller, safer from blasts and debris.
     get crouching() { return crouch; },
     set crouching(v) { crouch = !!v; },

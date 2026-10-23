@@ -46,6 +46,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.localClippingEnabled = true; // the first-person body cuts its own head (engine/controls.js)
   renderer.setPixelRatio(PIXEL_RATIO[quality]());
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.08, 3000);
@@ -233,6 +234,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   // ---- frame loop ----
   const frameFns = new Set(), logged = new Set();
   const logOnce = (key, err) => { if (!logged.has(key)) { logged.add(key); console.error(`[engine] ${key}`, err); } };
+  let timeScale = 1; // slow motion (cutscenes); 1 = real time
   let t = 0, last = performance.now(), fps = 60, acc = 0, frames = 0, slow = 0, downgraded = false;
   function measure(raw) {
     if (raw > 0.5) { acc = 0; frames = 0; return; } // tab was hidden
@@ -251,7 +253,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   }
   function frame(now) {
     const raw = Math.max(0, (now - last) / 1000); last = now;
-    const dt = Math.min(raw, 0.1); t += dt;
+    const dt = Math.min(raw, 0.1) * timeScale; t += dt;
     try { controls.update(dt); } catch (err) { logOnce('player update failed', err); }
     if (envK < 1) stepEnv(dt);
     if (level?.update) { try { level.update(dt, t, { camera, player: controls.player, env: envName, power }); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
@@ -290,6 +292,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     onBlocked: (fn) => controls.onBlocked(fn),
     onLand: (fn) => controls.onLand(fn),
     act: (name, s) => controls.act(name, s),
+    setHold: (on) => controls.setHold(on),
     get crouching() { return controls.crouching; },
     get pointerLocked() { return controls.locked; },
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
@@ -301,6 +304,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     onKey: (fn) => controls.onKey(fn),
     onFrame: (fn) => { frameFns.add(fn); return () => frameFns.delete(fn); },
     setQuality, setReduceMotion,
+    get timeScale() { return timeScale; }, set timeScale(v) { timeScale = Math.min(2, Math.max(0, Number(v) || 0)); },
     stats: () => ({ fps: Math.round(fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles, adapt: +post.adaptValue().toFixed(2) }),
     dispose() { renderer.setAnimationLoop(null); controls.dispose(); renderer.dispose(); },
   };
