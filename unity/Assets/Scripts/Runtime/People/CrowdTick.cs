@@ -116,7 +116,7 @@ namespace Gyeongbo.People
                 serveT = (M.serve ?? 10) * (0.7f + 0.6f * r());
                 var a = line[0]; line.RemoveAt(0);
                 a.state = "leave"; a.goal = new XZ(M.at.Value.x + M.leaveN.x * 18, M.at.Value.z + M.leaveN.z * 18);
-                if (M.carry != null) { SetProps(a, new HashSet<string>(a.props) { M.carry }); if (M.carry == "waterJug") a.moveAnim = "carry"; }
+                if (!string.IsNullOrEmpty(M.carry)) { SetProps(a, new HashSet<string>(a.props) { M.carry }); if (M.carry == "waterJug") a.moveAnim = "carry"; }
             }
         }
 
