@@ -1,6 +1,7 @@
 // Small helpers shared by the Systems ports: JS Math.random / Math.round semantics, three.js-unit point lights
-// through Kit, and fire-and-forget tasks that log instead of vanishing.
+// through Kit, fire-and-forget tasks that log instead of vanishing, and setTimeout on real (unscaled) time.
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Gyeongbo.Engine;
 using UnityEngine;
@@ -37,6 +38,45 @@ namespace Gyeongbo.Systems
         {
             try { if (t != null) await t; }
             catch (Exception e) { Debug.LogError("[" + what + "] " + e); }
+        }
+
+        // ---- setTimeout / clearTimeout on real time (performance.now), whatever the world's time scale ----
+        sealed class Timer { public int id; public float due; public Action fn; }
+        static readonly List<Timer> timers = new List<Timer>();
+        static int nextId = 1;
+        static TimerRunner runner;
+
+        public static int After(float seconds, Action fn)
+        {
+            if (runner == null)
+            {
+                var go = new GameObject("gyeongbo-timers") { hideFlags = HideFlags.HideInHierarchy };
+                UnityEngine.Object.DontDestroyOnLoad(go);
+                runner = go.AddComponent<TimerRunner>();
+            }
+            var t = new Timer { id = nextId++, due = Time.realtimeSinceStartup + Mathf.Max(0, seconds), fn = fn };
+            timers.Add(t);
+            return t.id;
+        }
+
+        public static void Cancel(int id) { if (id != 0) timers.RemoveAll(t => t.id == id); }
+
+        internal static void RunTimers()
+        {
+            float now = Time.realtimeSinceStartup;
+            while (true)
+            {
+                Timer next = null;
+                foreach (var t in timers) if (t.due <= now && (next == null || t.due < next.due)) next = t;
+                if (next == null) return;
+                timers.Remove(next);
+                try { next.fn?.Invoke(); } catch (Exception e) { Debug.LogException(e); }
+            }
+        }
+
+        sealed class TimerRunner : MonoBehaviour
+        {
+            void Update() => RunTimers();
         }
     }
 }

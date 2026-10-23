@@ -172,7 +172,7 @@ namespace Gyeongbo.Systems
                 uTime = Rand() * 100;
                 col = (o.color ?? J.Hex(0xfff1d6)).linear;
                 y0 = bx.y0; yh = bx.y1 - bx.y0;
-                points = new FxBillboards(n, fx.Memo("moteMat", () => Mat.Unlit(new MatSpec { map = fx.MoteTex(), blending = "additive", transparent = true, depthWrite = false, vertexColors = true })), 1, "fx-dust-motes")
+                points = new FxBillboards(n, fx.Memo("moteMat", () => Mat.Unlit(new MatSpec { map = fx.MoteTex(), blending = "additive", transparent = true, depthWrite = false, vertexColors = true, fog = false })), 1, "fx-dust-motes")
                     { points = true, pxMin = 1, pxMax = 5, minDepth = 0.2f };
                 Group = MakeGroup("fx-dust", 0, 0, 0);
                 Group.Add(points.obj);
