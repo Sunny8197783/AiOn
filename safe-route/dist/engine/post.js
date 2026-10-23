@@ -211,6 +211,7 @@ export function createPost({ renderer, scene, camera, quality = 'high', reduceMo
     setBloom(strength, radius, threshold) { bloom.strength = strength; if (radius !== undefined) bloom.radius = radius; if (threshold !== undefined) bloom.threshold = threshold; },
     setReduceMotion(v) { RM = !!v; },
     // Jump the eye adaptation straight to the current frame (after a fade or a level swap).
+    get grade() { return structuredClone(to); }, // the grade being eased toward
     snapAdapt() { adaptQ.material.uniforms.uFirst.value = 1; },
     // The current adapted exposure multiplier (debug/tests; reads back one pixel).
     adaptValue() { const b = new Float32Array(4); renderer.readRenderTargetPixels(adaptRT[ai], 0, 0, 1, 1, b); return b[0]; },

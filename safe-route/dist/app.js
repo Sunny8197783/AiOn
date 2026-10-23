@@ -4,6 +4,8 @@ import { createActions } from './engine/actions.js';
 import { shop3d, bag3d } from './ui/grab3d.js';
 import { createDanger } from './story/danger.js';
 import { createEcho } from './story/echo.js';
+import { createCine } from './story/cine.js';
+import { opening, timelapse } from './story/cutscenes.js';
 import { createHud } from './ui/hud.js';
 import { talk, card, timeSkip } from './ui/dialog.js';
 import { landing, pause, settings as settingsMenu, about } from './ui/menu.js';
@@ -174,6 +176,10 @@ engine.onLand(({ drop }) => {
 });
 const danger = createDanger({ ctx, actions, hurt });
 const echo = createEcho({ engine, ctx, store });
+// Cutscenes: the director, a harmless blast for them, and time skips shown as time passing over the town.
+ctx.cine = createCine(ctx);
+ctx.boom = (x, z, size = 1) => danger.trigger('boom', { x, z, size });
+{ const cardSkip = ctx.skip; ctx.skip = async (from, to, text) => { try { await timelapse(ctx, { from, to, text }); } catch (err) { console.error('[cine] time-lapse failed; showing the card', err); await cardSkip(from, to, text); } }; }
 // X: the first-aid kit (in the bag, or at home) patches you up; a broken leg stays broken.
 function firstAid() {
   const e = G.items.first_aid, atHome = engine.level?.id === 'apartment';
@@ -243,10 +249,8 @@ const controlsCard = () => card({ kind: 'info', title: '조작법', meta: '언�
 
 // ---- who is who: before the story starts ----
 async function intro() {
-  await card({ kind: 'info', title: '주인공 · 정민', meta: '31세 · 한결물류 연무센터 운영팀 (배송 운영 담당)',
-    body: ['연무동 한빛아파트 103동 302호에 혼자 산다. 회사는 걸어서 10분 거리의 물류센터.', '꼼꼼하지만 비상용품은 "언젠가 사야지" 하고 미뤄 둔 평범한 직장인. 손전등은 있는데 건전지가 없다.',
-      '이 이야기는 전쟁 직전 사흘과 그 뒤 열이틀 동안, 정민이 무엇을 확인하고 누구와 함께 버티는지를 따라갑니다.'],
-    actions: [{ id: 'ok', label: '다음', primary: true }] });
+  try { await opening(ctx); } catch (err) { console.error('[cine] opening failed', err); }
+  engine.setControls(false);
   const pick = await card({ kind: 'info', title: '체험 모드', meta: '설정(Esc)에서 언제든 바꿀 수 있습니다',
     body: ['같은 재난도 몸과 감각에 따라 전혀 다른 길이 됩니다. 정민의 조건을 골라 보세요.',
       '보행 장애: 달릴 수 없고 걸음이 느립니다. · 휠체어: 앉은 눈높이, 계단은 도움 없이 못 지나고 경사로만 씁니다.',

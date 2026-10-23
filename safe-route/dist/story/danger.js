@@ -97,17 +97,19 @@ export function createDanger({ ctx, actions, hurt }) {
     ctx.toast(close ? '휘이이익— 바로 머리 위다! 엎드려! (C)' : '휘이익— 포탄 낙하음!', 'site', 2600);
     later(2.3, () => blast(x, z));
   }
-  function blast(x, z) {
+  let ballSize = 1;
+  function blast(x, z, harm = true, size = 1) { // harm false: the sight and sound only (cutscenes); size scales the fireball
     const L = level(); if (!L || L.id !== 'town') return;
     const g = groundAt(L.walk, x, z, 0.5, true) ?? { y: 0 }, y = g.y;
     const d = dist(x, z);
     audio.boom(Math.min(1, Math.max(0.3, d / 40)));
     engine.shake(Math.max(0.04, 0.6 - d * 0.02), 1.2);
-    flash.position.set(x, y + 2, z); flashK = 1; ball.position.set(x, y + 1.2, z); ring.position.set(x, y + 0.15, z);
+    flash.position.set(x, y + 2 * size, z); flashK = 1; ballSize = size; ball.position.set(x, y + 1.2 * size, z); ring.position.set(x, y + 0.15, z);
     const c = new THREE.Mesh(craterGeo, craterMat); c.scale.setScalar(rnd(1.4, 2.2)); c.position.set(x, y + 0.03, z); L.group.add(c);
     for (let i = 0; i < 8; i++) { const a = Math.random() * 6.28, v = rnd(3, 8); actions.spawn(Math.random() < 0.5 ? 'brick' : 'rock', x, y + 0.4, z, Math.cos(a) * v, rnd(4, 9), Math.sin(a) * v); }
-    billow(x, y, z, 14);
+    billow(x, y, z, Math.round(14 * Math.min(2, size)), { size: 8 * size });
     if (Math.random() < 0.6) ignite(x, y, z, rnd(25, 50)); // often a fire that keeps burning
+    if (!harm) return;
     const n = damage(x, z, [4, 9, 16], 'blast');
     if (n >= 30) ctx.toast('폭풍에 날아가 바닥을 굴렀다. 귀가 먹먹하다.', 'self', 4200);
     else if (n > 0) ctx.toast('파편이 스쳤다. 피가 흐른다.', 'self', 3600);
@@ -225,7 +227,7 @@ export function createDanger({ ctx, actions, hurt }) {
 
   engine.onFrame((dt) => {
     // effects keep running (fires burn down) even while a menu is open
-    if (flashK > 0) { flashK = Math.max(0, flashK - dt * 2); flash.intensity = 900 * flashK * flashK; ball.scale.setScalar(2 + (1 - flashK) * 7); ball.material.opacity = Math.min(1, flashK * flashK * 1.6); ring.scale.setScalar(1 + (1 - flashK) * 16); ring.material.opacity = 0.55 * flashK; }
+    if (flashK > 0) { flashK = Math.max(0, flashK - dt * 2); flash.intensity = 900 * ballSize * flashK * flashK; ball.scale.setScalar((2 + (1 - flashK) * 7) * ballSize); ball.material.opacity = Math.min(1, flashK * flashK * 1.6); ring.scale.setScalar((1 + (1 - flashK) * 16) * ballSize); ring.material.opacity = 0.55 * flashK; }
     for (const p of puffs) {
       if (p.age >= p.life) continue;
       p.age += dt; const k = p.age / p.life, w = p.sp.position;
@@ -252,7 +254,7 @@ export function createDanger({ ctx, actions, hurt }) {
     // engine/actions.js hit someone: the looter's own onHit handles it; tells the app not to count it as violence.
     isHostile: (p) => !!p?.hostile,
     // force an event now (dev panel / tests)
-    trigger(kind, at) { const I = intensity() ?? { shell: 1 }; if (kind === 'blast') blast(at.x, at.z); else if (kind === 'shell') shell(I); else if (kind === 'collapse') collapse(); else if (kind === 'looter' && !looter) spawnLooter(); },
+    trigger(kind, at) { const I = intensity() ?? { shell: 1 }; if (kind === 'blast') blast(at.x, at.z); else if (kind === 'boom') blast(at.x, at.z, false, at.size ?? 1); else if (kind === 'shell') shell(I); else if (kind === 'collapse') collapse(); else if (kind === 'looter' && !looter) spawnLooter(); },
     reset() { dropLooter(); pending.length = 0; shellT = 20; collapseT = 60; looterT = 45; },
   };
 }

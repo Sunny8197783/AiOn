@@ -49,7 +49,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
   let anim = '', lastGround = 0, snap = true, beamStrength = 1, flashK = 1;
   let shakeT = 0, shakeDur = 1, shakeA = 0;
   let vy = 0, air = false, stamina = 1, winded = false, blocked = false, sens = 1, peakY = 0, move = null, actAnim = null, actT = 0, crouch = false;
-  let airT = 0, accel = 0, lastFwd = 0, lastYaw = 0, lookOff = 0;
+  let airT = 0, accel = 0, lastFwd = 0, lastYaw = 0, lookOff = 0, modelHidden = false;
   const headW = new THREE.Vector3(), neckW = new THREE.Vector3();
   // First person: the own head would fill the lens, so the camera sees the body through a copy of its material
   // that clips everything above the neck. Shadows use the uncut body (clipShadows off): no headless shadow.
@@ -337,7 +337,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     const headDriven = !!model?.bones?.head && prof.eye === PLAYER.eye;
     if (model?.group) {
       model.group.position.copy(position); model.group.rotation.y = bodyYaw;
-      model.group.visible = override ? view !== 'first' : headDriven || viewK > 0.35;
+      model.group.visible = !modelHidden && (override ? view !== 'first' : headDriven || viewK > 0.35);
       airT = air && !move ? airT + dt : 0;
       let next = hs < 0.15 ? 'idle' : carrying === 'water' ? 'carry' : 'walk'; // walk..run is one blend by speed
       if (g && g.slope > 0.35 && hs > 0.15 && carrying !== 'water') next = climb >= 0 ? 'stairsUp' : 'stairsDown';
@@ -470,6 +470,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     act(name, seconds) { if (!model?.play?.(name, { seconds })) { actAnim = name; actT = seconds ?? 0.4; } },
     get busy() { return !!move; },
     setHold(on) { model?.setHold?.(on); },
+    setModelHidden(v) { modelHidden = !!v; }, // cutscenes show their own people
     // Low to the ground (C): slower, smaller, safer from blasts and debris.
     get crouching() { return crouch; },
     set crouching(v) { crouch = !!v; },

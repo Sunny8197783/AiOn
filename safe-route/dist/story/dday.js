@@ -9,21 +9,26 @@ import { fact } from '../game/facts.js';
 import { applyHome, applyBag, bagItems } from './prep-actions.js';
 import { radioScene, emergencyText, factCard, lightSource, drainBattery, has, AREA, BROADCASTS } from './common.js';
 import { seoyeonRelay } from './seoyeon.js';
+import { strikeScene, blackoutScene, sirenScene } from './cutscenes.js';
 
 const ALERT = 20 * 60 + 5, LATE = 20 * 60 + 30;
 
 // A few seconds after 정민 steps outside, a missile hits a villa south of the park (no story place):
 // the blast, the shake, then fire and a smoke column that stay for the rest of the war.
+// Shown as a cutscene (story/cutscenes.js); the town keeps the ruin, the fire and the smoke column after it.
 function strike(ctx) {
   const G = ctx.G;
   G.know.strikeSeen = true;
-  ctx.audio.boom(0.55);
-  ctx.engine.shake(0.3, 1.6);
-  ctx.setLevelState('town', 'strike', 'hit');
-  recordEvent(G, 'strike', { minute: G.minute });
-  ctx.stat('tension', 18);
-  ctx.caption('쾅— 땅이 울렸다. 공원 너머 남쪽 빌라 한 동이 무너져 내리고, 불길과 검은 연기가 치솟는다.', null, 5200);
-  ctx.toast('멈추지 말고 대피소로. 무너진 건물 쪽으로 가지 않는다.', 'self', 5200);
+  let hit = false;
+  const impact = () => {
+    if (hit) return; hit = true;
+    ctx.audio.boom(0.55);
+    ctx.setLevelState('town', 'strike', 'hit');
+    recordEvent(G, 'strike', { minute: G.minute });
+    ctx.stat('tension', 18);
+  };
+  strikeScene(ctx, impact).catch((err) => console.error('[cine] strike scene failed', err))
+    .finally(() => { impact(); ctx.toast('멈추지 말고 대피소로. 무너진 건물 쪽으로 가지 않는다.', 'self', 5200); });
 }
 // Later, more blasts far away: a dull boom and a slight tremor every half minute or so.
 function farBlasts(ctx) {
@@ -72,12 +77,18 @@ async function evening(ctx) {
 
   // 19:40 the lights go out.
   G.minute = 19 * 60 + 40;
-  blackoutState(ctx);
-  ctx.engine.setEnv('interiorDark', { seconds: 0.4 });
-  ctx.audio.ambience('blackout', 0.3);
+  let out = false;
+  const cut = () => {
+    if (out) return; out = true;
+    blackoutState(ctx);
+    ctx.engine.setPower(false);
+    ctx.engine.setEnv('interiorDark', { seconds: 0.4 });
+    ctx.audio.ambience('blackout', 0.3);
+  };
+  try { await blackoutScene(ctx, cut); } catch (err) { console.error('[cine] blackout scene failed', err); }
+  cut();
   recordEvent(G, 'blackout', {});
   ctx.refresh();
-  await ctx.caption('정전 — 집 안의 불이 한꺼번에 꺼졌다. 창밖 건너편 동도 캄캄하다.', null, 3500);
   const src = lightSource(ctx);
   ctx.lightSource = src;
   ctx.toast(src === 'flashlight' ? 'F 키: 손전등 켜기/끄기' : src === 'phone' ? 'F 키: 휴대폰 손전등 (배터리가 빨리 닳습니다)' : '빛이 없다. 천천히 움직이자.', 'self', 5000);
@@ -124,18 +135,18 @@ async function alert(ctx) {
   G.minute = ALERT;
   ctx.refresh();
   ctx.audio.siren(true);
-  ctx.caption('공습경보 사이렌 — 1분간 오르내리는 소리 (5초 상승 · 3초 하강 반복)', null, 6000);
-  await emergencyText(ctx, { kind: '위급재난문자', time: '20:05', text: `[위급재난문자] 20:05 미사일 발사, 연무동지역 공습경보, 지하시설 또는 건물 내로 대피. EVACUATION, MISSILES ATTACK ${AREA}` });
-  recordEvent(G, 'alert', { minute: ALERT });
-  await factCard(ctx, '공습경보', ['alert_airraid', 'bag_take', 'alert_stairs', 'alert_night']);
-
-  // Town for the evacuation.
+  // Town for the evacuation (set first: the siren cutscene shows the street filling).
   const closures = G.cond.closures.dday;
   ctx.setLevelState('town', 'traffic', 'none');
   ctx.setLevelState('town', 'crowd', 'evacuating');
   ctx.setLevelState('town', 'closures', closures);
   ctx.setLevelState('town', 'gates', { east: 'closed', stairs: 'open', ramp: 'open', access: 'closed' });
   ctx.setLevelState('town', 'notices', 'dday');
+  try { await sirenScene(ctx); } catch (err) { console.error('[cine] siren scene failed', err); ctx.caption('공습경보 사이렌 — 1분간 오르내리는 소리 (5초 상승 · 3초 하강 반복)', null, 6000); }
+  await emergencyText(ctx, { kind: '위급재난문자', time: '20:05', text: `[위급재난문자] 20:05 미사일 발사, 연무동지역 공습경보, 지하시설 또는 건물 내로 대피. EVACUATION, MISSILES ATTACK ${AREA}` });
+  recordEvent(G, 'alert', { minute: ALERT });
+  await factCard(ctx, '공습경보', ['alert_airraid', 'bag_take', 'alert_stairs', 'alert_night']);
+
 
   // What is still open depends on this run's closures; nobody names a road that is closed tonight.
   const detour = [['danji', '단지길'], ['sijang', '시장길']].filter(([id]) => !closures.includes(id)).map(([, n]) => n).join('이나 ');
