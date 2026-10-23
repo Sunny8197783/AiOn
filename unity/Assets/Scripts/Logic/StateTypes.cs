@@ -31,7 +31,7 @@ namespace Gyeongbo.Logic
         public Handover handover;
 
         // structuredClone(G): a deep copy (checkpoint/restore). Event details are copied too.
-        public Game Clone() => throw new NotImplementedException("port: game/state.js:structuredClone(G)");
+        public Game Clone() => (Game)Js.Copy(this);
     }
 
     public sealed class Slots
@@ -77,7 +77,11 @@ namespace Gyeongbo.Logic
         public List<string> cardFields, plannedRoute;
 
         // !!G.know[key] for the keys game/debrief.js looks up by name.
-        public bool Has(string key) => throw new NotImplementedException("port: game/debrief.js:G.know[k]");
+        public bool Has(string key)
+        {
+            var f = key == null ? null : typeof(Know).GetField(key);
+            return f != null && Js.Truthy(f.GetValue(this));
+        }
     }
 
     public sealed class Rel
