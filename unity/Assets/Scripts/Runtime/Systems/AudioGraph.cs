@@ -25,6 +25,7 @@ namespace Gyeongbo.Systems
         readonly List<Ev> ev = new List<Ev>();
         internal readonly List<ANode> ins = new List<ANode>();
         internal readonly float[] buf = new float[ACtx.QUANTUM];
+        internal bool flat;              // this quantum's values are all buf[0] (no automation, no inputs)
         float v, lastV, tgt, tau, v0;
         double lastT = double.NaN, t0;
         bool tgtOn;
@@ -70,11 +71,47 @@ namespace Gyeongbo.Systems
             return v;
         }
 
+        // No event falls inside this quantum: the same curve as Eval, without a pow / exp per sample.
+        void Steady(int n)
+        {
+            double t = ctx.t0, dt = ctx.dt;
+            if (ev.Count > 0 && (ev[0].k == K.Lin || ev[0].k == K.Exp))   // a ramp on its way to ev[0]
+            {
+                var e = ev[0];
+                if (double.IsNaN(lastT)) { lastT = t; lastV = v; }
+                double span = e.t - lastT;
+                if (span <= 0) { for (int i = 0; i < n; i++) buf[i] = e.v; }
+                else if (e.k == K.Lin) { double k = (t - lastT) / span, dk = dt / span; for (int i = 0; i < n; i++) buf[i] = lastV + (e.v - lastV) * (float)(k + i * dk); }
+                else if (lastV == 0 || lastV * e.v < 0) { for (int i = 0; i < n; i++) buf[i] = lastV; }
+                else
+                {
+                    double r = (double)e.v / lastV, x = lastV * Math.Pow(r, (t - lastT) / span), q = Math.Pow(r, dt / span);
+                    for (int i = 0; i < n; i++) { buf[i] = (float)x; x *= q; }
+                }
+            }
+            else if (tgtOn)
+            {
+                if (tau <= 0) { for (int i = 0; i < n; i++) buf[i] = tgt; }
+                else
+                {
+                    double x = (v0 - tgt) * Math.Exp(-(t - t0) / tau), f = Math.Exp(-dt / tau);
+                    for (int i = 0; i < n; i++) { buf[i] = tgt + (float)x; x *= f; }
+                }
+            }
+            else for (int i = 0; i < n; i++) buf[i] = v;   // a set waiting in the future: hold
+            v = buf[n - 1];
+        }
+
         // Per-sample values of this quantum: automation plus connected inputs (LFOs), down-mixed to mono.
         internal void Fill(int n)
         {
-            if (ev.Count == 0 && !tgtOn) { for (int i = 0; i < n; i++) buf[i] = v; }
+            // A target curve that has arrived (nothing queued after it) stops costing an exp per sample.
+            if (tgtOn && ev.Count == 0 && Mathf.Abs(v - tgt) <= 1e-6f * Mathf.Max(1, Mathf.Abs(tgt))) { tgtOn = false; v = tgt; }
+            flat = ev.Count == 0 && !tgtOn;
+            if (flat) { for (int i = 0; i < n; i++) buf[i] = v; }
+            else if (ev.Count == 0 || ev[0].t > ctx.t0 + (n - 1) * ctx.dt) Steady(n);
             else for (int i = 0; i < n; i++) buf[i] = Eval(ctx.t0 + i * ctx.dt);
+            if (ins.Count > 0) flat = false;
             for (int j = ins.Count - 1; j >= 0; j--)
             {
                 var s = ins[j]; s.Pull(n);
@@ -187,12 +224,19 @@ namespace Gyeongbo.Systems
         protected override void Process(int n)
         {
             pan.Fill(n);
+            float gc = 0, gs = 0, pf = 0;
             for (int i = 0; i < n; i++)
             {
-                float p = Mathf.Clamp(pan.buf[i], -1, 1), l = L[i], r = R[i];
-                if (!stereo) { float x = (p + 1) / 2; L[i] = l * Mathf.Cos(x * Mathf.PI / 2); R[i] = l * Mathf.Sin(x * Mathf.PI / 2); }
-                else if (p <= 0) { float x = p + 1; L[i] = l + r * Mathf.Cos(x * Mathf.PI / 2); R[i] = r * Mathf.Sin(x * Mathf.PI / 2); }
-                else { float x = p; L[i] = l * Mathf.Cos(x * Mathf.PI / 2); R[i] = r + l * Mathf.Sin(x * Mathf.PI / 2); }
+                float l = L[i], r = R[i];
+                if (i == 0 || !pan.flat)
+                {
+                    pf = Mathf.Clamp(pan.buf[i], -1, 1);
+                    float x = !stereo ? (pf + 1) / 2 : pf <= 0 ? pf + 1 : pf;
+                    gc = Mathf.Cos(x * Mathf.PI / 2); gs = Mathf.Sin(x * Mathf.PI / 2);
+                }
+                if (!stereo) { L[i] = l * gc; R[i] = l * gs; }
+                else if (pf <= 0) { L[i] = l + r * gc; R[i] = r * gs; }
+                else { L[i] = l * gc; R[i] = r + l * gs; }
             }
             stereo = true;
         }
@@ -217,6 +261,10 @@ namespace Gyeongbo.Systems
         public AOsc(ACtx c) : base(c) { frequency = new AParam(c, 440); detune = new AParam(c, 0); }
         public void Start(double when) => startAt = Math.Max(when, 0);
 
+        static readonly float[] SIN = MakeSin();
+        static float[] MakeSin() { var t = new float[4097]; for (int i = 0; i <= 4096; i++) t[i] = (float)Math.Sin(2 * Math.PI * i / 4096); return t; }
+        static float Sine(float ph) { float x = ph * 4096; int i = (int)x; if (i < 0) i = 0; else if (i > 4095) i = 4095; return SIN[i] + (SIN[i + 1] - SIN[i]) * (x - i); }
+
         static float Blep(float t, float dt)
         {
             if (t < dt) { t /= dt; return t + t - t * t - 1; }
@@ -227,18 +275,19 @@ namespace Gyeongbo.Systems
         protected override void Process(int n)
         {
             frequency.Fill(n); detune.Fill(n);
+            float dm = detune.flat ? (detune.buf[0] == 0 ? 1 : Mathf.Pow(2, detune.buf[0] / 1200)) : 1;
             for (int i = 0; i < n; i++)
             {
                 double t = ctx.t0 + i * ctx.dt;
                 if (!Live(t)) { L[i] = R[i] = 0; continue; }
-                float d = detune.buf[i], f = frequency.buf[i] * (d == 0 ? 1 : Mathf.Pow(2, d / 1200)), inc = Mathf.Clamp(f / ctx.sampleRate, -0.5f, 0.5f);
+                float d = detune.buf[i], f = frequency.buf[i] * (detune.flat ? dm : d == 0 ? 1 : Mathf.Pow(2, d / 1200)), inc = Mathf.Clamp(f / ctx.sampleRate, -0.5f, 0.5f);
                 float ph = (float)phase, a = Mathf.Abs(inc), s;
                 switch (type)
                 {
                     case "square": s = (ph < 0.5f ? 1 : -1) + Blep(ph, a) - Blep((ph + 0.5f) % 1, a); break;
                     case "sawtooth": { float q = (ph + 0.5f) % 1; s = 2 * q - 1 - Blep(q, a); break; }   // 0 at phase 0, rising
                     case "triangle": s = ph < 0.25f ? 4 * ph : ph < 0.75f ? 2 - 4 * ph : 4 * ph - 4; break;
-                    default: s = Mathf.Sin(ph * 2 * Mathf.PI); break;
+                    default: s = Sine(ph); break;
                 }
                 L[i] = R[i] = s;
                 phase += inc; phase -= Math.Floor(phase);
@@ -258,14 +307,16 @@ namespace Gyeongbo.Systems
         {
             stereo = true;
             int len = buffer?.length ?? 0, sr = ctx.sampleRate;
+            long idx = -1;
+            float[] cl = len > 0 ? buffer.ch[0] : null, cr = len > 0 ? buffer.ch[buffer.ch.Length > 1 ? 1 : 0] : null;
             for (int i = 0; i < n; i++)
             {
                 double t = ctx.t0 + i * ctx.dt;
-                if (len == 0 || done || !Live(t)) { L[i] = R[i] = 0; continue; }
-                long idx = (long)Math.Floor((offset + (t - startAt)) * sr + 0.5);
-                if (loop) idx %= len;
-                else if (idx >= len) { done = true; L[i] = R[i] = 0; continue; }
-                L[i] = buffer.ch[0][idx]; R[i] = buffer.ch[buffer.ch.Length > 1 ? 1 : 0][idx];
+                if (len == 0 || done || !Live(t)) { L[i] = R[i] = 0; idx = -1; continue; }
+                if (idx < 0) { idx = (long)Math.Floor((offset + (t - startAt)) * sr + 0.5); if (loop) idx %= len; }
+                else if (++idx >= len && loop) idx = 0;
+                if (idx >= len) { done = true; L[i] = R[i] = 0; continue; }
+                L[i] = cl[idx]; R[i] = cr[idx];
             }
         }
     }
@@ -304,12 +355,12 @@ namespace Gyeongbo.Systems
             for (int i = 0; i < 4; i++)
             {
                 var b = combs[i]; int j = ci[o + i]; float d = b[j];
-                b[j] = x + g[i] * d; y += d; ci[o + i] = (j + 1) % b.Length;
+                b[j] = x + g[i] * d; y += d; ci[o + i] = j + 1 == b.Length ? 0 : j + 1;
             }
             for (int i = 0; i < 2; i++)
             {
                 var b = aps[i]; int j = ai[o / 2 + i]; float d = b[j], w = y + 0.5f * d;
-                b[j] = w; y = d - 0.5f * w; ai[o / 2 + i] = (j + 1) % b.Length;
+                b[j] = w; y = d - 0.5f * w; ai[o / 2 + i] = j + 1 == b.Length ? 0 : j + 1;
             }
             return y;
         }
@@ -329,13 +380,14 @@ namespace Gyeongbo.Systems
     // reduction and the browsers' automatic make-up gain ((1 / gain at 0 dB)^0.6).
     internal sealed class ALimiter : ANode
     {
-        readonly float threshold, knee, ratio, aA, aR, makeup;
+        readonly float threshold, knee, ratio, aA, aR, makeup, under;
         float env;
         public ALimiter(ACtx c, float threshold, float knee, float ratio, float attack, float release) : base(c)
         {
             keep = true; this.threshold = threshold; this.knee = knee; this.ratio = ratio;
             aA = Mathf.Exp(-1 / (attack * c.sampleRate)); aR = Mathf.Exp(-1 / (release * c.sampleRate));
             makeup = Mathf.Pow(10, -Curve(0) * 0.6f / 20);
+            under = Mathf.Pow(10, (threshold - knee / 2) / 20);   // below this level the curve is 0 dB
         }
 
         float Curve(float x)   // gain change in dB for an input level x dB
@@ -351,9 +403,10 @@ namespace Gyeongbo.Systems
             for (int i = 0; i < n; i++)
             {
                 float det = Mathf.Max(Mathf.Abs(L[i]), Mathf.Abs(R[i]));
-                float gr = Curve(det > 1e-6f ? 20 * Mathf.Log10(det) : -120);
+                float gr = det < under ? 0 : Curve(det > 1e-6f ? 20 * Mathf.Log10(det) : -120);
                 env = gr < env ? aA * env + (1 - aA) * gr : aR * env + (1 - aR) * gr;
-                float k = Mathf.Pow(10, env / 20) * makeup;
+                if (env > -1e-5f) env = 0;
+                float k = env == 0 ? makeup : Mathf.Pow(10, env / 20) * makeup;
                 L[i] *= k; R[i] *= k;
             }
         }
@@ -365,6 +418,7 @@ namespace Gyeongbo.Systems
         public readonly int sampleRate;
         public readonly ANode destination;
         public string state = "running";
+        public Action onQuantum;   // setTimeout stand-in: runs before each render quantum, on the audio clock
         long frames;
         internal int block;
         internal double t0, t1, dt;
@@ -387,6 +441,7 @@ namespace Gyeongbo.Systems
             while (n > 0)
             {
                 int k = Math.Min(QUANTUM, n);
+                onQuantum?.Invoke();
                 block++; t0 = currentTime; t1 = (frames + k) / (double)sampleRate;
                 destination.Pull(k);
                 for (int i = 0; i < k; i++) { o[w++] = Mathf.Clamp(destination.L[i], -1, 1); o[w++] = Mathf.Clamp(destination.R[i], -1, 1); }
