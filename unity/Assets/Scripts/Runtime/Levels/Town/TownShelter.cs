@@ -194,9 +194,95 @@ namespace Gyeongbo.Levels
                 gates["ramp"] = open => { J.SetRot(pivot, 0, 0, open ? Mathf.PI / 2 - 0.05f : 0); boomSolid.off = open; };
             }
 
-            BuildAccess(kit, stat, dyn, walk, solid, tactile, exitMat, emLamp, conc, steel, shelterSign, rail, gates);
-            BuildEast(kit, stat, dyn, solid, glass, dark, shelterSign, gates);
-            BuildGuideSigns(kit, stat, steel, solid);
+            // ================= C: gentle ramp with handrails, tactile strips, roll-down shutter =================
+            {
+                float xl = -112, xm = -109.6f, xt = -101.8f, z0 = 13.75f, z1 = 16, yb = -0.5f;
+                walk.Add(new WalkZone { x0 = xm, x1 = xt, z0 = z0, z1 = z1, ramp = new Ramp("x", yb, Y) }); walk.Add(new WalkZone(xl, xm, z0, z1, yb));
+                var floor = kit.Surface("concrete", new SurfaceOpts { color = J.Hex(0xc9c5bc) });
+                stat.Add(Quad(P(xm, yb, z1), P(xt, Y, z1), P(xt, Y, z0), P(xm, yb, z0), floor, 1));
+                stat.Add(Quad(P(xl, yb, z1), P(xm, yb, z1), P(xm, yb, z0), P(xl, yb, z0), floor, 1));
+                stat.Add(kit.Slab(xt - xl, Y + 1.2f, 0.15f, conc, new At { x = (xl + xt) / 2, y = -1.1f, z = 13.6f }), kit.Slab(0.3f, Y + 1.2f, 2.4f, conc, new At { x = xl - 0.15f, y = -1.1f, z = 14.8f }));
+                stat.Add(Quad(P(xt, Y + 0.004f, z1), P(xt + 0.6f, Y + 0.004f, z1), P(xt + 0.6f, Y + 0.004f, z0), P(xt, Y + 0.004f, z0), tactile, 0.3f));
+                stat.Add(Quad(P(-111.6f, yb + 0.004f, 15.92f), P(-109.8f, yb + 0.004f, 15.92f), P(-109.8f, yb + 0.004f, 15.3f), P(-111.6f, yb + 0.004f, 15.3f), tactile, 0.3f));
+                foreach (var h in new[] { 0.65f, 0.85f }) foreach (var z in new[] { 13.85f, 15.9f })
+                {
+                    rail(P(xt + 0.3f, Y + h, z), P(xm, yb + h, z)); rail(P(xm, yb + h, z), P(xl + 0.15f, yb + h, z));
+                }
+                for (double x = xl + 0.3; x <= xt + 0.3; x += 1.5) { float y = x > xm ? yb + (Y - yb) * ((float)x - xm) / (xt - xm) : yb; stat.Add(kit.Cyl(0.025f, 0.025f, 0.85f, kit.Mat("metal"), new At { x = (float)x, y = y, z = 13.85f }, 6)); }
+                shelterSign(-108.4f, yb + 1.95f, 15.94f, Mathf.PI);
+                stat.Add(kit.Cyl(0.04f, 0.04f, 2.6f, steel, new At { x = xt + 0.7f, y = Y, z = 13.2f }, 8)); shelterSign(xt + 0.7f, Y + 2.55f, 13.15f, Mathf.PI, 0.4f);
+                var cs = kit.Sign(new[] { "출입구 C · 경사로", "휠체어 · 유모차 · 보행 보조기" }, new SignOpts { w = 1.5f, h = 0.42f, bg = "#ffffff", fg = "#1f4e8c", single = true }); J.SetPos(cs, -106, Y + 1.45f, 15.94f); J.SetYaw(cs, Mathf.PI); stat.Add(cs);
+                // shutter box, slats, opening behind
+                stat.Add(kit.Box(2.0f, 0.35f, 0.3f, kit.Mat("paint:#9aa1a6", new MatSpec { metalness = 0.6f, roughness = 0.4f }), new At { x = -110.7f, y = yb + 2.4f, z = 15.82f }));
+                var slats = kit.Memo("town:shutter", () =>
+                {
+                    var h = kit.Canvas(64, 128, (g, w, hh) => { for (int y = 0; y < hh; y++) { var v = TownUtil.F(128 + 90 * Math.Sin(y / 8.0 * Math.PI)); g.fillStyle = $"rgb({v},{v},{v})"; g.fillRect(0, y, w, 1); } });
+                    return Mat.Lit(new MatSpec { color = J.Hex(0xb9bec2), metalness = 0.7f, roughness = 0.35f, normalMap = kit.Texture(kit.NormalFrom(h, 3), false), repeat = new Vector2(1, 6) });
+                });
+                var shutter = J.Group("shutter");
+                var sl = TownBKit.Mesh(Geo.Plane(1.8f, 2.4f), slats, cast: true); J.SetPos(sl, -110.7f, yb + 1.2f, 15.93f); J.SetYaw(sl, Mathf.PI);
+                var paper = kit.Sign(new[] { "공사 중", "10월 말 개방 예정", "비상시 현장 안내에 따라 개방" }, new SignOpts { w = 0.6f, h = 0.5f, bg = "#fdfbf2", fg = "#222", single = true }); J.SetPos(paper, -110.7f, yb + 1.45f, 15.915f); J.SetYaw(paper, Mathf.PI);
+                shutter.Add(sl, paper); dyn.Add(shutter);
+                var opening = J.Group("opening");
+                var hole = TownBKit.Mesh(Geo.Plane(1.8f, 2.4f), kit.Mat("paint:#141618", new MatSpec { roughness = 1 })); J.SetPos(hole, -110.7f, yb + 1.2f, 15.94f); J.SetYaw(hole, Mathf.PI);
+                var ex = TownBKit.Mesh(Geo.Plane(0.5f, 0.25f), exitMat); J.SetPos(ex, -110.7f, yb + 2.0f, 15.92f); J.SetYaw(ex, Mathf.PI);
+                var inner = kit.Box(1.0f, 0.06f, 0.1f, emLamp, new At { x = -110.7f, y = yb + 2.15f, z = 15.9f, cast = false });
+                var cl = kit.PointLight(J.Hex(0xf2f6ff), 14, 7, 2); J.SetPos(cl.gameObject, -110.7f, yb + 1.9f, 15.1f); kit.Lit("emergency", cl, 14);
+                opening.Add(hole, ex, inner); dyn.Add(opening); dyn.Add(cl); kit.Merge(opening); // cl outside `opening`: lights never hide
+                solid(xl, xt, 13.45f, z0, "railC", -3, 2); solid(xl - 0.3f, xl, 13.45f, z1, "railC", -3, 2);
+                gates["access"] = open => { shutter.SetActive(!open); opening.SetActive(open); kit.GateLit(cl, open); };
+            }
+
+            // ================= East: glass double doors, canopy, closure barrier and notice =================
+            {
+                float x = -69.95f, zc = 31;
+                stat.Add(kit.Slab(2.6f, 0.28f, 5.4f, kit.Surface("concrete", new SurfaceOpts { color = J.Hex(0xc7c3ba) }), new At { x = -68.7f, y = Y + 2.95f, z = zc }));
+                foreach (var z in new[] { 28.6f, 33.4f }) { stat.Add(kit.Box(0.24f, 2.95f, 0.24f, kit.Mat("whiteWall"), new At { x = -67.55f, y = Y, z = z })); solid(-67.7f, -67.4f, z - 0.15f, z + 0.15f, "canopyEast"); }
+                var glow = kit.Memo("town:lobbyGlow", () => kit.Lit("indoor", Mat.Lit(new MatSpec { color = J.Hex(0x2a2a28), emissive = J.Hex(0xffe6c4), emissiveIntensity = 0.6f, roughness = 0.8f }), 0.6f));
+                var back = TownBKit.Mesh(Geo.Plane(3.2f, 2.5f), glow); J.SetPos(back, x - 0.01f, Y + 1.25f, zc); J.SetYaw(back, Mathf.PI / 2); stat.Add(back);
+                foreach (var dz in new[] { -1.65f, 1.65f }) stat.Add(kit.Box(0.1f, 2.6f, 0.1f, dark, new At { x = x + 0.03f, y = Y, z = zc + dz }));
+                stat.Add(kit.Box(0.12f, 0.14f, 3.4f, dark, new At { x = x + 0.03f, y = Y + 2.5f, z = zc }));
+                var leaves = new List<(GameObject g, int s)>();
+                foreach (var s in new[] { -1, 1 })
+                {
+                    var g = J.Group("leaf");
+                    var p = kit.Box(0.03f, 2.45f, 1.55f, glass, new At { x = 0, y = 0, z = 0, cast = false }); Kit.Keep(p);
+                    g.Add(p, kit.Box(0.05f, 2.45f, 0.05f, dark, new At { x = 0, y = 0, z = s * 0.75f }), kit.Box(0.06f, 0.4f, 0.03f, kit.Mat("metal"), new At { x = 0.04f, y = 0.95f, z = -s * 0.65f }));
+                    J.SetPos(g, x + 0.06f, Y, zc + s * 0.78f); dyn.Add(g); kit.Merge(g); leaves.Add((g, s));
+                }
+                shelterSign(x + 0.03f, Y + 1.95f, 33.9f, Mathf.PI / 2);
+                var plq = kit.Sign(new[] { "민방위 대피시설", "연무 생활문화센터 지하주차장", "수용 인원 1,200명" }, new SignOpts { w = 0.9f, h = 0.6f, bg = "#1f4e8c", single = true }); J.SetPos(plq, x + 0.03f, Y + 1.5f, 28.0f); J.SetYaw(plq, Mathf.PI / 2); stat.Add(plq);
+                // closure: stanchions with belts, standing notice
+                var closed = J.Group("closedEast");
+                var posts = new[] { 28.7f, 30.1f, 31.9f, 33.3f };
+                foreach (var z in posts) closed.Add(kit.Cyl(0.03f, 0.03f, 0.95f, kit.Mat("metal"), new At { x = -67.8f, y = Y, z = z }, 8), kit.Cyl(0.15f, 0.15f, 0.04f, dark, new At { x = -67.8f, y = Y, z = z }, 14));
+                var belt = kit.Memo("town:belt", () => Mat.Lit(new MatSpec { roughness = 0.6f, side = "double", map = tex("belt", 128, 16, (g, w, h) => { for (int k = 0; k < 8; k++) { g.fillStyle = k % 2 != 0 ? "#ffffff" : "#c42b25"; g.fillRect(k * w / 8f, 0, w / 8f, h); } }) }));
+                for (int i = 1; i < posts.Length; i++) { var m = TownBKit.Mesh(Geo.Plane(posts[i] - posts[i - 1], 0.06f), belt); J.SetPos(m, -67.8f, Y + 0.88f, (posts[i] + posts[i - 1]) / 2); J.SetYaw(m, Mathf.PI / 2); closed.Add(m); }
+                var note = kit.Sign(new[] { "동쪽 출입구 폐쇄", "A 계단 · B 진출입로 이용" }, new SignOpts { w = 0.9f, h = 0.6f, bg = "#ffffff", fg = "#c42b25", border = "#c42b25", single = true });
+                J.SetPos(note, -66.9f, Y + 1.25f, 34.5f); J.SetYaw(note, Mathf.PI / 2); closed.Add(note, kit.Box(0.05f, 0.95f, 0.05f, dark, new At { x = -66.92f, y = Y, z = 34.5f }), kit.Box(0.4f, 0.04f, 0.4f, dark, new At { x = -66.92f, y = Y, z = 34.5f }));
+                dyn.Add(closed); kit.Merge(closed);
+                var barrier = solid(-68.0f, -67.55f, 28.4f, 33.6f, "gateEast");
+                gates["east"] = open =>
+                {
+                    closed.SetActive(!open); barrier.off = open;
+                    foreach (var (g, s) in leaves) { var p = J.Pos(g); J.SetPos(g, p.x, p.y, zc + s * (open ? 2.25f : 0.78f)); }
+                };
+            }
+
+            // ================= guide signs (유도표지판) on 2 m posts =================
+            var ENT = new Dictionary<string, MapPlace> { ["A"] = TownMap.PLACES["shelterA"], ["B"] = TownMap.PLACES["shelterB"], ["C"] = TownMap.PLACES["shelterC"], ["east"] = TownMap.PLACES["shelterEast"] };
+            foreach (var (x, z, nx, nz, to) in new[] { (-58.6f, 9.4f, 1, 0, "A"), (-118f, 9.4f, -1, 0, "C"), (-57f, 26f, 0, -1, "east"), (-57f, 58f, 0, 1, "B"), (-61.5f, -8.8f, 0, -1, "A"), (-44.6f, 26.6f, 1, 0, "east") })
+            {
+                var t = ENT[to]; float dx = (float)t.x - x, dz = (float)t.z - z, d = Mathf.Sqrt(dx * dx + dz * dz), fx = -nx, fz = -nz;
+                float ahead = (dx * fx + dz * fz) / d, side = (dx * -fz + dz * fx) / d;
+                string arrow = ahead > 0.7f ? "up" : side > 0 ? "right" : "left"; float meters = Math.Max(10, TownBKit.Round(d / 5) * 5);
+                var sgn = kit.GuideSign(arrow, meters, 0.5f); TownBKit.FrontSide(TownBKit.MatOf(sgn));
+                float ry = Mathf.Atan2(nx, nz);
+                J.SetPos(sgn, x + nx * 0.05f, Y + 2.125f, z + nz * 0.05f); J.SetYaw(sgn, ry); stat.Add(sgn);
+                var bp = TownBKit.Mesh(Geo.Plane(0.52f, 0.27f), kit.Mat("paint:#a8adb2", new MatSpec { metalness = 0.6f })); J.SetPos(bp, x + nx * 0.03f, Y + 2.125f, z + nz * 0.03f); J.SetYaw(bp, ry + Mathf.PI); stat.Add(bp);
+                stat.Add(kit.Cyl(0.035f, 0.035f, 2.3f, steel, new At { x = x, y = Y, z = z }, 8));
+                solid(x - 0.12f, x + 0.12f, z - 0.12f, z + 0.12f, "guidePost", -0.5f, 2.5f);
+            }
 
             kit.Merge(stat);
             foreach (var p in signProto.Values) TownBKit.Drop(p);
@@ -207,9 +293,5 @@ namespace Gyeongbo.Levels
             }
             return new TownShelterResult { group = group, solids = solids, walk = walk, setGates = setGates };
         }
-
-        delegate Solid SolidFn(float x0, float x1, float z0, float z1, string id, float y0 = -3, float y1 = 3);
-        delegate void SignFn(float x, float y, float z, float ry, float w = 0.45f);
-        delegate void RailFn(Vector3 a, Vector3 b, float r = 0.024f);
     }
 }
