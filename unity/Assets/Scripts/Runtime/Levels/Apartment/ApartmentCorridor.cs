@@ -125,7 +125,8 @@ namespace Gyeongbo.Levels
 
             // The hallway-fire spot: recycling boxes and a newspaper bundle (normal / scorched), soot and extinguisher powder.
             var fp = J.Group("fire-spot"); SetPos(fp, FIRE_SPOT.x, Y, FIRE_SPOT.z); dyn.Add(fp);
-            var normal = J.Group("normal"); var scorched = J.Group("scorched"); fp.Add(normal, scorched); scorched.SetActive(false);
+            // JS hides scorched here; it stays active until Merge (which may skip inactive objects) and setFire('none') hides it.
+            var normal = J.Group("normal"); var scorched = J.Group("scorched"); fp.Add(normal, scorched);
             var @char = kit.Mat("paint:#2a211b", new MatSpec { roughness = 1 }); var paper = kit.Mat("paint:#d9d6cc", new MatSpec { roughness = 1 }); var ash = kit.Mat("paint:#4a4541", new MatSpec { roughness = 1 });
             var boxes = new[] { new[] { 0.55, 0.4, 0.42, -0.1, 0, 0.02, 0.1 }, new[] { 0.4, 0.3, 0.34, -0.12, 0.4, 0.04, -0.2 }, new[] { 0.42, 0.18, 0.3, 0.38, 0, 0, 0.3 } };
             for (int i = 0; i < boxes.Length; i++)

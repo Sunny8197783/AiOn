@@ -4,7 +4,7 @@
 // table, wall TV, stand air conditioner, curtains); a small bedroom (bed, wardrobe, desk with a laptop) and the south
 // 베란다 (washing machine, drying poles, 경량칸막이). Stateful props: ApartmentProps, ApartmentStock.
 // Unit box x [-7.6, 0.3] (east wall against the lift shaft), z [0, 8.0]; balcony z [8.0, 9.4].
-// This file: shell, kitchen, 현관 and hall; ApartmentHomeRooms.cs: living room, bedroom, balcony, points, textures.
+// This file: shell, kitchen, 현관 and hall; ApartmentHomeRooms.cs: living room, bedroom, balcony, points, drawings.
 using System;
 using System.Collections.Generic;
 using System.Linq;
