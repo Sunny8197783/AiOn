@@ -38,10 +38,10 @@ namespace Gyeongbo.Levels
                 tinted.Add((m, b)); return m;
             }
             var L = new Vector3(0.3f, 0.85f, 0.45f).normalized;
-            GeoData shade(GeoData geo) // bake simple sun shading into vertex colours (Unlit has no lighting)
+            GeoData shade(GeoData geo) // bake simple sun shading into vertex colours (Unlit has no lighting); linear like three.js attributes
             {
                 geo.color = new List<Color>(geo.normal.Count);
-                foreach (var nrm in geo.normal) { float k = 0.5f + 0.5f * Mathf.Max(0, Vector3.Dot(nrm, L)); geo.color.Add(new Color(k, k, k, 1).gamma); }
+                foreach (var nrm in geo.normal) { float k = 0.5f + 0.5f * Mathf.Max(0, Vector3.Dot(nrm, L)); geo.color.Add(new Color(k, k, k, 1)); }
                 return geo;
             }
             GameObject add(GameObject m) { group.Add(m); return m; }
@@ -137,7 +137,7 @@ namespace Gyeongbo.Levels
                 foreach (var z in new[] { -0.62f, 0.62f })
                 {
                     var b = Geo.Box(0.04f, 0.12f, 0.3f).Translate(x, y, z);
-                    b.color = Enumerable.Repeat(new Color(cr, cg, cb, 1).gamma, b.pos.Count).ToList(); lampParts.Add(b);
+                    b.color = Enumerable.Repeat(new Color(cr, cg, cb, 1), b.pos.Count).ToList(); lampParts.Add(b);
                 }
             var mLamp = inst(Geo.Merge(lampParts), Mat.Unlit(new MatSpec { fog = false, vertexColors = true }), mx);
             var traffic = movers.Select((_, i) => new[] { bodyItems[i], mCab.transform.GetChild(i).gameObject, mLamp.transform.GetChild(i).gameObject }).ToList();

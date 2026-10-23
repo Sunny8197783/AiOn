@@ -45,10 +45,10 @@ namespace Gyeongbo.Levels
             B.Solid(XF - 0.04, ApartmentHome.HOME.x1, ZA - 0.03, ZZ + 0.03, BF, BF + 2.25);
 
             // ---- item geometries (base at y = 0) and materials ----
-            GeoData vc(GeoData geo, Func<float, float, string> colorAt) // per-vertex colours from (y, normal)
+            GeoData vc(GeoData geo, Func<float, float, string> colorAt) // per-vertex colours from (y, normal); linear like three.js attributes
             {
                 geo.color = new List<Color>(geo.pos.Count);
-                for (int i = 0; i < geo.pos.Count; i++) geo.color.Add(J.Css(colorAt(geo.pos[i].y, geo.normal[i].y)));
+                for (int i = 0; i < geo.pos.Count; i++) geo.color.Add(J.Css(colorAt(geo.pos[i].y, geo.normal[i].y)).linear);
                 return geo;
             }
             var prof = new[] { (0.0, 0.0), (0.044, 0.0), (0.051, 0.008), (0.051, 0.109), (0.0512, 0.11), (0.0512, 0.19), (0.051, 0.191), (0.051, 0.2), (0.049, 0.215), (0.03, 0.258), (0.016, 0.283), (0.016, 0.296), (0.0172, 0.297), (0.0172, 0.315), (0.0, 0.315) };

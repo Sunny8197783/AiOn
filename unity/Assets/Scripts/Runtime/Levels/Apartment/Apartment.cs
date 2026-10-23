@@ -187,7 +187,7 @@ namespace Gyeongbo.Levels
             {
                 if (key == null || !apply.TryGetValue(key, out var fn)) { Debug.LogWarning($"[apartment] unknown state \"{key}\"; known: {string.Join(", ", apply.Keys)}"); return; }
                 object v;
-                if (key == "smoke") { float n = Sv.Num(value); v = float.IsNaN(n) ? 0f : Math.Min(1f, Math.Max(0f, n)); }
+                if (key == "smoke") { float n = Sv.Plain(value) is bool b ? (b ? 1 : 0) : Sv.Num(value); v = float.IsNaN(n) ? 0f : Math.Min(1f, Math.Max(0f, n)); } // Number(value) || 0
                 else if (key == "stock")
                 {
                     var p = Sv.Plain(value);
