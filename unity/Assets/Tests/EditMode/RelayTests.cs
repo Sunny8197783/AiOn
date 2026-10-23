@@ -144,6 +144,52 @@ namespace Gyeongbo.Tests
             Assert.AreEqual("precise", Relay.NoteKind(Relay.ParseNote("20:09에 동쪽 출입구가 닫혀 있었어. 다른 입구 상태는 확인 못 했어.")));
         }
 
+        // Port check: JS regex semantics (ASCII \b and \d next to Hangul, clause order, quotes) against node's output.
+        [Test]
+        public void ParseNoteMatchesTheJsOutput()
+        {
+            var cases = new[]
+            {
+                ("A계단으로 와", "null|null|stairs|false|null|partial|route=A계단으로 와"),
+                ("a로 오면 돼", "null|null|stairs|false|null|partial|route=a로 오면 돼"),
+                ("AB 둘 다 닫힘", "all_closed|null|null|false|null|generalized|what=AB 둘 다 닫힘"),
+                ("B진출입로 운영 중", "null|null|ramp|false|null|partial|route=B진출입로 운영 중"),
+                ("C경사로 열림", "null|null|access|false|null|partial|route=C경사로 열림"),
+                ("ABC 모두 확인 못 함", "null|null|null|true|null|partial|unknowns=ABC 모두 확인 못 함"),
+                ("입구A 막혀있음", "null|null|stairs|false|null|partial|route=입구A 막혀있음"),
+                ("20:09에 동문 닫혔어", "gate_closed|20:09|null|false|null|partial|what=20:09에 동문 닫혔어;time=20:09에 동문 닫혔어"),
+                ("8시간 기다림", "null|null|null|false|null|unparsed|"),
+                ("8 시 30 분 동쪽 폐쇄", "gate_closed|8 시 30 분|null|false|null|partial|what=8 시 30 분 동쪽 폐쇄;time=8 시 30 분 동쪽 폐쇄"),
+                ("9시에 다 막혔어", "all_closed|9시|null|false|null|generalized|what=9시에 다 막혔어;time=9시에 다 막혔어"),
+                ("전부 막혀 있었어", "all_closed|null|null|false|null|generalized|what=전부 막혀 있었어"),
+                ("확인 안 했어 다른 데는", "null|null|null|true|null|partial|unknowns=확인 안 했어 다른 데는"),
+                ("모두 닫힘! 동쪽은 확실", "all_closed|null|null|false|null|generalized|what=모두 닫힘"),
+                ("대피소는 지금 폐쇄됐어", "all_closed|null|null|false|null|generalized|what=대피소는 지금 폐쇄됐어"),
+                ("계단 쓰지 마", "null|null|null|false|null|unparsed|"),
+                ("경사로 피해서 와", "null|null|null|false|null|unparsed|"),
+                ("왼쪽으로 꺾어서 쭉", "null|null|null|false|direction|partial|advice=왼쪽으로 꺾어서 쭉"),
+                ("나처럼 따라와", "null|null|null|false|follow_me|partial|advice=나처럼 따라와"),
+                ("안내판에서 다시 확인해", "null|null|null|false|check_notice|partial|advice=안내판에서 다시 확인해"),
+                ("확인해 보고 안내 따라", "null|null|null|false|check_notice|partial|advice=확인해 보고 안내 따라"),
+                ("120:30 동쪽", "null|null|null|false|null|unparsed|"),
+                ("23:59 동쪽 통제", "gate_closed|23:59|null|false|null|partial|what=23:59 동쪽 통제;time=23:59 동쪽 통제"),
+                ("19:5 동쪽", "null|null|null|false|null|unparsed|"),
+                ("동쪽,닫힘", "null|null|null|false|null|unparsed|"),
+                ("동쪽 출입구 근처 차량 통제", "null|null|null|false|null|unparsed|"),
+                ("다 닫힘. 모르겠어. C로 가", "all_closed|null|access|true|null|generalized|what=다 닫힘;route=C로 가;unknowns=모르겠어"),
+                ("막 왔어 B로", "null|null|ramp|false|null|partial|route=막 왔어 B로"),
+                ("b 진출입로 말고 계단", "null|null|null|false|null|unparsed|"),
+                ("미확인 정보: 전체 폐쇄", "null|null|null|true|null|partial|unknowns=미확인 정보: 전체 폐쇄"),
+                ("대피시설 막힘\n계단으로 와", "all_closed|null|stairs|false|null|generalized|what=대피시설 막힘;route=계단으로 와"),
+            };
+            foreach (var (text, expect) in cases)
+            {
+                var c = Relay.ParseNote(text);
+                var got = $"{c.what ?? "null"}|{c.time ?? "null"}|{c.route ?? "null"}|{(c.unknowns ? "true" : "false")}|{c.advice ?? "null"}|{Relay.NoteKind(c)}|{string.Join(";", c.quotes.Select(kv => kv.Key + "=" + kv.Value))}";
+                Assert.AreEqual(expect, got, text);
+            }
+        }
+
         [Test]
         public void MakeHandoverKeepsThePlayersWordsSanitizesEditsAndFallsBackToChips()
         {
