@@ -27,8 +27,8 @@ namespace Gyeongbo.Levels
         // [x, z, ry] planter boxes; pure so the tree builder can add the shrubs to its instancing.
         public static readonly List<float[]> PLANTERS = new List<float[]>
         {
-            new[] { -30, -23.3f, 0 }, new[] { -4, -23.3f, 0 }, new[] { -98, -26.6f, 0 }, new[] { -80, -26.6f, 0 }, new[] { 74, -20.8f, 0 }, new[] { 100, -20.8f, 0 },
-            new[] { -66, 21, PI / 2 }, new[] { -66, 41, PI / 2 }, new[] { 69.5f, 29, 0 }, new[] { 88, 29, 0 }, new[] { -123, -14.6f, 0 }, new[] { 18, 10.9f, 0 },
+            new float[] { -30, -23.3f, 0 }, new float[] { -4, -23.3f, 0 }, new float[] { -98, -26.6f, 0 }, new float[] { -80, -26.6f, 0 }, new float[] { 74, -20.8f, 0 }, new float[] { 100, -20.8f, 0 },
+            new float[] { -66, 21, PI / 2 }, new float[] { -66, 41, PI / 2 }, new float[] { 69.5f, 29, 0 }, new float[] { 88, 29, 0 }, new float[] { -123, -14.6f, 0 }, new float[] { 18, 10.9f, 0 },
         };
 
         public static List<TreeSpot> ShrubSpots(Func<float> rand)

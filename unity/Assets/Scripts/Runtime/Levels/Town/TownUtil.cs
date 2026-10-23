@@ -168,7 +168,9 @@ namespace Gyeongbo.Levels
         {
             foreach (var r in o.GetComponentsInChildren<Renderer>()) r.shadowCastingMode = on ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off;
         }
-        // A copy of a (memoised) material with another base colour: stands in for three.js instanceColor.
+        // A copy of a (memoised) material with another base colour.
+        // ponytail: stands in for three.js instanceColor (one instanced mesh per colour: crowns, leaves, bags, bike
+        // frames); per-instance colour through Kit.Instanced (instanced colour buffer) is the upgrade.
         internal static Material Tinted(Kit kit, string key, Material baseMat, string css) => kit.Memo($"{key}:tint:{css}", () =>
         {
             var m = new Material(baseMat); Mat.SetColor(m, J.Css(css)); return m;
