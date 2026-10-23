@@ -10,8 +10,9 @@ namespace Gyeongbo.Logic
 {
     internal static class Js
     {
-        // Math.round: halves round up (C# Math.Round is banker's rounding).
-        public static double Round(double x) => Math.Floor(x + 0.5);
+        // Math.round: halves round up (C# Math.Round is banker's rounding). x - floor(x) is exact, so unlike
+        // floor(x + 0.5) it also gets 0.49999999999999994 right.
+        public static double Round(double x) { var r = Math.Floor(x); return x - r >= 0.5 ? r + 1 : r; }
 
         // String(n) / `${n}` for a number.
         public static string Num(double n) =>
