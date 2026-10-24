@@ -20,14 +20,20 @@ namespace Gyeongbo.Levels
         // An InstancedMesh: copies of geo at the JS-space matrices, baked into one static mesh. Tagged keep so
         // kit.Merge leaves it alone (kit.merge skips instanced meshes in JS).
         // ponytail: baked copies instead of GPU instancing; fine for these static props, use Graphics.RenderMeshInstanced if counts grow.
-        public static GameObject Inst(GameObject parent, GeoData geo, Material mat, IList<Matrix4x4> mats, bool cast = false, bool receive = false)
+        // colors: per-instance colour (setColorAt), linear like three.js; baked as vertex colours (mat needs vertexColors).
+        public static GameObject Inst(GameObject parent, GeoData geo, Material mat, IList<Matrix4x4> mats, bool cast = false, bool receive = false, IList<Color> colors = null)
         {
             GameObject o;
             if (mats.Count == 0) o = J.Group("inst");
             else
             {
                 var list = new List<GeoData>(mats.Count);
-                foreach (var m in mats) list.Add(geo.Clone().ApplyMatrix(m));
+                for (int i = 0; i < mats.Count; i++)
+                {
+                    var c = geo.Clone().ApplyMatrix(mats[i]);
+                    if (colors != null) { c.color = new List<Color>(c.pos.Count); for (int k = 0; k < c.pos.Count; k++) c.color.Add(colors[i]); }
+                    list.Add(c);
+                }
                 o = Geo.Obj(Geo.Merge(list), mat, "inst", cast, receive);
             }
             Kit.Keep(o);
