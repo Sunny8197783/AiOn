@@ -204,6 +204,8 @@ test('speedMul stays within 0.6..1 and falls with fatigue and load', () => {
   assert.ok(tired < fresh && tired >= 0.6);
   buy(G, { water_2l: 20 }, martPrices);
   pack(G, 'water_2l', 22);
+  assert.equal(speedMul(G), tired, 'a bag left by the door slows nobody');
+  G.know.bagOn = true;
   assert.equal(speedMul(G), 0.6);
 });
 
@@ -244,4 +246,11 @@ test('checkpoint and restore roll back in place', () => {
   assert.equal(G.money, 150000, 'can retry twice from the same checkpoint');
   assert.throws(() => restore(createGame({ seed: 1 })), /no checkpoint/);
   assert.throws(() => checkpoint(G, ''));
+});
+
+test('a broken leg slows the run for good', () => {
+  const G = createGame({ seed: 4 }), base = speedMul(G);
+  G.injury = ['leg'];
+  assert.equal(speedMul(G), Math.round(base * 0.7 * 100) / 100);
+  assert.deepEqual(load(save(G)).injury, ['leg']);
 });

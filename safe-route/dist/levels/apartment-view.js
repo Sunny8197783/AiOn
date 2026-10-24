@@ -74,9 +74,13 @@ export function buildView(B) {
   // ---- trees (autumn mix), hedge, parked cars, street lamps with light pools ----
   const spots = [];
   for (let x = -42; x < 50; x += 7) spots.push([x + (r() - 0.5) * 2, 35.6 + (r() - 0.5)]);
-  for (let x = -38; x < 40; x += 9) spots.push([x + (r() - 0.5) * 2, 11.2]);
+  // The row in front of 103동 stands 3 m clear of the balconies (outer rail z = 9.4) with smaller crowns, so no
+  // branch pokes through the 302호 베란다 (it used to: z 11.2 with crowns up to 3.4 m wide).
+  const nearRow = spots.length;
+  for (let x = -38; x < 40; x += 9) spots.push([x + (r() - 0.5) * 2, 12.6]);
+  const nearEnd = spots.length;
   for (let x = -30; x < 30; x += 8) spots.push([x + r() * 2, -23 + (r() - 0.5) * 2]);
-  const crowns = spots.map(([x, z]) => { const s = 2.2 + r() * 1.2; return { x, y: 2.6 + s * 0.9, z, sx: s, sy: s * 1.15, sz: s, ry: r() * 6 }; });
+  const crowns = spots.map(([x, z], i) => { const s = i >= nearRow && i < nearEnd ? 1.8 + r() * 0.7 : 2.2 + r() * 1.2; return { x, y: 2.6 + s * 0.9, z, sx: s, sy: s * 1.15, sz: s, ry: r() * 6 }; });
   const crownMesh = add(kit.instanced(shade(new THREE.IcosahedronGeometry(1, 1)), basic({ vertexColors: true }), crowns, { cast: false, receive: false }));
   crowns.forEach((_, i) => crownMesh.setColorAt(i, new THREE.Color(['#5a7a3a', '#4f6e34', '#c9a23a', '#c46a2a', '#a8442e', '#6b8a40'][(r() * 6) | 0])));
   add(kit.instanced(shade(new THREE.CylinderGeometry(0.16, 0.22, 3, 6).translate(0, 1.5, 0)), basic({ vertexColors: true }, 0x4b3a2c), spots.map(([x, z]) => ({ x, z })), { cast: false, receive: false }));

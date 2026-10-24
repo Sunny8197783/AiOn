@@ -209,7 +209,7 @@ export function buildTraffic(kit) {
   const _beam = new THREE.Matrix4(), _fwd = new THREE.Matrix4();
   function update(dt, t, ctx = {}) {
     const env = ctx.env;
-    power = env !== 'blackout';
+    power = ctx.power !== false && env !== 'blackout';
     const isNight = env === 'night' || env === 'blackout' || env === 'dusk';
     if (isNight !== night) { night = isNight; lampMat.emissiveIntensity = night ? 3 : 0.25; }
     beams.visible = night && mode !== 'none';

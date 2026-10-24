@@ -3,6 +3,7 @@
 import { CATALOG, BAG_LIMIT, itemName } from './items.js';
 import { fact } from './facts.js';
 import { bagLoad, hhmm } from './state.js';
+import { pickEnding } from './endings.js';
 import { EXT_STEPS } from './drills.js';
 
 const PEOPLE = { manager: '박영수 소장', clerk: '이수아', seoyeon: '오서연' };
@@ -34,6 +35,20 @@ const resultWord = (r) => typeof r === 'string' ? RESULT[r] ?? '해 봤습니다
     : typeof r?.ok === 'boolean' ? (r.ok ? '잘 해냈습니다' : '아쉬움이 남았습니다') : '해 봤습니다';
 
 const FAIL = {
+  // Health ran out: a fall, a fight, a blast or debris. detail.why says which.
+  dead(G, { why = 'hurt' } = {}) {
+    const W = {
+      fall: ['높은 곳에서 떨어졌습니다', '떨어지기 전, 아래까지의 높이를 가늠할 시간이 있었습니다.', '내려갈 때는 계단·사다리처럼 몸을 붙일 수 있는 길을 먼저 찾기'],
+      fight: ['몸싸움 끝에 쓰러졌습니다', '상대가 먼저 물러설 여지가 있었습니다.', '시비가 붙으면 물건을 내주거나 자리를 피하는 것도 선택지로 두기'],
+      blast: ['폭발에 휘말렸습니다', '휘파람 같은 낙하음이 들린 뒤 몇 초의 여유가 있었습니다.', "낙하음이 들리면 바로 엎드리고, 건물 안쪽·지하로 몸을 숨기기"],
+      debris: ['무너진 잔해에 다쳤습니다', '금이 가고 먼지가 떨어지는 건물은 무너지기 전에 신호를 보냅니다.', '흔들리거나 금 간 건물 곁에서는 멀리 떨어져 걷기'],
+      fire: ['불길 속에서 쓰러졌습니다', '연기가 짙어지기 전에 빠져나갈 길이 있었습니다.', '불이 번진 곳은 자세를 낮추고 바람이 불어오는 쪽으로 빠져나가기'],
+      hurt: ['더 이상 버틸 수 없을 만큼 다쳤습니다', '쉬면서 상처를 돌볼 수 있는 순간이 있었습니다.', '구급함을 챙기고, 다쳤을 때는 안전한 곳에서 먼저 처치하기'],
+    }[why] ?? null;
+    const [title, seen, next] = W ?? ['더 이상 버틸 수 없을 만큼 다쳤습니다', '쉬면서 상처를 돌볼 수 있는 순간이 있었습니다.', '다친 뒤에는 먼저 안전한 곳에서 처치하기'];
+    const facts = { blast: ['alert_airraid', 'shelter_near'], debris: ['alert_airraid', 'shelter_near'], fire: ['fire_big'] }[why] ?? ['mind_breath'];
+    return { title, seen, missed: G.injury?.length ? '이미 다친 몸으로 움직이고 있었습니다.' : '몸 상태를 살필 여유가 없었습니다.', next, facts };
+  },
   late(G) {
     const k = G.know;
     return {
@@ -89,17 +104,6 @@ const FAIL = {
       next: G.know.extinguisherLocated ? '불길이 천장에 닿았는지 먼저 보고, 끌지 대피할지 정하기'
         : "'집 장비 점검' 때 복도 소화기 위치와 사용 순서를 확인하기",
       facts: [factId, 'fire_small', 'ext_1'],
-    };
-  },
-  missedBus(G) {
-    const packed = Object.values(G.items).some(e => e.bag > 0);
-    return {
-      title: '임시 대피 버스를 놓쳤습니다',
-      seen: `공식 대피 안내는 ${hhmm(G.cond.evacNoticeAt)}에 나와 있었습니다.`,
-      missed: !packed ? '가방을 그 자리에서 꾸리느라 출발이 늦어졌습니다.'
-        : !G.know.routeChecked ? '새로 통제된 길이 집결지로 가는 길과 겹쳤습니다.' : '집결지까지 걸리는 시간이 예상보다 길었습니다.',
-      next: !packed ? "'비상가방 꾸리기'로 미리 꾸린 가방을 현관에 두기" : '출발 전에 지도에서 새 통제 구간과 집결지 경로를 다시 보기',
-      facts: ['evac_kit', 'bag_door', 'evac_note'],
     };
   },
   lostWay(G) {
@@ -179,5 +183,5 @@ export function endingRecord(G) {
   const people = G.events.filter(e => e.type === 'help').map(e => ({ who: PEOPLE[e.details.who] ?? e.details.who, what: e.details.what }));
   for (const [k, r] of Object.entries(G.rel)) if (r.contact) people.push({ who: PEOPLE[k] ?? k, what: `비상 연락 방법을 정했습니다 (${CONTACT[r.contact] ?? r.contact})` });
   const f = fact(PRACTICE.find(([k]) => !G.know[k])?.[1] ?? 'shelter_know');
-  return { helped, unused, unchecked, people, practice: { text: f.text, sourceId: f.sourceId } };
+  return { fate: pickEnding(G), helped, unused, unchecked, people, practice: { text: f.text, sourceId: f.sourceId } };
 }

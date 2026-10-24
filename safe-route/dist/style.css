@@ -108,6 +108,10 @@ body:has(.modal-layer) .hud-prompt { opacity: 0; }
 .hud-keys { position: absolute; right: 16px; bottom: 16px; margin: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35em .8em; max-width: 380px; font-size: .74rem; color: var(--text-dim); opacity: .75; text-shadow: 0 1px 6px #000; }
 .hud-keys span { display: inline-flex; align-items: center; gap: .3em; }
 .hud-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(110, 8, 14, calc(var(--tension, 0) * .6)) 100%); }
+.hud-hurt { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 35%, rgba(170, 0, 0, calc(var(--k, .5) * .85)) 100%); }
+.hud-hurt.on { animation: hurt .7s ease-out; }
+@keyframes hurt { 0% { opacity: 1; } 100% { opacity: 0; } }
+.reduce-motion .hud-hurt.on { animation-duration: .01s; }
 .hud-vignette.pulse { animation: pulse 2.4s ease-in-out infinite; }
 .letterbox { position: absolute; left: 0; right: 0; height: 11vh; background: #000; transform: scaleY(0); transition: transform .7s var(--ease); }
 .letterbox.top { top: 0; transform-origin: top; } .letterbox.bottom { bottom: 0; transform-origin: bottom; }
@@ -462,3 +466,32 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: .5em 0; 
   .ending-doc { position: absolute; left: 0; top: 0; width: 100%; background: #fff !important; color: #000; border-radius: 0; box-shadow: none; }
   .ending-doc a { color: #000; } .ending-doc a::after { content: ' (' attr(href) ')'; font-size: .8em; word-break: break-all; }
 }
+
+/* compass strip, minimap, stamina */
+.hud-compass { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 360px; max-width: calc(100vw - 32px); height: 34px; }
+.hud-map { position: absolute; top: 58px; right: 16px; width: 184px; height: 184px; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .45)); }
+.hud-minimap { width: 100%; height: 100%; }
+.hud-stamina { position: absolute; left: 50%; bottom: calc(20% - 44px); transform: translateX(-50%); display: flex; align-items: center; gap: .5em; font-size: .72rem; font-weight: 800; color: var(--text-dim); text-shadow: 0 1px 4px #000; }
+.hud-stamina[hidden] { display: none; }
+.stamina-bar { width: 160px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+.stamina-fill { display: block; height: 100%; background: #7fe0a0; }
+.hud-stamina.winded .stamina-fill { background: #ff8a6a; }
+.hud.cinematic .hud-compass, .hud.cinematic .hud-map, .hud.cinematic .hud-stamina { opacity: 0; }
+@media (max-width: 720px) { .hud-map { width: 128px; height: 128px; top: 54px; } .hud-compass { top: 8px; } }
+/* experience modes: low vision blurs and darkens the world; the HUD stays readable */
+html.sim-lowvision #world { filter: blur(6px) brightness(.6) contrast(.85) saturate(.6); }
+.lock-hint { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 11; padding: .5em 1em; border-radius: 999px; background: rgba(10, 15, 18, .78); border: 1px solid var(--line); color: var(--text); font-weight: 700; font-size: .9rem; pointer-events: none; }
+.lock-hint[hidden] { display: none; }
+
+/* ---- cutscenes (story/cine.js): letterbox bars, typed place/time title, skip hint ---- */
+.cine { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.cine-bar { position: absolute; left: 0; right: 0; height: 12vh; background: #000; transform: scaleY(0); transition: transform .7s var(--ease); }
+.cine-bar.top { top: 0; transform-origin: top; } .cine-bar.bottom { bottom: 0; transform-origin: bottom; }
+.cine.on .cine-bar { transform: scaleY(1); }
+.cine-title { position: absolute; left: max(24px, 5vw); top: calc(12vh + 22px); font-family: ui-monospace, Consolas, monospace; color: #f2efe6; text-shadow: 0 1px 3px #000; letter-spacing: .06em; }
+.cine-title { transition: opacity 1s; } .cine-title.out { opacity: 0; }
+.cine-title p { margin: 0 0 .35em; font-size: clamp(1rem, 2.2vw, 1.35rem); font-weight: 700; min-height: 1.3em; }
+.cine-title p.sub { font-size: clamp(.82rem, 1.6vw, 1rem); font-weight: 500; color: #c9c4b6; }
+.cine-skip { position: absolute; right: max(16px, 3vw); bottom: calc(12vh - 34px); color: rgba(255, 255, 255, .55); font-size: .8rem; letter-spacing: .05em; opacity: 0; transition: opacity .6s .8s; }
+.cine.on .cine-skip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .cine-bar { transition: none; } }

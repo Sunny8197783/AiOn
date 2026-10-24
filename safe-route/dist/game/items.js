@@ -33,6 +33,8 @@ export const CATALOG = {
   // Made at home (서류·연락처 정리), not bought.
   contact_card: { name: '비상연락처 카드', unit: '장', price: 0, weightKg: 0.01, volumeL: 0.01, category: 'docs', notSold: true, facts: ['contact_card', 'contact_fields', 'contact_meet'] },
   doc_copies: { name: '신분증·중요 서류 사본', unit: '묶음', price: 0, weightKg: 0.05, volumeL: 0.05, category: 'docs', notSold: true, facts: ['bag_copies', 'docs_take'] },
+  // The original, picked up from the wallet on the living-room table (story/world.js).
+  id_card: { name: '신분증(주민등록증)', unit: '장', price: 0, weightKg: 0.01, volumeL: 0.01, category: 'docs', notSold: true, facts: ['docs_take'] },
   // Already in the fridge; only safe for a limited time once the power is off.
   fridge_food: { name: '냉장고 반찬', unit: '통', price: 0, weightKg: 0.4, volumeL: 0.5, category: 'food', notSold: true, risk: 'spoil', facts: ['food_fridge', 'food_4h', 'food_door'] },
   cooked_meat: { name: '남은 익힌 고기', unit: '통', price: 0, weightKg: 0.3, volumeL: 0.4, category: 'food', notSold: true, risk: 'spoil', facts: ['myth_meat', 'food_4h'] },

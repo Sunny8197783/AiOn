@@ -10,6 +10,9 @@ export function createAudio() {
   const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
   let ctx = null, master, amb, sfx, uiBus, verb, white, brown;
   let volume = 0.7, muted = false;
+  // Per-bus volume (settings): ambience, effects (siren, fire, radio, steps), ui blips. 0..1 on top of the master.
+  const BUS_BASE = { ambience: 0.8, effects: 1, ui: 0.45 }, busVol = { ambience: 1, effects: 1, ui: 1 };
+  const busNode = () => ({ ambience: amb, effects: sfx, ui: uiBus });
   const want = { ambience: 'none', siren: false, radio: null, fire: 0, crowd: 0, spray: false };
   let ambNow = null, sirenNode = null, radioNode = null, fireNode = null, crowdNode = null, sprayNode = null, lastStep = 0;
 
@@ -67,7 +70,7 @@ export function createAudio() {
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -8; limiter.knee.value = 4; limiter.ratio.value = 14; limiter.attack.value = 0.003; limiter.release.value = 0.25;
     chain(master, limiter, ctx.destination);
-    amb = gain(0.8); sfx = gain(1); uiBus = gain(0.45);
+    amb = gain(BUS_BASE.ambience * busVol.ambience); sfx = gain(BUS_BASE.effects * busVol.effects); uiBus = gain(BUS_BASE.ui * busVol.ui);
     [amb, sfx, uiBus].forEach((b) => b.connect(master));
     white = makeBuffer(3, (d, n) => { for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; });
     brown = makeBuffer(4, (d, n) => { let v = 0; for (let i = 0; i < n; i++) { v = (v + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = v * 3.5; } });
@@ -276,6 +279,31 @@ export function createAudio() {
 
   // ---------- master ----------
   const applyMaster = () => { if (ctx) master.gain.setTargetAtTime(muted ? 0 : volume, now(), 0.05); };
+  // A distant explosion: a sharp crack, then a long low rumble with the room/street reverb.
+  function boom(distance = 1) {
+    if (!ctx) return;
+    const t = now(), far = Math.max(0.3, Math.min(1, distance));
+    burst({ freq: 1800 - far * 900, Q: 0.6, type: 'lowpass', dur: 0.25, vol: 0.9 / far, wet: 0.6 });
+    const s = noise(brown, false), f = filt('lowpass', 160 - far * 60, 0.8), g = gain(0);
+    chain(s, f, g, sfx); const w = gain(0.7); g.connect(w); w.connect(verb);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1.6 / far, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.8);
+    s.stop(t + 4);
+  }
+
+  // Body and object hits: punches, thrown things landing, breaking glass, a swing through the air.
+  const SFX = {
+    punch: () => { burst({ freq: 900, Q: 0.8, dur: 0.06, vol: 0.5 }); tone({ freq: 120, to: 60, dur: 0.12, vol: 0.25, dest: sfx }); },
+    thud: () => { burst({ freq: 400, Q: 1, dur: 0.09, vol: 0.35 }); tone({ freq: 90, to: 50, dur: 0.1, vol: 0.18, dest: sfx }); },
+    land: () => { burst({ freq: 300, Q: 0.7, type: 'lowpass', dur: 0.18, vol: 0.7 }); tone({ freq: 70, to: 40, dur: 0.2, vol: 0.35, dest: sfx }); },
+    glass: () => { for (let i = 0; i < 6; i++) tone({ freq: rnd(2500, 5200), dur: rnd(0.05, 0.25), vol: 0.05, at: now() + i * rnd(0.01, 0.04), dest: sfx, type: 'triangle' }); burst({ freq: 5000, Q: 0.5, type: 'highpass', dur: 0.2, vol: 0.25 }); },
+    swing: () => burst({ freq: 700, Q: 0.5, dur: 0.16, vol: 0.12 }),
+    pick: () => tone({ freq: 500, to: 700, dur: 0.06, vol: 0.05, dest: sfx }),
+    // An incoming shell: a falling whistle over `s` seconds (the blast itself is boom()).
+    whistle: (s = 2.2) => tone({ freq: 2400, to: 500, type: 'sine', dur: s, vol: 0.12, dest: sfx }),
+    collapse: () => { const t = now(); for (let i = 0; i < 14; i++) burst({ freq: rnd(150, 700), Q: 0.6, type: 'lowpass', dur: rnd(0.2, 0.6), vol: rnd(0.3, 0.8), at: t + i * rnd(0.05, 0.2), wet: 0.4 }); },
+  };
+  function hit(name, ...a) { if (ctx) (SFX[name] || SFX.thud)(...a); }
+
   function unlock() {
     if (!AC) return;
     if (!ctx) {
@@ -295,6 +323,8 @@ export function createAudio() {
     unlock,
     setVolume(v) { volume = clamp01(v); applyMaster(); },
     setMute(b) { muted = !!b; applyMaster(); },
+    setBus(name, v) { if (!(name in busVol)) return; busVol[name] = clamp01(v); const n = ctx && busNode()[name]; if (n) ramp(n.gain, BUS_BASE[name] * busVol[name], 0.1); },
+    boom, hit,
     ambience, siren, phoneAlert, radio, footstep, ui, fire, spray, crowd,
     get state() { return ctx?.state ?? 'locked'; },
   };

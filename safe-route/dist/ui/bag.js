@@ -11,9 +11,20 @@ const WARN = new Set(['fire', 'spoil']);
 // mentions has something in the bag. ponytail: keyword match; pass goal objects if wording drifts.
 const GOAL_WORDS = [
   [/물(?!통)/, ['water_500', 'water_2l']], [/음식|식량/, ['bars', 'canned', 'rice_instant']], [/빛|손전등/, ['flashlight']],
-  [/정보|라디오/, ['radio', 'powerbank']], [/약|구급/, ['meds', 'first_aid']], [/연락/, ['contact_card']], [/서류|사본/, ['doc_copies']],
+  [/정보|라디오/, ['radio', 'powerbank']], [/약|구급/, ['meds', 'first_aid']], [/연락/, ['contact_card']], [/신분증|서류|사본/, ['id_card', 'doc_copies']],
   [/현금/, ['cash']], [/보온|담요|여벌/, ['blanket', 'clothes', 'raincoat']], [/위생/, ['hygiene_kit', 'wipes', 'tissue', 'masks']], [/물통/, ['water_jug']],
 ];
+
+// Goal lines with a tick each: [{ label, ok }] (ok null = not checked in free mode / no keywords).
+// bagOf(id) = units in the bag; an item marked ready:false (not checked or charged) does not count.
+export function goalStatus(goals, mode, bagOf, items) {
+  const inBag = (id) => bagOf(id) > 0 && items.find(i => i.id === id)?.ready !== false;
+  return goals.map((g) => {
+    const groups = typeof g === 'string' ? GOAL_WORDS.filter(([re]) => re.test(g)).map(([, ids]) => ids) : [g.items], label = typeof g === 'string' ? g : g.label;
+    if (mode === 'free' || !groups.length) return { label, ok: null };
+    return { label, ok: typeof g === 'string' ? groups.every(ids => ids.some(inBag)) : goalMet(g, bagOf, inBag) };
+  });
+}
 
 export async function bag({ mode = 'guided', context = 'alert', limit = { weightKg: 8, volumeL: 25 }, items = [], goals = [], tips = [] } = {}) {
   const st = Object.fromEntries(items.map(i => [i.id, { home: Math.max(0, i.home | 0), bag: Math.max(0, i.bag | 0) }]));
@@ -26,8 +37,6 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
   const counts = { home: el('small'), bag: el('small') };
   const meters = ['w', 'v'].map(k => ({ k, bar: el('span', { class: 'mg-bar-fill' }), text: el('b') }));
   const goalList = el('ul', { class: 'mg-goals', 'aria-label': '챙길 것' });
-  // A goal is a label (ticked by keyword) or a BAG_GOALS entry (ticked by the same rule evalBag uses).
-  const goalGroups = goals.map(g => typeof g === 'string' ? GOAL_WORDS.filter(([re]) => re.test(g)).map(([, ids]) => ids) : [g.items]);
 
   const move = (id, from, n) => {
     const to = from === 'home' ? 'bag' : 'home', k = Math.min(n, st[id][from]);
@@ -69,13 +78,9 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
       mt.bar.parentElement.dataset.state = s;
       mt.text.textContent = `${mt.k === 'w' ? fmtKg(val) : `${val.toFixed(1)}L`} / ${mt.k === 'w' ? fmtKg(max) : `${max}L`} · ${METER_WORD[s]}`;
     }
-    const inBag = (id) => (st[id]?.bag ?? 0) > 0 && items.find(i => i.id === id)?.ready !== false; // packed but not checked/charged does not count
-    goalList.replaceChildren(...goals.map((g, i) => {
-      const groups = goalGroups[i], label = typeof g === 'string' ? g : g.label;
-      if (mode === 'free' || !groups.length) return el('li', { class: 'is-plain' }, el('span', { 'aria-hidden': 'true' }, '·'), label);
-      const ok = typeof g === 'string' ? groups.every(ids => ids.some(inBag)) : goalMet(g, (id) => st[id]?.bag ?? 0, inBag);
-      return el('li', { class: ok ? 'is-done' : '' }, el('span', { 'aria-hidden': 'true' }, ok ? '✓' : '○'), label, el('span', { class: 'sr-only' }, ok ? ' (담음)' : ' (아직)'));
-    }));
+    goalList.replaceChildren(...goalStatus(goals, mode, (id) => st[id]?.bag ?? 0, items).map(({ label, ok }) => ok === null
+      ? el('li', { class: 'is-plain' }, el('span', { 'aria-hidden': 'true' }, '·'), label)
+      : el('li', { class: ok ? 'is-done' : '' }, el('span', { 'aria-hidden': 'true' }, ok ? '✓' : '○'), label, el('span', { class: 'sr-only' }, ok ? ' (담음)' : ' (아직)'))));
     if (!focusWhere) return;
     const rowsNow = [...lists[focusWhere].querySelectorAll('.mg-row')];
     const target = rowsNow.find(b => b.dataset.id === focusId) || rowsNow[Math.min(Math.max(idx, 0), rowsNow.length - 1)]

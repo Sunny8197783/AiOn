@@ -1,6 +1,8 @@
-// Portable radio: a backlit FM dial (drag, ←/→, Shift for fine steps), frequency readout, signal meter and
-// a waveform that turns to static off-station. Tuned in, the broadcast arrives line by line as captions;
-// '메모' keeps a line. Resolves { station, official, heard, noted: [{ text, kind }] }; official = an official line was heard.
+// Portable radio (or the phone's FM app): switch it on, pull out the antenna (the phone needs earphones as its
+// antenna), then turn the tuning knob — drag it round, scroll on it, or ←/→ (Shift for fine steps) — while the
+// needle crawls along the dial. The signal meter, waveform and static (onSignal → audio) follow the clarity.
+// Tuned in, the broadcast arrives line by line as captions; '메모' keeps a line.
+// Resolves { station, official, heard, noted: [{ text, kind }] }; official = an official line was heard.
 import { el, put, modal, header, ladderHelp, pill, reduced } from './mini-dom.js';
 import { radioSignal } from '../game/drills.js';
 
@@ -9,8 +11,9 @@ const r1 = (f) => Math.round(Math.min(MAX, Math.max(MIN, f)) * 10) / 10;
 const word = (c) => c <= 0 ? '신호 없음' : c < 0.4 ? '약함' : c < LOCK ? '보통' : '잘 들림';
 const lineSeconds = (s) => Math.min(5.5, Math.max(2.4, 1.2 + s.length * 0.055));
 
-export async function radio({ mode = 'guided', stations = [], start = 89.5, battery = true, extraSeconds = 0 } = {}) {
-  let freq = r1(Number(start) || 89.5), power = false, raf = 0, last = performance.now(), frameAcc = 0;
+export async function radio({ mode = 'guided', stations = [], start = 89.5, battery = true, extraSeconds = 0, device = 'radio', onSignal = null } = {}) {
+  const phone = device === 'phone', aerial = phone ? '이어폰' : '안테나';
+  let freq = r1(Number(start) || 89.5), power = false, raf = 0, last = performance.now(), frameAcc = 0, antenna = false, canPower = false;
   let cur = null, lockT = 0, nextAt = 0.8, shownState = '', clar = 0, closed = false;
   const pos = new Map(), heard = [], noted = [], seen = new Set();
   const target = stations.find(s => s.kind === 'official') || stations[0];
@@ -23,22 +26,26 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
     for (const h of heard) if (!top || n.get(h.station) >= n.get(top)) top = h.station; // ties: the later one
     return top;
   };
-  const finish = () => { closed = true; cancelAnimationFrame(raf); m.close({ station: best(), official: heard.some(h => h.station.kind === 'official'), heard: heard.map(h => h.text), noted: noted.map(n => ({ text: n.text, kind: n.station.kind })) }); };
-  const m = modal({ className: 'mg-radio', label: '휴대용 라디오', onKey: (e) => { if (e.key === 'Escape') { finish(); return true; } } });
+  const finish = () => { closed = true; cancelAnimationFrame(raf); try { onSignal?.(null); } catch { /* audio is optional */ } m.close({ station: best(), official: heard.some(h => h.station.kind === 'official'), heard: heard.map(h => h.text), noted: noted.map(n => ({ text: n.text, kind: n.station.kind })) }); };
+  const m = modal({ className: 'mg-radio', label: phone ? '휴대폰 FM 라디오' : '휴대용 라디오', onKey: (e) => { if (e.key === 'Escape') { finish(); return true; } } });
 
   // --- faceplate ---
   const dial = el('canvas', { width: 720, height: 112, class: 'mg-dial-canvas', 'aria-hidden': 'true' });
   const wave = el('canvas', { width: 360, height: 56, class: 'mg-wave', 'aria-hidden': 'true' });
   const slider = el('div', { class: 'mg-dial', role: 'slider', tabindex: 0, 'data-autofocus': true, 'aria-label': '주파수 다이얼', 'aria-valuemin': MIN, 'aria-valuemax': MAX, 'aria-disabled': 'true' }, dial);
   const readout = el('b', { class: 'mg-freq' }), sigBars = el('span', { class: 'mg-sig', 'aria-hidden': 'true' }, [1, 2, 3, 4, 5].map(() => el('i'))), sigText = el('small');
-  const knob = el('span', { class: 'mg-knob', 'aria-hidden': 'true' });
+  const knob = el('span', { class: 'mg-knob', 'aria-hidden': 'true', style: 'touch-action:none;cursor:grab;width:64px;height:64px' });
   const powerLed = el('span', { class: 'mg-led', 'aria-hidden': 'true' });
   const status = el('p', { class: 'mg-radio-status' });
   const capWho = el('p', { class: 'mg-cap-who' }), capText = el('p', { class: 'mg-cap-text' });
   const caption = el('div', { class: 'mg-caption', 'aria-live': 'polite' }, capWho, capText);
   const transcript = el('ul', { class: 'mg-transcript', 'aria-label': '들은 내용' });
-  const off = el('button', { type: 'button', class: 'mg-btn mg-primary' }, '라디오 끄기');
+  const off = el('button', { type: 'button', class: 'mg-btn mg-primary' }, phone ? '앱 닫기' : '라디오 끄기');
   off.addEventListener('click', finish);
+  const powerBtn = el('button', { type: 'button', class: 'mg-btn', 'aria-pressed': 'false' }, phone ? 'FM 라디오 앱 켜기' : '전원 켜기');
+  powerBtn.addEventListener('click', () => { if (!canPower) return; if (power) { power = false; powerLed.classList.remove('on'); slider.setAttribute('aria-disabled', 'true'); update(); } else powerOn(); powerBtn.setAttribute('aria-pressed', String(power)); powerBtn.textContent = power ? (phone ? '앱 끄기' : '전원 끄기') : (phone ? 'FM 라디오 앱 켜기' : '전원 켜기'); });
+  const antBtn = el('button', { type: 'button', class: 'mg-btn', 'aria-pressed': 'false' }, phone ? '이어폰 꽂기' : '안테나 펴기');
+  antBtn.addEventListener('click', () => { antenna = !antenna; antBtn.setAttribute('aria-pressed', String(antenna)); antBtn.textContent = antenna ? (phone ? '이어폰 빼기' : '안테나 접기') : (phone ? '이어폰 꽂기' : '안테나 펴기'); update(); });
 
   const setFreq = (f) => { if (!power) return; freq = r1(f); update(); };
   slider.addEventListener('keydown', (e) => {
@@ -47,10 +54,18 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
     if (step !== undefined) { e.preventDefault(); setFreq(freq + step); }
     else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); setFreq(e.key === 'Home' ? MIN : MAX); }
   });
-  const fromX = (e) => { const r = slider.getBoundingClientRect(); const pad = r.width * (30 / 720); return MIN + ((e.clientX - r.left - pad) / (r.width - 2 * pad)) * (MAX - MIN); };
-  slider.addEventListener('pointerdown', (e) => { if (!power) return; slider.setPointerCapture(e.pointerId); slider.focus(); setFreq(fromX(e)); });
-  slider.addEventListener('pointermove', (e) => { if (slider.hasPointerCapture(e.pointerId)) setFreq(fromX(e)); });
-  slider.addEventListener('wheel', (e) => { if (!power) return; e.preventDefault(); setFreq(freq + (e.deltaY < 0 ? 0.1 : -0.1)); }, { passive: false });
+  // Tuning knob: drag round its centre; one full turn moves the needle 2 MHz. Scrolling turns it in 0.1 MHz clicks.
+  let knobA = null;
+  const angleOf = (e) => { const r = knob.getBoundingClientRect(); return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2)); };
+  knob.addEventListener('pointerdown', (e) => { if (!power) return; e.preventDefault(); knob.setPointerCapture(e.pointerId); knobA = angleOf(e); });
+  knob.addEventListener('pointermove', (e) => {
+    if (knobA === null || !knob.hasPointerCapture(e.pointerId)) return;
+    const a = angleOf(e); let d = a - knobA; if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI;
+    knobA = a; freq = Math.min(MAX, Math.max(MIN, freq + (d / (2 * Math.PI)) * 2)); update();
+  });
+  const endKnob = () => { knobA = null; freq = r1(freq); update(); };
+  knob.addEventListener('pointerup', endKnob); knob.addEventListener('pointercancel', endKnob);
+  for (const t of [knob, slider]) t.addEventListener('wheel', (e) => { if (!power) return; e.preventDefault(); setFreq(freq + (e.deltaY < 0 ? 0.1 : -0.1)); }, { passive: false });
 
   function drawDial() {
     const g = dial.getContext('2d'), W = dial.width, H = dial.height, x = (f) => 30 + ((f - MIN) / (MAX - MIN)) * (W - 60);
@@ -102,11 +117,14 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
   }
 
   function update() {
-    const { station, clarity } = power ? radioSignal(freq, stations) : { station: null, clarity: 0 };
+    // Antenna folded / no earphones: only a fraction of the signal gets through, never enough to lock.
+    const sig = power ? radioSignal(r1(freq), stations) : { station: null, clarity: 0 };
+    const station = sig.station, clarity = sig.clarity * (antenna ? 1 : 0.6);
+    try { onSignal?.(power ? clarity : null); } catch { /* audio is optional */ }
     readout.textContent = power ? freq.toFixed(1) : '--.-';
     [...sigBars.children].forEach((b, i) => b.classList.toggle('on', power && clarity * 5 > i + 0.01));
-    sigText.textContent = power ? `신호 ${word(clarity)}` : '꺼짐';
-    knob.style.transform = `rotate(${(freq - MIN) * 34}deg)`;
+    sigText.textContent = power ? `신호 ${word(clarity)}${antenna ? '' : ` · ${aerial} 없음`}` : '꺼짐';
+    knob.style.transform = `rotate(${(freq - MIN) * 180}deg)`; // 2 MHz per turn, as the drag
     const locked = power && station && clarity >= LOCK ? station : null;
     slider.setAttribute('aria-valuenow', String(freq));
     slider.setAttribute('aria-valuetext', `${freq.toFixed(1)}MHz, 신호 ${word(clarity)}${locked ? `, ${locked.name}` : ''}`);
@@ -139,31 +157,33 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
     if (!rm || frameAcc > 0.16) { frameAcc = 0; drawWave(now / 1000, clar); }
     raf = requestAnimationFrame(loop);
   }
-  const help = ladderHelp(mode, () => [el('p', {}, `다이얼을 천천히 돌려 보세요 — 목표 ${target ? `${target.freq}MHz` : '방송이 들리는 곳'}`), el('p', { class: 'mg-why' }, '잡음이 줄고 신호 막대가 차오르면 방송이 들립니다. Shift를 누른 채 돌리면 0.1MHz씩 움직입니다.')]);
+  const help = ladderHelp(mode, () => [el('p', {}, `전원을 켜고 ${aerial === '안테나' ? '안테나를 편 뒤' : '이어폰을 꽂은 뒤'}, 손잡이를 천천히 돌려 보세요 — 목표 ${target ? `${target.freq}MHz` : '방송이 들리는 곳'}`), el('p', { class: 'mg-why' }, `잡음이 줄고 신호 막대가 차오르면 방송이 들립니다. ${phone ? '휴대폰 FM 라디오는 이어폰 줄이 안테나 역할을 합니다.' : '안테나를 접으면 신호가 약해집니다.'}`)]);
 
   put(m.root,
-    header('라디오', '휴대용 라디오', mode, 'mg-radio-title'),
+    header(phone ? 'FM 라디오' : '라디오', phone ? '휴대폰 FM 라디오 앱 · 배터리 사용' : '휴대용 라디오', mode, 'mg-radio-title'),
     help,
     el('div', { class: 'mg-radio-body' },
       el('div', { class: 'mg-speaker', 'aria-hidden': 'true' }),
       el('div', { class: 'mg-radio-face' },
         el('div', { class: 'mg-lcd' }, powerLed, readout, el('small', {}, 'MHz'), el('span', { class: 'mg-sigbox' }, sigBars, sigText)),
-        wave, slider, el('div', { class: 'mg-knobrow' }, el('small', {}, 'TUNING'), knob))),
+        wave, slider, el('div', { class: 'mg-knobrow' }, powerBtn, antBtn, el('small', {}, 'TUNING · 돌리기'), knob))),
     status, caption,
     el('h3', { class: 'mg-sub' }, '들은 내용'), transcript,
-    el('footer', { class: 'mg-foot' }, el('p', { class: 'mg-keys' }, '다이얼에서 ←/→ 0.3MHz · Shift+←/→ 0.1MHz · PgUp/PgDn 1MHz · 끌어서 맞추기 · Esc 끄기'), el('div', { class: 'mg-actions' }, off)));
+    el('footer', { class: 'mg-foot' }, el('p', { class: 'mg-keys' }, '손잡이를 끌어 돌리기 · 휠 0.1MHz · 다이얼에서 ←/→ 0.3MHz · Shift+←/→ 0.1MHz · PgUp/PgDn 1MHz · Esc 끄기'), el('div', { class: 'mg-actions' }, off)));
   m.root.setAttribute('aria-labelledby', 'mg-radio-title');
 
-  const powerOn = () => { if (closed) return; power = true; powerLed.classList.add('on'); slider.removeAttribute('aria-disabled'); status.textContent = ''; update(); };
+  const powerOn = () => { if (closed || !canPower) return; power = true; powerBtn.setAttribute('aria-pressed', 'true'); powerBtn.textContent = phone ? '앱 끄기' : '전원 끄기'; powerLed.classList.add('on'); slider.removeAttribute('aria-disabled'); status.textContent = ''; update(); };
   update();
+  // The player switches it on; the batteries (if they had to be found first) come before that.
+  const ready = () => { if (closed) return; canPower = true; status.textContent = phone ? 'FM 라디오 앱을 켜세요.' : '전원 스위치를 켜세요.'; powerBtn.focus(); };
   if (!battery) {
-    status.textContent = '건전지가 없어 켜지지 않는다.';
+    status.textContent = phone ? '배터리가 없어 켜지지 않는다.' : '건전지가 없어 켜지지 않는다.';
     capText.textContent = '';
   } else if (extraSeconds > 0) {
     const wait = rm ? 1.2 : Math.min(4, extraSeconds / 10);
     status.replaceChildren('어둠 속에서 건전지를 찾아 넣는 중… ', el('span', { class: 'mg-bar', 'aria-hidden': 'true' }, el('span', { class: 'mg-bar-fill mg-fill-anim', style: `animation-duration:${wait}s` })));
-    setTimeout(powerOn, wait * 1000);
-  } else powerOn();
+    setTimeout(ready, wait * 1000);
+  } else ready();
   raf = requestAnimationFrame(loop);
   return m.done;
 }

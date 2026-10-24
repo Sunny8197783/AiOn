@@ -58,6 +58,13 @@ export function buildProps(B, g, dyn) {
     bagPt.label = v === 'none' ? '가방 둘 자리' : v === 'packed' ? '비상가방 (꾸림)' : '비상가방 (비어 있음)';
   }
 
+  // ---- wallet with the ID card on the living-room table (picked up = gone from the table and from E) ----
+  const wallet = new THREE.Group(); wallet.position.set(-1.98, T, 6.13); wallet.rotation.y = 0.4; dyn.add(wallet);
+  wallet.add(kit.rbox(0.11, 0.022, 0.09, 0.008, P('#4a2e1e', 0.7), {}));
+  wallet.add(kit.box(0.085, 0.003, 0.054, P('#dfe7ee', 0.4), { x: 0.035, y: 0.022, z: 0.02, ry: 0.3 })); // card peeking out
+  const walletPt = B.point('homeWallet', '지갑 · 신분증', -1.98, FL, 6.13, 'pickup', 1.4);
+  function setWallet(v) { wallet.visible = v !== 'taken'; walletPt.enabled = v !== 'taken'; }
+
   // ---- 계획판: whiteboard with this week's slots, sticky notes and magnets, on the bathroom wall facing the living room ----
   const pz = 3.6, px = -0.4, py = FL + 1.45;
   g.add(kit.box(1.0, 0.72, 0.025, M.alu, { x: px, y: py - 0.36, z: pz + 0.0125 }));
@@ -74,7 +81,7 @@ export function buildProps(B, g, dyn) {
     halo.material.opacity = 0.85 + 0.12 * Math.sin(t * 9.7);
   }
   setRadio('none'); setCandle('none'); setBag('empty');
-  return { setRadio, setCandle, setBag, update };
+  return { setRadio, setCandle, setBag, setWallet, update };
 }
 
 function drawDial(c, w, h) {

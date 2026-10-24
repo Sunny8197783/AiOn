@@ -61,16 +61,16 @@ export function createKit(renderer, { quality = 'high' } = {}) {
 
   // ---- Surfaces: each returns { color, height } canvases at S x S. Tiling sizes are in metres. ----
   const SURFACES = {
-    asphalt(r) {
+    asphalt(r) { // worn, slightly warm grey: broad patches and fine aggregate, low-contrast so it does not shimmer
       const color = canvas(S, S, (g, w, h) => {
-        g.fillStyle = '#3a3c3f'; g.fillRect(0, 0, w, h);
-        for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(20,22,24,${0.12 + r() * 0.12})`; g.beginPath(); g.ellipse(r() * w, r() * h, 20 + r() * 70, 14 + r() * 40, r() * 3, 0, 7); g.fill(); }
-        speckle(g, w, h, r, S * 30, ['#4d5054', '#2c2e31', '#55585c', '#26282a', '#5f6165']);
-        g.strokeStyle = 'rgba(15,15,16,0.55)'; g.lineWidth = 1;
-        for (let i = 0; i < 4; i++) { g.beginPath(); let x = r() * w, y = r() * h; g.moveTo(x, y); for (let k = 0; k < 8; k++) { x += (r() - 0.5) * 40; y += (r() - 0.5) * 40; g.lineTo(x, y); } g.stroke(); }
+        g.fillStyle = '#3f3e3c'; g.fillRect(0, 0, w, h);
+        for (let i = 0; i < 14; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '28,28,27' : '82,80,76'},${0.06 + r() * 0.1})`; g.beginPath(); g.ellipse(r() * w, r() * h, 30 + r() * 110, 20 + r() * 60, r() * 3, 0, 7); g.fill(); }
+        speckle(g, w, h, r, S * 22, ['#474643', '#363533', '#4c4a47', '#32312f'], [0.6, 1.4]);
+        g.strokeStyle = 'rgba(18,18,18,0.45)'; g.lineWidth = 1.2;
+        for (let i = 0; i < 3; i++) { g.beginPath(); let x = r() * w, y = r() * h; g.moveTo(x, y); for (let k = 0; k < 8; k++) { x += (r() - 0.5) * 40; y += (r() - 0.5) * 40; g.lineTo(x, y); } g.stroke(); }
       });
-      const height = canvas(S, S, (g, w, h) => { g.fillStyle = '#808080'; g.fillRect(0, 0, w, h); speckle(g, w, h, r, S * 40, ['#9a9a9a', '#5e5e5e', '#b0b0b0', '#4a4a4a']); });
-      return { color, height, tile: 4, rough: 0.92 };
+      const height = canvas(S, S, (g, w, h) => { g.fillStyle = '#808080'; g.fillRect(0, 0, w, h); speckle(g, w, h, r, S * 30, ['#929292', '#6e6e6e', '#9a9a9a', '#666666'], [0.6, 1.6]); });
+      return { color, height, tile: 4, rough: 0.9 };
     },
     sidewalk(r) { // Korean interlocking pavers, 20 x 10 cm, running bond
       const cols = 10, rows = 20, pw = S / cols, ph = S / rows;
@@ -308,7 +308,14 @@ export function createKit(renderer, { quality = 'high' } = {}) {
   // ---- Light groups: 'street' | 'windows' | 'shops' | 'indoor' | 'signs' | 'emergency' | any name ----
   // Lights are never hidden, only dimmed to 0: a changing light count recompiles every shader.
   const groups = new Map(), itemOf = new WeakMap();
-  const put = (G, it) => { const v = G.on && !it.off ? it.base * G.scale : 0; if (it.isLight) it.obj.intensity = v; else it.obj.emissiveIntensity = v; };
+  // userData.unlitColor: a backlit panel (vending machine) also darkens its colour when its power is off.
+  const put = (G, it) => {
+    const v = G.on && !it.off ? it.base * G.scale : 0;
+    if (it.isLight) { it.obj.intensity = v; return; }
+    it.obj.emissiveIntensity = v;
+    const dim = it.obj.userData?.unlitColor;
+    if (dim !== undefined) it.obj.color.setScalar(dim + (1 - dim) * Math.min(1, v / (it.base || 1)));
+  };
   function lit(group, obj, on) {
     if (!groups.has(group)) groups.set(group, { items: [], on: true, scale: 1 });
     const G = groups.get(group);

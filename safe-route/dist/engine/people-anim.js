@@ -5,7 +5,7 @@ import { B } from './people-body.js';
 
 export const NB = 18, OFF = NB * 3, PLEN = OFF + 3;
 const { sin, cos, max, min, PI, acos } = Math;
-export const ANIMS = ['idle', 'walk', 'run', 'brisk', 'carry', 'walker', 'sit', 'sitChair', 'talk', 'phone', 'wave', 'point', 'crouch', 'stairsUp', 'stairsDown'];
+export const ANIMS = ['idle', 'walk', 'run', 'brisk', 'carry', 'walker', 'sit', 'sitChair', 'talk', 'phone', 'wave', 'point', 'crouch', 'stairsUp', 'stairsDown', 'punch', 'throw', 'hurt', 'down', 'air'];
 // Locomotion: nominal speed (m/s), metres per full gait cycle at that speed (for a 1.72 m adult), shape.
 export const GAIT = {
   walk: { v: 1.3, stride: 1.42, A: 0.36, K: 1.0, load: 0.14, As: 0.3, el: 0.2, bob: 0.022, lean: 0.03 },
@@ -14,6 +14,7 @@ export const GAIT = {
   carry: { v: 1.0, stride: 1.2, A: 0.28, K: 0.9, load: 0.15, As: 0.22, el: 0.2, bob: 0.024, lean: 0.05 },
   walker: { v: 0.8, stride: 0.95, A: 0.25, K: 0.85, load: 0.12, As: 0, el: 0.35, bob: 0.012, lean: 0.24, fixedLean: true },
   stairsUp: { v: 0.55, stride: 0.6, A: 0.42, K: 1.35, load: 0.38, As: 0.14, el: 0.25, bob: 0.03, lean: 0.16, bias: 0.35, fixedLean: true },
+  crouch: { v: 1.0, stride: 0.8 }, // crouch-walk: only its rate/amp are used (POSES.crouch steps the folded legs)
   stairsDown: { v: 0.6, stride: 0.62, A: 0.3, K: 0.6, load: 0.55, As: 0.12, el: 0.25, bob: 0.03, lean: -0.05, bias: 0.06, fixedLean: true },
 };
 
@@ -113,6 +114,31 @@ const POSES = {
     P[B.rArm * 3] = 1.42 + 0.05 * sin(c.t * 2.2); P[B.rArm * 3 + 2] = 0.18; P[B.rFore * 3] = 0.08; P[B.rFore * 3 + 1] = -0.3;
     add(P, B.chest, 0, -0.12); add(P, B.head, 0.03, -0.15);
   },
+  punch(P, c) { // right straight, left hand guarding the face
+    idle(P, c, 0.3);
+    P[B.rArm * 3] = 1.5; P[B.rArm * 3 + 2] = 0.1; P[B.rFore * 3] = 0.05; P[B.lArm * 3] = 0.7; P[B.lArm * 3 + 2] = -0.2; P[B.lFore * 3] = 1.9;
+    add(P, B.chest, 0, -0.4); add(P, B.spine, 0.08, -0.15); add(P, B.head, 0.05, 0.3);
+  },
+  throw(P, c) { // release: arm high in front, body turned through
+    idle(P, c, 0.3);
+    P[B.rArm * 3] = 2.1; P[B.rArm * 3 + 2] = 0.25; P[B.rFore * 3] = 0.35; P[B.lArm * 3] = 0.5; P[B.lArm * 3 + 2] = -0.4;
+    add(P, B.chest, 0.1, -0.45); add(P, B.spine, 0.12, -0.2); add(P, B.head, 0, 0.35);
+  },
+  hurt(P, c) { // knocked back: torso thrown back, arms flung out
+    idle(P, c, 0.2);
+    add(P, B.spine, 0.28); add(P, B.chest, 0.2); add(P, B.neck, 0.15); add(P, B.head, 0.25);
+    for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 0.4, 0, s * 0.75); add(P, a + 1, 0.5); }
+  },
+  air(P, c) { // off the ground: one knee higher than the other, arms out a little for balance
+    idle(P, c, 0.15);
+    add(P, B.lThigh, 0.6); add(P, B.lShin, -1.0); add(P, B.lFoot, 0.35); add(P, B.rThigh, 0.25); add(P, B.rShin, -0.55); add(P, B.rFoot, 0.25);
+    for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 0.35, 0, s * 0.38); add(P, a + 1, 0.45); }
+    add(P, B.spine, -0.06); add(P, B.head, 0.05);
+  },
+  down(P, c) { // on the ground: crouched low, head down, arms over the head
+    POSES.crouch(P, c); add(P, B.spine, -0.25); add(P, B.head, 0.35);
+    for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 1.2, 0, s * 0.2); add(P, a + 1, 1.6); }
+  },
   crouch(P, c) {
     const d = c.d, th = 1.9, ccw = -0.35, hy = d.ankleY + d.L1 * cos(th) + d.L2 * cos(ccw);
     const fwd = legsFold(P, c, th, hy, 0.2, true);
@@ -120,6 +146,14 @@ const POSES = {
     add(P, B.spine, -0.42); add(P, B.chest, -0.15); add(P, B.neck, 0.15); add(P, B.head, 0.32);
     for (const s of [-1, 1]) { const a = s < 0 ? B.lArm : B.rArm; add(P, a, 0.85, 0, s * 0.18); add(P, a + 1, 0.55); }
     add(P, B.chest, 0.01 * sin(c.t * 1.65));
+    if (c.amp > 0.02) { // moving low: short steps from the folded legs, a small bob, arms swinging a little
+      for (const s of [-1, 1]) {
+        const q = c.ph + (s > 0 ? PI : 0), t0 = s < 0 ? B.lThigh : B.rThigh, sw = max(0, cos(q + 0.35));
+        add(P, t0, 0.34 * c.amp * sin(q)); add(P, t0 + 1, -0.3 * c.amp * sw); add(P, t0 + 2, 0.12 * c.amp * sin(q));
+        add(P, s < 0 ? B.lArm : B.rArm, -s * 0.18 * c.amp * sin(c.ph));
+      }
+      P[OFF + 1] -= 0.018 * c.amp * (1 - cos(2 * c.ph)) / 2; add(P, B.spine, 0, -0.08 * c.amp * sin(c.ph));
+    }
   },
   sit(P, c) { // on a floor mat, knees up; origin = under the hips. Hands rest on the knees (IK, see people.js)
     legsFold(P, c, 2.0, 0.058 * c.d.H, 0.2);
@@ -167,7 +201,7 @@ export function gripOf(name, props) {
 
 // Gait phase speed and amplitude for an animation at a given speed and person height.
 export function gaitStep(name, speed, H) {
-  const g = GAIT[name]; if (!g) return { rate: 0, amp: 0 };
+  const g = GAIT[name]; if (!g || (name === 'crouch' && speed == null)) return { rate: 0, amp: 0 }; // a placed crouch stays still
   const v = speed ?? g.v, r = Math.max(0, v) / g.v;
   const stride = g.stride * (H / 1.72) * Math.max(0.45, Math.sqrt(Math.min(1.6, r)));
   return { rate: 2 * PI * v / stride, amp: Math.min(1.25, Math.sqrt(r)) };

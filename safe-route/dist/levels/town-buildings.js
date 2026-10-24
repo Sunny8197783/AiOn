@@ -25,7 +25,10 @@ export function facePlane(side, c, a0, a1, y0, y1, material, { u0 = 0, u1 = 1, v
 
 export function buildBuildings(kit, { holes = {} } = {}) {
   const group = new THREE.Group(); group.name = 'buildings';
-  const stat = new THREE.Group(), far = new THREE.Group(); group.add(stat, far);
+  let stat = new THREE.Group(); // swapped briefly while the strike villa is built into its own group
+  const far = new THREE.Group(); group.add(stat, far);
+  // The villa the D-day missile destroys (town-strike.js): built unmerged so it can be swapped for a ruin.
+  const strike = { group: new THREE.Group(), box: null }; strike.group.name = 'strikeVilla'; group.add(strike.group);
   const solids = [];
 
   const roofMat = kit.memo('town:roof', () => kit.surface('concrete', { color: 0xb5b2aa }));
@@ -119,9 +122,11 @@ export function buildBuildings(kit, { holes = {} } = {}) {
       const x0 = b.x0 + i * (cw + gap), z0 = b.z0 + j * (cd + gap), floors = Math.max(3, b.floors + [-1, 0, 0, 1][(rr() * 4) | 0]);
       const kind = b.kind === 'shop' || rr() < 0.3 ? 'shop' : 'villa', v = (rr() * 3) | 0;
       const tint = kind === 'villa' ? ['#ffffff', '#d9c7b8', '#f2d5c0'][v] : ['#ffffff', '#e6e0d2', '#cfd6dc'][v];
-      const fh = FH[kind], h = CURB + floors * fh;
+      const fh = FH[kind], h = CURB + floors * fh, hit = b.id === 's2' && i === 0 && j === 0;
+      const keep = stat; if (hit) { stat = strike.group; strike.box = { x0, x1: x0 + cw, z0, z1: z0 + cd, h }; }
       shell(x0, x0 + cw, z0, z0 + cd, h, { long: fac(kind, floors, 4, v + 1, tint), short: fac(kind, floors, 4, v + 1, tint) }, { perL: 14, perS: 14 });
       roofKit(x0, x0 + cw, z0, z0 + cd, h, rr, kind === 'villa' && rr() < 0.7);
+      stat = keep;
     }
   }
 
@@ -172,6 +177,6 @@ export function buildBuildings(kit, { holes = {} } = {}) {
   }
   far.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 
-  kit.merge(stat); kit.merge(far);
-  return { group, solids };
+  kit.merge(stat); kit.merge(far); kit.merge(strike.group);
+  return { group, solids, strike };
 }

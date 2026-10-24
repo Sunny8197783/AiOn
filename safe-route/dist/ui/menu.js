@@ -192,7 +192,7 @@ export function pause() {
       btn('체크포인트 저장', { iconName: 'save', onclick: go('save') }),
       menuBtn),
     confirmBox,
-    el('dl', { class: 'key-list', 'aria-label': '조작키' }, ...[['WASD · 방향키', '이동'], ['Shift', '달리기'], ['마우스 끌기 · Alt+방향키', '둘러보기'], ['E · Enter', '살피기 · 대화'], ['F', '손전등 · 휴대폰 불빛'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '1인칭 / 3인칭'], ['Esc', '이 메뉴']]
+    el('dl', { class: 'key-list', 'aria-label': '조작키' }, ...[['WASD · 방향키', '이동'], ['Shift', '달리기 (기력)'], ['Space', '점프'], ['마우스 (클릭 후) · Alt+방향키', '둘러보기'], ['E · Enter', '살피기 · 대화'], ['F', '손전등 · 휴대폰 불빛'], ['P', '휴대폰 · FM 라디오'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '1인칭 / 3인칭'], ['H', '조작법'], ['Esc', '이 메뉴']]
       .flatMap(([k, t]) => [el('dt', {}, k), el('dd', {}, t)])));
   const m = modal({ className: 'pause', label: '일시정지 메뉴', content,
     onKey(e) { if (e.key === 'Escape' && !e.repeat) { e.preventDefault(); if (!confirmBox.hidden) { confirmBox.hidden = true; menuBtn.focus(); } else m.close('resume'); } } });
@@ -200,9 +200,11 @@ export function pause() {
 }
 
 // ---------- settings ----------
-// settings(current) -> Promise<{ quality, volume, mute, captions, reduceMotion, textScale, view }>
+// settings(current) -> Promise<{ quality, volume, mute, captions, reduceMotion, textScale, view, sensitivity, minimap,
+//   volAmbience, volEffects, volUi, profile }>
 export function settings(current = {}) {
-  const cur = { quality: 'high', volume: 0.7, mute: false, captions: true, reduceMotion: false, textScale: 1, view: 'third', ...current };
+  const cur = { quality: 'high', volume: 0.7, mute: false, captions: true, reduceMotion: false, textScale: 1, view: 'third',
+    sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', ...current };
   const root = document.documentElement, scale0 = root.style.getPropertyValue('--text-scale');
   const radios = (name, legend, options, value, note) => el('fieldset', { class: 'set-group' }, el('legend', {}, legend),
     el('div', { class: 'seg' }, options.map(([v, label, sub]) => el('label', {},
@@ -215,15 +217,29 @@ export function settings(current = {}) {
   const volOut = el('output', { for: 'set-volume' }, `${Math.round(cur.volume * 100)}%`);
   const vol = el('input', { type: 'range', id: 'set-volume', name: 'volume', min: '0', max: '100', step: '5', value: String(Math.round(cur.volume * 100)), 'aria-valuetext': `${Math.round(cur.volume * 100)}%` });
   vol.addEventListener('input', () => { volOut.textContent = `${vol.value}%`; vol.setAttribute('aria-valuetext', `${vol.value}%`); });
+  // One more range per sound bus and for mouse sensitivity: [name, label, value 0..1 (or 0.3..3), min, max, unit]
+  const range = (name, label, value, min = 0, max = 100, fmt = (v) => `${v}%`) => {
+    const out = el('output', {}, fmt(Math.round(value * 100)));
+    const input = el('input', { type: 'range', id: `set-${name}`, name, min: String(min), max: String(max), step: '5', value: String(Math.round(value * 100)), 'aria-valuetext': fmt(Math.round(value * 100)) });
+    input.addEventListener('input', () => { out.textContent = fmt(input.value); input.setAttribute('aria-valuetext', fmt(input.value)); });
+    return [el('label', { class: 'set-range', for: `set-${name}` }, el('span', {}, label), out), input];
+  };
   const form = el('form', { class: 'settings-form' },
     el('div', { class: 'set-cols' },
       el('div', {},
         radios('quality', '그래픽 품질', [['low', '낮음', '가벼운 노트북'], ['medium', '보통', '대부분의 PC'], ['high', '높음', '그림자·주변광']], cur.quality, '느려지면 게임이 한 번 자동으로 품질을 낮춥니다.'),
         radios('view', '시점', [['third', '3인칭', '어깨 너머'], ['first', '1인칭', '정민의 눈']], cur.view),
-        radios('textScale', '글자 크기', [[0.9, '작게'], [1, '보통'], [1.15, '크게'], [1.3, '아주 크게']], cur.textScale)),
+        radios('textScale', '글자 크기', [[0.9, '작게'], [1, '보통'], [1.15, '크게'], [1.3, '아주 크게']], cur.textScale),
+        radios('profile', '체험 모드', [['none', '기본'], ['mobility', '보행 장애', '달리기 불가 · 느린 걸음'], ['wheelchair', '휠체어', '앉은 눈높이 · 계단 불가'],
+          ['lowvision', '저시력', '흐린 시야 · 음성 안내'], ['deaf', '청각 장애', '소리 없음 · 자막과 신호'], ['guardian', '보호자 동반', '지체 장애 · 함께 걷기']], cur.profile,
+          '몸과 감각의 조건에 따라 같은 길도 달라집니다.'),
+        el('fieldset', { class: 'set-group' }, el('legend', {}, '조작'),
+          ...range('sensitivity', '마우스 감도', cur.sensitivity, 30, 300, (v) => `${(v / 100).toFixed(2)}배`),
+          toggle('minimap', '미니맵 표시', '오른쪽 위의 작은 지도 (북쪽이 위)', cur.minimap))),
       el('div', {},
         el('fieldset', { class: 'set-group' }, el('legend', {}, '소리'),
           el('label', { class: 'set-range', for: 'set-volume' }, el('span', {}, icon('sound'), '전체 음량'), volOut), vol,
+          ...range('volAmbience', '환경음 (거리 · 실내)', cur.volAmbience), ...range('volEffects', '효과음 (사이렌 · 불 · 라디오)', cur.volEffects), ...range('volUi', '버튼 소리', cur.volUi),
           toggle('mute', '소리 끄기', '사이렌과 경보음도 꺼집니다. 자막은 계속 나옵니다.', cur.mute)),
         el('fieldset', { class: 'set-group' }, el('legend', {}, '접근성'),
           toggle('captions', '자막 표시', '사이렌·방송·소리를 글로도 보여 줍니다.', cur.captions),
@@ -235,9 +251,11 @@ export function settings(current = {}) {
     const f = new FormData(form);
     uiSound('confirm');
     m.close({ ...cur, quality: f.get('quality') || cur.quality, view: f.get('view') || cur.view, textScale: Number(f.get('textScale')) || 1,
-      volume: Number(vol.value) / 100, mute: f.has('mute'), captions: f.has('captions'), reduceMotion: f.has('reduceMotion') });
+      volume: Number(vol.value) / 100, mute: f.has('mute'), captions: f.has('captions'), reduceMotion: f.has('reduceMotion'),
+      sensitivity: Number(f.get('sensitivity')) / 100 || 1, minimap: f.has('minimap'), profile: f.get('profile') || 'none',
+      volAmbience: Number(f.get('volAmbience')) / 100, volEffects: Number(f.get('volEffects')) / 100, volUi: Number(f.get('volUi')) / 100 });
   });
-  const content = el('div', { class: 'settings-panel' }, el('p', { class: 'eyebrow' }, icon('sliders'), '설정'), el('h2', {}, '보기·소리·접근성'), form);
+  const content = el('div', { class: 'settings-panel' }, el('p', { class: 'eyebrow' }, icon('sliders'), '설정'), el('h2', {}, '보기·소리·조작·접근성'), form);
   const cancel = () => { if (scale0) root.style.setProperty('--text-scale', scale0); else root.style.removeProperty('--text-scale'); m.close({ ...cur }); };
   const m = modal({ className: 'settings', label: '설정', content, onKey(e) { if (e.key === 'Escape') { e.preventDefault(); cancel(); } } });
   form.querySelector('input:checked')?.focus();

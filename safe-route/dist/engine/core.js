@@ -46,6 +46,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.localClippingEnabled = true; // the first-person body cuts its own head (engine/controls.js)
   renderer.setPixelRatio(PIXEL_RATIO[quality]());
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.08, 3000);
@@ -56,9 +57,14 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   const controls = createControls({ camera, canvas, scene, getLevel: () => level, reduceMotion: RM, quality });
 
   // ---- people + fx (dynamic, optional) ----
-  const people = { createPerson: capsulePerson, createCrowd: emptyCrowd, fallback: true };
+  const people = { createPerson: capsulePerson, createCrowd: emptyCrowd, fallback: true }, persons = new Set();
   const peopleReady = Promise.allSettled([import('./people.js'), import('./crowd.js')]).then(([p, c]) => {
-    if (p.status === 'fulfilled' && typeof p.value.createPerson === 'function') { Object.assign(people, p.value); people.fallback = false; }
+    // Every person made from here on is known to engine/actions.js (punches, thrown things); the player models too,
+    // which actions skips.
+    if (p.status === 'fulfilled' && typeof p.value.createPerson === 'function') {
+      Object.assign(people, p.value); people.fallback = false;
+      const make = people.createPerson; people.createPerson = (o) => { const m = make(o); if (m?.group) persons.add(m); return m; };
+    }
     else console.error('[engine] engine/people.js unavailable; using capsule people', p.reason ?? 'no createPerson export');
     if (c.status === 'fulfilled' && typeof c.value.createCrowd === 'function') people.createCrowd = c.value.createCrowd;
     else console.error('[engine] engine/crowd.js unavailable; crowds stay empty', c.reason ?? 'no createCrowd export');
@@ -81,8 +87,12 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
 
   // ---- environment presets (tweened) ----
   let envName = null, envFrom = null, envTo = null, envK = 1, envDur = 0, rainFx = null, beam = 1;
-  let litFrom = {}, litTo = {};
+  let litFrom = {}, litTo = {}, power = true;
   const litNow = {};
+  // Grid power off (blackout): street lamps, lit windows, shop fronts and signs stay dark whatever the sky
+  // preset says; battery-backed 'emergency' and 'indoor' (interiors pick their own preset) are untouched.
+  const GRID = new Set(['street', 'windows', 'shops', 'signs']);
+  const litTarget = (preset) => Object.fromEntries(Object.entries(PRESETS[preset].lit).map(([g, v]) => [g, !power && GRID.has(g) ? 0 : v]));
   function stepEnv(dt) {
     envK = envDur > 0 ? Math.min(1, envK + dt / envDur) : 1;
     const e = ease(envK), S = mixState(envFrom, envTo, e);
@@ -102,7 +112,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     envTo = envState(THREE, preset, rain);
     envFrom = sky.state ? { ...sky.state } : envTo;
     envDur = Math.max(0, Number(seconds) || 0); envK = 0;
-    litFrom = { ...litNow }; litTo = { ...litNow, ...PRESETS[preset].lit };
+    litFrom = { ...litNow }; litTo = { ...litNow, ...litTarget(preset) };
     envName = preset;
     try { scene.environment = sky.environment(preset, rain); } catch (err) { console.error('[engine] PMREM environment failed', err); }
     post.setGrade(gradeFor(preset, rain), envDur);
@@ -137,14 +147,14 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   }
 
   // ---- levels ----
-  const built = new Map();
+  const built = new Map(), done = new Set();
   function getLevel(id) {
     if (!built.has(id)) {
       const make = levels[id];
       if (typeof make !== 'function') return Promise.reject(new Error(`[engine] unknown level "${id}"; known: ${Object.keys(levels).join(', ')}`));
       const p = (async () => { await ready; return normalizeLevel(await make(kit, people, fx), id); })();
       built.set(id, p);
-      p.catch(() => built.delete(id)); // a failed build may be retried
+      p.then(() => done.add(id), () => built.delete(id)); // a failed build may be retried
     }
     return built.get(id);
   }
@@ -154,7 +164,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   function enter(levelId, spawn, { prepare } = {}) {
     const run = queue.catch(() => {}).then(async () => {
       busy = true;
-      const fadeS = RM ? 0 : 0.35;
+      const fadeS = RM ? 0 : done.has(levelId) ? 0.1 : 0.35; // a level already built swaps in a blink
       try {
         await post.fadeTo(0, fadeS);
         let L;
@@ -172,6 +182,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
         if (prepare) { try { await prepare(L); } catch (err) { console.error(`[engine] prepare for level "${levelId}" failed (continuing)`, err); } }
         try { await Promise.race([renderer.compileAsync(scene, camera), new Promise((r) => setTimeout(r, 4000))]); }
         catch (err) { console.warn('[engine] shader precompile failed (continuing)', err); }
+        prewarm();
         return L;
       } finally {
         await post.fadeTo(1, fadeS);
@@ -180,6 +191,25 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     });
     queue = run;
     return run;
+  }
+
+  // Build and precompile the other levels while the player is busy elsewhere, so a door never waits on a
+  // build. Idle callbacks keep each build between frames; one level at a time.
+  let warming = false; const tried = new Set();
+  function prewarm() {
+    if (warming) return; warming = true;
+    const idle = (fn) => (globalThis.requestIdleCallback ? requestIdleCallback(fn, { timeout: 8000 }) : setTimeout(fn, 1500));
+    const next = () => {
+      const id = Object.keys(levels).find((k) => !built.has(k) && !tried.has(k));
+      if (!id) return;
+      tried.add(id);
+      idle(async () => {
+        try { const L = await getLevel(id); await renderer.compileAsync(L.group, camera, scene); }
+        catch (err) { console.warn(`[engine] prewarm of "${id}" failed (it loads at the door instead)`, err); }
+        setTimeout(next, 800);
+      });
+    };
+    setTimeout(next, 4000);
   }
 
   // ---- quality, motion, size ----
@@ -204,6 +234,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   // ---- frame loop ----
   const frameFns = new Set(), logged = new Set();
   const logOnce = (key, err) => { if (!logged.has(key)) { logged.add(key); console.error(`[engine] ${key}`, err); } };
+  let timeScale = 1; // slow motion (cutscenes); 1 = real time
   let t = 0, last = performance.now(), fps = 60, acc = 0, frames = 0, slow = 0, downgraded = false;
   function measure(raw) {
     if (raw > 0.5) { acc = 0; frames = 0; return; } // tab was hidden
@@ -222,10 +253,10 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   }
   function frame(now) {
     const raw = Math.max(0, (now - last) / 1000); last = now;
-    const dt = Math.min(raw, 0.1); t += dt;
+    const dt = Math.min(raw, 0.1) * timeScale; t += dt;
     try { controls.update(dt); } catch (err) { logOnce('player update failed', err); }
     if (envK < 1) stepEnv(dt);
-    if (level?.update) { try { level.update(dt, t, { camera, player: controls.player, env: envName }); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
+    if (level?.update) { try { level.update(dt, t, { camera, player: controls.player, env: envName, power }); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
     sky.update(dt, camera, controls.player.position, RM);
     if (rainFx) { try { rainFx.update(dt, camera); } catch (err) { logOnce('rain update failed', err); } }
     for (const fn of [...frameFns]) { try { fn(dt, t); } catch (err) { logOnce('onFrame listener failed', err); } }
@@ -236,7 +267,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   renderer.setAnimationLoop(frame);
 
   return {
-    THREE, renderer, scene, camera, kit, people, ready,
+    THREE, renderer, scene, camera, kit, people, persons, ready, post,
     get fx() { return fx; },
     get quality() { return quality; },
     get level() { return level; },
@@ -247,6 +278,24 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     get env() { return envName; },
     get reduceMotion() { return RM; },
     enter, setEnv, setPlayerPreset,
+    get power() { return power; },
+    // Grid power for the current scene; re-applies the lit groups of the current preset at once.
+    setPower(on) {
+      power = !!on;
+      if (!envName) return;
+      litTo = { ...litTo, ...litTarget(envName) };
+      if (envK >= 1) { for (const [g, v] of Object.entries(litTo)) { litNow[g] = v; kit.setLit(g, v > 0.0005, v); } }
+    },
+    setProfile: (p) => controls.setProfile(p),
+    shake: (a, s) => controls.shake(a, s),
+    setSensitivity: (v) => controls.setSensitivity(v),
+    onBlocked: (fn) => controls.onBlocked(fn),
+    onLand: (fn) => controls.onLand(fn),
+    act: (name, s) => controls.act(name, s),
+    setHold: (on) => controls.setHold(on),
+    setModelHidden: (v) => controls.setModelHidden(v),
+    get crouching() { return controls.crouching; },
+    get pointerLocked() { return controls.locked; },
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
     setView: (v) => controls.setView(v),
     setControls: (on) => controls.setEnabled(on),
@@ -256,7 +305,8 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     onKey: (fn) => controls.onKey(fn),
     onFrame: (fn) => { frameFns.add(fn); return () => frameFns.delete(fn); },
     setQuality, setReduceMotion,
-    stats: () => ({ fps: Math.round(fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles }),
+    get timeScale() { return timeScale; }, set timeScale(v) { timeScale = Math.min(2, Math.max(0, Number(v) || 0)); },
+    stats: () => ({ fps: Math.round(fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles, adapt: +post.adaptValue().toFixed(2) }),
     dispose() { renderer.setAnimationLoop(null); controls.dispose(); renderer.dispose(); },
   };
 }

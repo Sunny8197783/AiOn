@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { builder, vpbrMaterial } from './people-geo.js';
 import { B, PARENT, buildBody } from './people-body.js';
 import { pose, gaitStep, gripOf, ANIMS, GAIT, NB, OFF, PLEN } from './people-anim.js';
+import { clip, clipInfo, maskOf, clipLook } from './people-clips.js';
 import * as PR from './people-props.js';
 import { presetSpec } from './people-outfit.js';
 
@@ -16,6 +17,14 @@ const BONE_NAMES = Object.keys(B);
 const AUTO = { phone: 'phone', carry: 'waterJug', walker: 'walker' }; // animations that need a prop shown
 const FADE = 0.2;
 const STAIRS = new Set(['stairsUp', 'stairsDown']);
+// Walk, brisk walk and run are one blend space: at a given speed the two nearest gaits are posed on one shared
+// phase and mixed, so a person speeding up goes from a stroll through a march into a run with no pop.
+const LOCO = [['walk', 1.3], ['brisk', 2.1], ['run', 3.9]], LOCO_SET = new Set(LOCO.map(([n]) => n));
+function locoMix(v) {
+  if (v <= LOCO[0][1]) return [LOCO[0][0], LOCO[0][0], 0];
+  for (let i = 1; i < LOCO.length; i++) if (v <= LOCO[i][1]) { const k = (v - LOCO[i - 1][1]) / (LOCO[i][1] - LOCO[i - 1][1]); return [LOCO[i - 1][0], LOCO[i][0], k * k * (3 - 2 * k)]; }
+  const n = LOCO.at(-1)[0]; return [n, n, 0];
+}
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _S = new THREE.Vector3(), _D = new THREE.Vector3(), _N = new THREE.Vector3(),
   _U = new THREE.Vector3(), _X = new THREE.Vector3(), _Y = new THREE.Vector3(), _Z = new THREE.Vector3(), _m = new THREE.Matrix4(),
   _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _gq = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -48,7 +57,9 @@ export function createPerson({ preset = 'crowd', seed } = {}) {
   group.name = mesh.name; group.add(mesh);
 
   // ---- state ----
-  const P = new Float32Array(PLEN), Pp = new Float32Array(PLEN);
+  const P = new Float32Array(PLEN), Pp = new Float32Array(PLEN), Pq = new Float32Array(PLEN), Pc = new Float32Array(PLEN);
+  let act = null; // the one-shot clip playing: { name, t, dur, power }
+  const lean = { f: 0, s: 0, tf: 0, ts: 0 }; let aim = 0, aimOn = false, hold = 0, holdOn = false;
   const o = ((seed ?? 7) * 0.618034) % 1;
   let cur = 'idle', prev = 'idle', fade = 1, speed = null, t = o * 50, ph = o * 6.28, amp = 0, ikW = 0, lookOn = false, lookYaw = 0, wheelA = 0, shadow = true, lastGrip = null;
   const look = { x: 0, z: 0 };
@@ -158,16 +169,46 @@ export function createPerson({ preset = 'crowd', seed } = {}) {
     t += dt;
     // with the rollator out, plain walking becomes walker walking
     const eff = (n) => (objs.walker?.visible && (n === 'walk' || n === 'brisk' || n === 'run') ? 'walker' : n);
-    const step = gaitStep(eff(cur), speed, d.H);
-    ph = (ph + step.rate * dt) % (Math.PI * 200);
-    amp += (step.amp - amp) * Math.min(1, dt * 6);
+    const base = eff(cur), loco = LOCO_SET.has(base) && speed != null;
+    const [la, lb, lw] = loco ? locoMix(speed) : [base, base, 0];
+    const sa = gaitStep(la, speed, d.H), sb = lw > 0 ? gaitStep(lb, speed, d.H) : sa;
+    ph = (ph + (sa.rate + (sb.rate - sa.rate) * lw) * dt) % (Math.PI * 200);
+    amp += (sa.amp + (sb.amp - sa.amp) * lw - amp) * Math.min(1, dt * 6);
     if (fade < 1) fade = Math.min(1, fade + dt / FADE);
     const c = { t, ph, amp, d, o, seat: +api.seat || 0.45, stoop: spec.stoop ?? 0 };
-    pose(eff(cur), P, c);
+    pose(la, P, c);
+    if (lw > 0) { pose(lb, Pq, c); for (let i = 0; i < PLEN; i++) P[i] += (Pq[i] - P[i]) * lw; }
     if (fade < 1) {
       pose(eff(prev), Pp, c);
       const w = fade * fade * (3 - 2 * fade);
       for (let i = 0; i < PLEN; i++) P[i] = Pp[i] + (P[i] - Pp[i]) * w;
+    }
+    // Lean into speeding up / turning (setLean), the head kept level the way people steady their gaze.
+    const lk = Math.min(1, dt * 6); lean.f += (lean.tf - lean.f) * lk; lean.s += (lean.ts - lean.s) * lk;
+    if (lean.f || lean.s) {
+      P[B.spine * 3] -= lean.f * 0.55; P[B.chest * 3] -= lean.f * 0.25; P[B.head * 3] += lean.f * 0.5;
+      P[B.spine * 3 + 2] += lean.s * 0.45; P[B.chest * 3 + 2] += lean.s * 0.25; P[B.head * 3 + 2] -= lean.s * 0.55;
+    }
+    // Where the eyes look up or down (setAim) bends the spine, chest, neck and head a share each.
+    if (aimOn) { P[B.spine * 3] += aim * 0.12; P[B.chest * 3] += aim * 0.22; P[B.neck * 3] += aim * 0.18; P[B.head * 3] += aim * 0.3; }
+    // Something held ready to throw (setHold): the right hand up in front of the chest.
+    hold += ((holdOn ? 1 : 0) - hold) * Math.min(1, dt * 8);
+    if (hold > 0.01) {
+      const h = hold, r = B.rArm * 3, f = B.rFore * 3;
+      P[r] += (1.1 - P[r]) * h; P[r + 1] *= 1 - h; P[r + 2] += (0.12 - P[r + 2]) * h;
+      P[f] += (1.2 - P[f]) * h; P[f + 1] += (-0.6 - P[f + 1]) * h; P[B.rHand * 3] += (0.15 - P[B.rHand * 3]) * h;
+    }
+    // One-shot clip over the result: eased in over 60 ms and out over the last 120 ms.
+    if (act) {
+      act.t += dt;
+      const k = act.t / act.dur;
+      if (k >= 1) act = null;
+      else {
+        Pc.set(P); c.power = act.power; clip(act.name, Pc, c, k);
+        const w = Math.min(1, act.t / 0.06, (act.dur - act.t) / 0.12), m = maskOf(act.name);
+        if (!m) for (let i = 0; i < PLEN; i++) P[i] += (Pc[i] - P[i]) * w;
+        else for (const b of m) for (let j = b * 3; j < b * 3 + 3; j++) P[j] += (Pc[j] - P[j]) * w;
+      }
     }
     if (lookOn) { // turn head, neck and a little chest toward a world point
       group.updateWorldMatrix(true, false);
@@ -214,6 +255,22 @@ export function createPerson({ preset = 'crowd', seed } = {}) {
       if (opts.instant) prev = name;
     },
     setSpeed(mps) { speed = mps == null ? null : Math.max(0, +mps || 0); },
+    // Play a one-shot clip (engine/people-clips.js: punch, throw, pickup, vault, climb, land, hurt) over the
+    // current animation. seconds overrides its length; power (0..1) scales clips that have a strength (land).
+    play(name, { seconds, power = 0.5 } = {}) {
+      const info = clipInfo(name); if (!info) { console.error(`people: unknown clip "${name}" for ${preset}`); return false; }
+      act = { name, t: 0, dur: Math.max(0.1, seconds ?? info.dur), power }; return true;
+    },
+    get playing() { return act?.name ?? null; },
+    // Gait phase (a heel strikes each time it passes π/2 + nπ) and how much the legs are moving (0..~1.25).
+    get phase() { return ph; }, get stride() { return amp; },
+    get clipK() { return act ? act.t / act.dur : null; }, // progress of the playing clip, 0..1
+    get clipLook() { return act ? clipLook(act.name, act.t / act.dur, act.power) : 0; }, // eye pitch the clip asks for
+    // Lean forward (speeding up, +) and sideways into a turn (+ = top toward the left), radians-ish, eased.
+    setLean(f = 0, s = 0) { lean.tf = Math.max(-0.4, Math.min(0.4, f)); lean.ts = Math.max(-0.4, Math.min(0.4, s)); },
+    // Look up (+) or down (-) by pitch radians, spread over spine, chest, neck and head; null to stop.
+    setAim(pitch) { aimOn = pitch != null; aim = aimOn ? Math.max(-1.2, Math.min(1.1, pitch)) : 0; },
+    setHold(on) { holdOn = !!on; },
     setProp(name, on = true) {
       if (!PROPS.includes(name)) { console.error(`people: unknown prop "${name}" for ${preset}`); return; }
       want[name] = !!on; syncProps();

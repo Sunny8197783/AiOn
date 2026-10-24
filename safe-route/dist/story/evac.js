@@ -136,9 +136,17 @@ async function depart(ctx) {
   await ctx.goto('apartment', 'home', 'interiorDark');
   ctx.refresh();
   let noted = false, said = false;
-  const show = () => ctx.objective('임시 집결지로', `14:00까지 행정복지센터 앞 임시 집결지에 도착합니다. ${G.know.evacClosuresKnown ? `오늘 통제: ${closures.map(c => CLOSURES[c].label).join(', ')}` : '어디가 통제인지는 아직 모릅니다.'}`, [{ text: '문에 쪽지 남기기 (선택)', done: noted }, { text: '집결지 도착', done: false }]);
+  // The last choice is yours: the bus is one way out, not the answer. Each path ends the story differently.
+  const show = () => ctx.objective('오늘 어떻게 할까', `14:00 버스는 행정복지센터 앞 집결지에서 떠납니다. ${G.know.evacClosuresKnown ? `오늘 통제: ${closures.map(c => CLOSURES[c].label).join(', ')}` : '어디가 통제인지는 아직 모릅니다.'}`, [
+    { text: '문에 쪽지 남기기 (선택)', done: noted }, { text: '버스 타기: 14:00까지 집결지', done: false }, { text: '남기: 관리사무소 박 소장에게', done: false },
+    { text: '서연과 함께: 303호', done: false }, { text: '돕기: 행정복지센터 자원봉사', done: false }, { text: '걸어서 떠나기: 큰길 끝까지', done: false }]);
   show();
-  await ctx.roam({ rate: 4, deadline: { day: 12, minute: 14 * 60, type: 'missedBus' }, on: {
+  const B = { x0: -124, x1: 124, z0: -104, z1: 104 }; // past these, on a road, you have walked out of town
+  const path = await ctx.roam({ rate: 4, tick: () => {
+    const p = ctx.engine.player;
+    if (ctx.engine.level?.id === 'town' && (p.x < B.x0 || p.x > B.x1 || p.z < B.z0 || p.z > B.z1)) return 'walk';
+    if (G.day > 12 || G.minute >= 14 * 60) return 'missed';
+  }, on: {
     homeExitDoor: async () => {
       if (!noted) {
         const pick = await ctx.ui.talk({ speaker: '현관', role: '나가기 전에', lines: ['문에 쪽지를 남길까?'], choices: [{ id: 'note', label: `"${hhmm(G.minute)} 행정복지센터 집결지로 떠납니다 — 302호 정민"` }, { id: 'no', label: '그냥 나간다' }] });
@@ -152,18 +160,35 @@ async function depart(ctx) {
     seoyeonDoor: async () => {
       if (said) return;
       said = true;
-      const pick = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['저는 지원 차량이 3시에 와요. 집결지에서 다시 만나요.', '같이 기다려 줄 필요는 없어요. 정민 씨는 버스 시간 맞춰 가세요.'], choices: [{ id: 'go', label: '집결지에서 만나요' }, { id: 'card', label: '제 연락처 카드 사진 찍어 두세요' }] });
+      const pick = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['저는 지원 차량이 3시에 와요. 집결지에서 다시 만나요.', '같이 기다려 줄 필요는 없어요. 정민 씨는 버스 시간 맞춰 가세요.'], choices: [{ id: 'go', label: '집결지에서 만나요' }, { id: 'card', label: '제 연락처 카드 사진 찍어 두세요' }, { id: 'wait', label: '같이 기다렸다가 지원 차량으로 같이 가요' }] });
       if (pick === 'card') recordEvent(G, 'help', { who: 'seoyeon', what: '떠나기 전 서로의 연락처를 다시 확인했다' });
+      if (pick === 'wait') { recordEvent(G, 'help', { who: 'seoyeon', what: '지원 차량이 올 때까지 곁을 지켰다' }); return 'seoyeon'; }
     },
-    managerWindow: async () => { await ctx.ui.talk({ speaker: '박영수 소장', role: '관리사무소', lines: ['저는 남아요. 건물 지키는 사람도 있어야죠. 조심히 가요, 302호.'] }); recordEvent(G, 'help', { who: 'manager', what: '마지막까지 건물을 지키며 길을 안내했다' }); },
-    assembly: async () => 'arrived',
+    managerWindow: async () => {
+      const pick = await ctx.ui.talk({ speaker: '박영수 소장', role: '관리사무소', lines: ['저는 남아요. 건물 지키는 사람도 있어야죠. 조심히 가요, 302호.'], choices: [{ id: 'go', label: '소장님도 조심하세요' }, { id: 'stay', label: '저도 남겠습니다. 같이 지켜요' }] });
+      recordEvent(G, 'help', { who: 'manager', what: '마지막까지 건물을 지키며 길을 안내했다' });
+      if (pick === 'stay') return 'stay';
+    },
+    center: async () => {
+      const pick = await ctx.ui.talk({ speaker: '행정복지센터', role: '자원봉사 접수', lines: ['급수 안내하고 거동 불편한 분들께 물 나를 사람이 모자라요.', '남아서 도와주실 수 있어요? 버스는 놓치게 될 거예요.'], choices: [{ id: 'yes', label: '남아서 돕겠습니다' }, { id: 'no', label: '죄송해요, 버스를 타야 해요' }] });
+      if (pick === 'yes') return 'volunteer';
+    },
+    assembly: async () => 'bus',
     ...Object.fromEntries(Object.keys(CLOSURES).map(id => [`closure_${id}`, async () => { await ctx.ui.talk({ speaker: '안내 요원', role: CLOSURES[id].label, lines: ['이 구간은 통제 중입니다. 다른 길로 돌아가 주세요.'] }); }])),
   } });
+  G.know.path = path;
+  recordEvent(G, 'path', { path });
+  if (path !== 'bus') return void await ctx.caption({ missed: '버스는 이미 떠났다. 텅 빈 집결지에 바람만 분다.', stay: '가방을 내려놓았다. 오늘부터 이 건물이 내 자리다.', seoyeon: '서연의 문 앞에 가방을 내려놓고 앉았다. 지원 차량은 늦어지고 있었다.',
+    volunteer: '조끼를 받아 입었다. 급수대 앞 줄이 길다.', walk: '도시의 끝, 통제선을 지나 국도로 들어섰다. 뒤에서 또 포성이 울렸다.' }[path], null, 4000);
   recordEvent(G, 'arrived_assembly', { minute: G.minute });
   if (G.know.routeChecked) ctx.payoff('route', '동네 길을 미리 알아 둔 덕분에 통제 구간을 돌아 집결지에 닿았다');
   const card = (G.items.contact_card?.bag ?? 0) + (G.items.doc_copies?.bag ?? 0) > 0;
-  await ctx.say('집결지 접수', ['이름, 연락처, 복용약을 적어 주세요. 신분증 있으세요?', card ? '(가방 앞주머니의 연락처 카드와 서류 사본을 보여 주었다.)' : '(기억나는 대로 적었다. 신분증 원본만 있었다.)'], null, '임시 집결지');
-  if (card) ctx.payoff('docs', '연락처 카드와 서류 사본으로 접수를 바로 마쳤다');
+  const id = (G.items.id_card?.bag ?? 0) + (G.items.id_card?.home ?? 0) > 0; // picked up from the wallet (story/world.js)
+  await ctx.say('집결지 접수', ['이름, 연락처, 복용약을 적어 주세요. 신분증 있으세요?',
+    id ? '(지갑에서 신분증을 꺼내 보여 주었다.)' : '(신분증을 집에 두고 나왔다. 이름과 주소, 생년월일로 본인 확인을 하느라 한참 걸렸다.)',
+    card ? '(가방 앞주머니의 연락처 카드와 서류 사본도 함께 건넸다.)' : '(연락처는 기억나는 대로 적었다.)'], null, '임시 집결지');
+  if (!id) { ctx.pass(15); ctx.toast(fact('docs_take').text, 'official', 5000); }
+  if (card || id) ctx.payoff('docs', id ? '챙겨 나온 신분증으로 접수를 바로 마쳤다' : '연락처 카드와 서류 사본으로 접수를 바로 마쳤다');
   await ctx.caption('버스 창밖으로 연무동이 멀어진다.', null, 3500);
 }
 

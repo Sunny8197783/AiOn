@@ -264,10 +264,23 @@ export function buildMart(kit, people, fx) {
     else console.error('[mart] unknown state', key, v);
   }
 
-  const P = (id, label, x, z, kind, rad = 1.6) => ({ id, label, x, y: 0, z, r: rad, kind });
+  const P = (id, label, x, z, kind, rad = 1.6, desc) => ({ id, label, x, y: 0, z, r: rad, kind, ...(desc && { desc }) });
+  // desc: what E shows when no chapter handles the point (story/world.js). A function gets the run context.
+  const off = () => state.power === 'off';
   const points = [
     P('martExit', '출입구', -9, -1.0, 'door', 1.8), P('checkout', '계산대', 0.75, -3.6, 'counter', 1.8), P('atm', 'ATM', -2.6, -1.4, 'atm', 1.4),
     ...Object.entries(SEC).map(([sec, [, a, id]]) => P(id, `${MART_SECTIONS[sec].label} 진열대`, AISLES[a], -14, 'shelf', 3)),
+    P('martCarts', '카트 보관대', -14.9, -4.9, 'look', 1.3, ['카트가 줄지어 서 있다. 오늘은 카트를 끌고 다니는 사람이 유난히 많다.', '들고 갈 수 있는 만큼만 사는 게 좋겠다. 집까지 걸어가야 한다.']),
+    P('martBaskets', '장바구니', -3.5, -2.0, 'look', 1.1, ['플라스틱 장바구니. 가득 담으면 꽤 무겁다.']),
+    P('martPallet', '생수 팔레트', -6.6, -5.0, 'look', 1.4, ['2L 생수 6병 묶음이 쌓여 있다. 노란 안내판: "1인 6병 한정"', '한 사람이 많이 사 가면 다른 사람 몫이 줄어든다.']),
+    P('martChill', '신선·유제품 냉장고', -4.7, -22.6, 'look', 2.6, () => off() ? ['냉장고 조명이 꺼지고 팬 소리도 멈췄다.', '문이 없는 오픈 냉장고라 냉기가 금방 빠진다. 유제품은 오래 못 버틴다.'] : ['우유, 두부, 요구르트, 김치. 정전이 되면 가장 먼저 상하는 것들이다.']),
+    P('martProduceN', '채소·과일 매대', 9.9, -11.8, 'look', 2.2, ['사과, 귤, 양파, 감자. 손질 없이 먹을 수 있는 과일은 비상시에도 쓸모가 있다.']),
+    P('martProduceS', '채소·과일 매대', 9.9, -17.2, 'look', 2.2, ['배추와 대파. 냉장 보관이 필요 없는 감자·양파는 오래 간다.']),
+    P('martTravelator', '무빙워크 (2층)', 14.4, -5.4, 'look', 1.3, () => off() ? ['무빙워크가 멈춰 있다. 2층은 셔터가 내려졌다.'] : ['2층은 주방용품·문구·의류. 오늘 필요한 건 1층에 다 있다.']),
+    P('martDetergent', '세제·조미료 진열대', AISLES[5], -14, 'look', 2.6, ['세제, 간장, 식용유. 지금 급한 물건은 아니다.']),
+    P('martSnacks', '과자·간식 진열대', AISLES[6], -14, 'look', 2.6, ['과자 진열대. 건빵과 에너지바는 식품 진열대에 따로 있다.']),
+    P('martLane3', '3번 계산대 (마감)', 8.4, -5.6, 'look', 1.2, ['"이 계산대는 마감했습니다. 옆 계산대를 이용해 주세요."']),
+    P('martPoster', '행사 포스터', 3, -0.9, 'look', 1.3, ['"오늘의 특가 · 제철 사과 1봉 7,900원"', '그 옆에 손글씨 안내가 붙어 있다: "생수·건전지는 1인 구매 수량을 제한합니다."']),
   ];
 
   kit.merge(stat);

@@ -46,9 +46,7 @@ export async function prologue(ctx) {
   await ctx.goto('office', 'entry', 'interior');
   ctx.hud.setChapter('프롤로그', '평소와 다른 화요일');
   ctx.refresh();
-  await ctx.card({ kind: 'info', title: '한결물류 연무센터 · 운영팀', meta: 'D-3 화요일 17:30',
-    body: ['정민은 생활물류 회사에서 배송 운영을 맡고 있다. 연무동 한빛아파트 103동 302호에 혼자 산다.', '오늘 오후부터 배송 취소가 이상하게 많다. 자리로 가서 대시보드를 확인하자.'],
-    actions: [{ id: 'go', label: '자리로 간다', primary: true }] });
+  ctx.toast('자리로 가서 대시보드를 확인하자.', 'self', 4200);
 
   let sorted = 0, talked = false;
   ctx.objective('대시보드 확인하기', '내 자리의 모니터를 확인합니다.', [{ text: '대시보드 확인', done: false }, { text: '팀장과 이야기', done: false }, { text: '퇴근', done: false }]);
@@ -63,7 +61,8 @@ export async function prologue(ctx) {
           const pick = await ctx.ui.talk({ speaker: s.from, role: s.meta, lines: [s.text], choices: Object.entries(LABELS).map(([id, label]) => ({ id, label })) });
           const ok = pick === s.answer;
           ctx.event('signal_sorted', { id: s.id, pick, ok });
-          await ctx.ui.talk({ speaker: ok ? '맞아요' : `"${LABELS[s.answer]}"에 가깝습니다`, role: LABELS[s.answer], lines: [s.why] });
+          if (ok) ctx.toast(`맞아요 · ${LABELS[s.answer]}`, 'self', 2200); // only a miss stops to explain
+          else await ctx.ui.talk({ speaker: `"${LABELS[s.answer]}"에 가깝습니다`, role: LABELS[s.answer], lines: [s.why] });
           if (s.answer === 'fact') ctx.note(s.text, 'site');
         }
         sorted = SIGNALS.length;
@@ -92,9 +91,8 @@ export async function prologue(ctx) {
     },
   });
 
-  await ctx.card({ kind: 'news', title: '이 이야기의 가상 설정', meta: '실제 상황이 아닙니다',
-    body: ['이야기 속 정부는 오늘 밤 일부 국가로의 출국을 제한한다고 발표합니다.', '이것은 이야기를 위한 가상 조건입니다. 실제 위기에서 이런 조치가 반드시 같은 순서로 일어나는 것은 아니며, 어떤 신호 하나가 전쟁을 확정하지도 않습니다.'],
-    actions: [{ id: 'ok', label: '알겠습니다', primary: true }] });
-  await ctx.skip('D-3 화 18:40', 'D-2 수 18:30', '이틀 동안 뉴스는 엇갈렸다. 회사는 단축 근무에 들어갔다. 정민은 오늘 저녁과 내일 하루를 준비에 쓰기로 했다.');
+  await ctx.skip('D-3 화 18:40', 'D-2 수 18:30', [
+    '그날 밤, 정부는 일부 국가로의 출국을 제한한다고 발표했다. (이야기를 위한 가상 조건 · 실제 상황이 아닙니다)',
+    '이틀 동안 뉴스는 엇갈렸다. 회사는 단축 근무에 들어갔다. 정민은 오늘 저녁과 내일 하루를 준비에 쓰기로 했다.']);
   G.day = -2; G.minute = 18 * 60 + 30;
 }

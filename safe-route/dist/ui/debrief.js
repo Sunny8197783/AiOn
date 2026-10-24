@@ -56,7 +56,7 @@ export function chapterCard({ chapter = '', title = '', lines: ls = [], payoffs 
 
 // ending(record: { helped, unused, unchecked, people, practice }, sources) -> Promise<'restart'|'menu'>
 export function ending(record = {}, sources = []) {
-  const { helped = [], unused = [], unchecked = [], people = [], practice = null } = record || {};
+  const { fate = null, helped = [], unused = [], unchecked = [], people = [], practice = null } = record || {};
   const src = practice?.sourceId ? lines(sources).find((s) => s.id === practice.sourceId) : null;
   const section = (ic, title, items, render, empty) => el('section', { class: 'doc-section' },
     el('h3', {}, icon(ic), title),
@@ -66,8 +66,9 @@ export function ending(record = {}, sources = []) {
   const doc = el('article', { class: 'ending-doc' },
     el('header', { class: 'doc-head' },
       el('p', { class: 'doc-kicker' }, '연무동 · 한빛아파트 103동 302호 · 정민'),
-      el('h2', {}, '생존 기록'),
+      el('h2', {}, fate ? `엔딩 · ${fate.title}` : '생존 기록'),
       el('p', { class: 'doc-sub' }, '전쟁 직전의 준비가 전쟁 이후의 선택지를 어떻게 바꾸었는지 돌아봅니다.')),
+    fate ? el('section', { class: 'doc-section doc-fate' }, lines(fate.lines).map((t) => el('p', {}, t))) : null,
     section('spark', '도움이 된 준비', helped, (h) => [el('b', {}, prepName(h.prep)), el('span', {}, h.moment || '')], '이번에는 미리 해 둔 준비가 큰 역할을 하지 못했습니다. 다음에는 하나만 먼저 해 보세요.'),
     section('box', '쓰지 못한 물건과 그 이유', unused, (u) => [el('b', {}, u.item), el('span', {}, u.why || '')], '가진 물건을 모두 쓸 수 있었습니다.'),
     section('rumor', '확인하지 못한 정보', unchecked, (t) => el('span', {}, t), '필요한 정보를 대부분 확인했습니다.'),
