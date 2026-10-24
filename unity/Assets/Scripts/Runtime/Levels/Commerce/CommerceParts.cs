@@ -172,5 +172,30 @@ namespace Gyeongbo.Levels
         }
         // Facing a direction: rotation.y for a model that faces -z.
         public static float YawTo(float dx, float dz) => Mathf.Atan2(-dx, -dz);
+
+        // ---- small helpers shared by the three level files ----
+        internal static At A(float x = 0, float y = 0, float z = 0, float ry = 0, float rx = 0, float rz = 0, bool cast = true) => new At { x = x, y = y, z = z, ry = ry, rx = rx, rz = rz, cast = cast };
+        internal static Xform X(float x = 0, float y = 0, float z = 0, float ry = 0, float rx = 0, float? s = null, float? sx = null, float? sy = null, float? sz = null) => new Xform { x = x, y = y, z = z, ry = ry, rx = rx, s = s, sx = sx, sy = sy, sz = sz };
+        internal static Material MatOf(GameObject o) => o.GetComponentInChildren<Renderer>(true)?.sharedMaterial;
+        // kit.sign(lines, { single: true, ...o }) placed at { x, y, z, ry } and kept out of merges.
+        internal static GameObject SignAt(Kit kit, string[] lines, SignOpts o, float x, float y, float z, float ry = 0)
+        {
+            o.single = true; var s = kit.Sign(lines, o); J.SetPos(s, x, y, z); J.SetYaw(s, ry); Kit.Keep(s); return s;
+        }
+        // JS Math.round (halves round up).
+        internal static int Round(float v) => (int)Math.Floor(v + 0.5f);
+        internal static float Turn(float a, float b) => Mathf.Atan2(Mathf.Sin(b - a), Mathf.Cos(b - a));
+        internal static Point Pt(string id, string label, float x, float z, string kind, float r = 1.6f, Func<Ctx, string[]> desc = null) => new Point { id = id, label = label, x = x, y = 0, z = z, r = r, kind = kind, desc = desc };
+    }
+
+    // A battery emergency lamp: a point light (off at 0) and its glowing lens, switched with the level's power.
+    sealed class EmergencyLamp
+    {
+        public Light l; public Material m; float full; float glow;
+        public EmergencyLamp(Kit kit, Color color, float on, float distance, Material lens, float lensOn)
+        {
+            l = kit.PointLight(color, on, distance, 2); full = l.intensity; l.intensity = 0; m = lens; glow = lensOn;
+        }
+        public void Set(bool power) { l.intensity = power ? 0 : full; Mat.SetEmissiveIntensity(m, power ? 0 : glow); }
     }
 }
