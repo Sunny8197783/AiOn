@@ -96,7 +96,7 @@ namespace Gyeongbo.Engine
         static float Wrap(float a) => Mathf.Atan2(Mathf.Sin(a), Mathf.Cos(a));
         internal static float Clamp(float v, float a, float b) => v < a ? a : v > b ? b : v;
 
-        sealed class Move { public float t, dur, x0, z0, y0, x1, z1, y1, arc; public string clip; }
+        internal sealed class Move { public float t, dur, x0, z0, y0, x1, z1, y1, arc; public string clip; }
         sealed class Blend { public float k; public Vector3 pos; public Quaternion rot; }
         sealed class Prof { public bool run = true, jump = true, stairs = true; public float eye = Player.EYE; }
 
