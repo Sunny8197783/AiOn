@@ -50,7 +50,6 @@ namespace Gyeongbo.UI
             void Finish() { if (S.closed) return; S.closed = true; cv.Dispose(); m.Close(new ExtinguisherResult { sequence = seq.ToList(), result = Result() }); }
             Label feedback = Mg.Text("mg-feedback");
             void Say(string text) => feedback.text = text;
-            m = MiniDom.Modal<ExtinguisherResult>("mg-ext", "소화기", null, OnKey);
 
             // --- layout ---
             var dangerBar = Mg.Cls(new VisualElement(), "mg-bar-fill"); dangerBar.style.width = 0; var dangerText = Mg.Text(null);
@@ -61,6 +60,7 @@ namespace Gyeongbo.UI
             var helpBox = Mg.El("div", "mg-ext-help");
             var retreatBtn = Mg.Btn("mg-btn mg-retreat", () => { if (practice) Finish(); else Retreat(); }, "⤺ " + (practice ? "연습 그만하기" : "물러나 알린다 (계단 · 119)"));
 
+            m = MiniDom.Modal<ExtinguisherResult>("mg-ext", "소화기", null, OnKey);
             MiniDom.Put(m.root,
                 MiniDom.Header(practice ? "소화기 · 연습" : "소화기", practice ? "사용 순서 익히기" : large ? "천장까지 닿는 불길" : "작은 불", mode, "mg-ext-title"),
                 practice ? Mg.El("p", "mg-why", "연습입니다. 실제 불은 없습니다.") : null,
