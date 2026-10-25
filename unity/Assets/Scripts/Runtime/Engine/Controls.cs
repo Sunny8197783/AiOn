@@ -177,7 +177,7 @@ namespace Gyeongbo.Engine
         static int docsFrame = -999;
         static List<UIDocument> Docs()
         {
-            if (Time.frameCount - docsFrame > 60) { docsFrame = Time.frameCount; docs.Clear(); docs.AddRange(UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None)); }
+            if (Time.frameCount - docsFrame > 60) { docsFrame = Time.frameCount; docs.Clear(); docs.AddRange(UnityEngine.Object.FindObjectsByType<UIDocument>()); }
             return docs;
         }
         // JS editable(e.target): a focused text field gets the keys, not the player.
