@@ -189,12 +189,13 @@ namespace Gyeongbo.Systems
             var last = Past.Count > 0 ? Past[Past.Count - 1] : null;
             ghostPts = last != null ? last.trail.Where(p => p.lv == L.id).Select(p => new XZ(p.x, p.z)).ToList() : new List<XZ>();
             ghostI = 0;
+            if (ghost != null && ghost.Group == null) ghost = null;   // destroyed with an unloaded level
             if (ghostPts.Count > 4)
             {
                 if (ghost == null) ghost = MakeGhost();
-                if (ghost != null) { L.group.Add(ghost.Group); J.SetPos(ghost.Group, ghostPts[0].x, Y(L, ghostPts[0].x, ghostPts[0].z), ghostPts[0].z); any = true; }
+                if (ghost != null) { L.group.Add(ghost.Group); ghost.Group.SetActive(true); J.SetPos(ghost.Group, ghostPts[0].x, Y(L, ghostPts[0].x, ghostPts[0].z), ghostPts[0].z); any = true; }
             }
-            else if (ghost != null) J.Remove(ghost.Group);
+            else if (ghost != null) { J.Remove(ghost.Group); ghost.Group.SetActive(false); }   // a detached object still renders in Unity
             L.group.Add(group);
             if (any && !shownTold) { shownTold = true; ctx.Toast("이전 회차의 내가 남긴 흔적이 보인다. 그때의 나는 이 길로 걸었다.", "self", 5200); }
         }
