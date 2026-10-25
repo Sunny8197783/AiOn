@@ -48,12 +48,12 @@ namespace Gyeongbo.UI
             ModalHandle<ExtinguisherResult> m = null;
             var cv = new MgCanvas(640, 360, "mg-ext-canvas");
             void Finish() { if (S.closed) return; S.closed = true; cv.Dispose(); m.Close(new ExtinguisherResult { sequence = seq.ToList(), result = Result() }); }
-            void Say(string text) => feedback.text = text;
             Label feedback = Mg.Text("mg-feedback");
+            void Say(string text) => feedback.text = text;
             m = MiniDom.Modal<ExtinguisherResult>("mg-ext", "소화기", null, OnKey);
 
             // --- layout ---
-            var dangerBar = Mg.Cls(new VisualElement(), "mg-bar-fill"); var dangerText = Mg.Text(null);
+            var dangerBar = Mg.Cls(new VisualElement(), "mg-bar-fill"); dangerBar.style.width = 0; var dangerText = Mg.Text(null);
             dangerText.style.unityFontStyleAndWeight = FontStyle.Bold;
             var danger = Mg.El("div", "mg-meter mg-danger", Mg.El("small", null, "▲ " + (large ? "버틸 수 있는 시간" : "불이 번지기까지")), dangerText, Mg.El("span", "mg-bar", dangerBar));
             Mg.Hidden(danger, practice);
@@ -100,7 +100,7 @@ namespace Gyeongbo.UI
                 btns.Clear(); fills.Clear();
                 Mg.Replace(actions, Mg.El("p", "mg-q", "순서대로 누르세요"), Mg.El("div", "mg-steps", order.Select(s =>
                 {
-                    var fill = Mg.Cls(new VisualElement(), "mg-step-fill");
+                    var fill = Mg.Cls(new VisualElement(), "mg-step-fill"); fill.style.width = 0;
                     fill.pickingMode = PickingMode.Ignore;
                     var b = Mg.Btn("mg-btn mg-step-btn", null, fill, Mg.Text("mg-check", "○"), Mg.El("span", null, s.label),
                         s.id == "squeeze" ? Mg.Text("mg-holdtip", "길게 누르기") : s.id == "sweep" ? Mg.Text("mg-holdtip", "마우스로 좌우로 쓸기") : null);

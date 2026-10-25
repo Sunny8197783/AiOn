@@ -76,7 +76,7 @@ namespace Gyeongbo.UI
             // meters
             R("mg-meter", s => s.marginBottom = 10);
             R("mg-bar", s => { s.height = 8; Radius(s, 99); s.backgroundColor = C("rgba(255,255,255,.1)"); s.overflow = Overflow.Hidden; });
-            R("mg-bar-fill", s => { s.height = Length.Percent(100); s.width = 0; Radius(s, 99); s.backgroundColor = C("#4cc38a"); });
+            R("mg-bar-fill", s => { s.height = Length.Percent(100); Radius(s, 99); s.backgroundColor = C("#4cc38a"); });
             R("mg-sum", s => { s.flexDirection = FlexDirection.Row; s.flexWrap = Wrap.Wrap; s.flexGrow = 1; });
 
             // bag
@@ -101,6 +101,10 @@ namespace Gyeongbo.UI
             R("mg-led.on", s => s.backgroundColor = C("#ff5a3c"));
             R("mg-sigbox", s => { s.marginLeft = StyleKeyword.Auto; s.flexDirection = FlexDirection.Row; s.alignItems = Align.Center; });
             R("mg-sig", s => { s.flexDirection = FlexDirection.Row; s.alignItems = Align.FlexEnd; s.height = 18; s.marginRight = 8; });
+            R("mg-sig-bar", s => { s.width = 4; s.marginRight = 2; Radius(s, 1); s.backgroundColor = C("rgba(255,200,97,.2)"); });
+            R("mg-sig-bar.on", s => s.backgroundColor = C("#ffc861"));
+            R("mg-knob-mark", s => { s.position = Position.Absolute; s.left = Length.Percent(50); s.top = 0; s.width = 3; s.height = 12; s.marginLeft = -1.5f; Radius(s, 2); s.backgroundColor = C(AMBER); });
+            R("mg-tr-row", s => { s.flexDirection = FlexDirection.Row; s.alignItems = Align.Center; Pad(s, 6, 8); Radius(s, 8); s.backgroundColor = C(CARD); s.marginBottom = 6; });
             R("mg-wave", s => { Radius(s, 6); s.marginBottom = 10; });
             R("mg-dial-canvas", s => Radius(s, 6));
             R("mg-dial", s => { Radius(s, 8); s.marginBottom = 10; });
@@ -125,6 +129,7 @@ namespace Gyeongbo.UI
             R("mg-retreat", s => { s.width = Length.Percent(100); BorderColor(s, "rgba(60,198,181,.5)"); s.marginTop = 10; s.whiteSpace = WhiteSpace.Normal; });
             R("is-next", s => { BorderColor(s, AMBER); s.borderTopWidth = s.borderBottomWidth = s.borderLeftWidth = s.borderRightWidth = 2; });
             R("mg-step-btn", s => { s.flexDirection = FlexDirection.Row; s.alignItems = Align.Center; s.width = Length.Percent(100); s.marginBottom = 8; s.overflow = Overflow.Hidden; });
+            R("mg-step-fill", s => { s.position = Position.Absolute; s.left = s.top = s.bottom = 0; s.backgroundColor = C("rgba(242,179,61,.3)"); });
             R("mg-step-btn.is-done", s => { BorderColor(s, "rgba(76,195,138,.6)"); s.color = C("#b7ecd9"); });
             R("mg-check", s => { s.width = 1.2f * F; s.unityFontStyleAndWeight = FontStyle.Bold; s.marginRight = 10; });
             R("mg-holdtip", s => { s.marginLeft = StyleKeyword.Auto; s.color = C(MUTED); Em(s, .78f); });
