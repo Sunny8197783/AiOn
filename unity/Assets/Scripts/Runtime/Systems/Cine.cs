@@ -172,7 +172,7 @@ namespace Gyeongbo.Systems
             for (int i = 0; i < lines.Length; i++)
             {
                 var p = new Label("") { pickingMode = PickingMode.Ignore };
-                p.style.color = i > 0 ? new Color32(0xc9, 0xc4, 0xb6, 255) : new Color32(0xf2, 0xef, 0xe6, 255);
+                p.style.color = (Color)(i > 0 ? new Color32(0xc9, 0xc4, 0xb6, 255) : new Color32(0xf2, 0xef, 0xe6, 255));
                 p.style.fontSize = i > 0 ? 15 : 20; p.style.unityFontStyleAndWeight = i > 0 ? FontStyle.Normal : FontStyle.Bold;
                 p.style.marginBottom = 5; p.style.minHeight = 24; p.style.letterSpacing = 1;
                 titleEl.Add(p);
