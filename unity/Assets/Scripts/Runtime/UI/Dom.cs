@@ -44,6 +44,7 @@ namespace Gyeongbo.UI
             if (tag == "button") { e = new Button { focusable = true }; e.style.flexDirection = FlexDirection.Row; e.style.alignItems = Align.Center; Hover(e); }
             else if (tag == "input" || tag == "textarea") { var tf = new TextField { multiline = tag == "textarea" }; e = tf; }
             else if (tag == "checkbox") e = new Toggle();
+            else if (tag == "scroll") e = new ScrollView(ScrollViewMode.Vertical) { horizontalScrollerVisibility = ScrollerVisibility.Hidden };   // overflow: auto
             else if (TEXT_TAGS.Contains(tag) && kids.TrueForAll(k => k is string)) e = new Label(string.Concat(kids)) { enableRichText = false };
             else
             {
@@ -255,7 +256,10 @@ namespace Gyeongbo.UI
             stack.Add(root);
             UiSound("open");
             UiFx.Fade(layer);
-            if (!Css.Has(root, "talk") && !Css.Has(root, "phone") && !Css.Has(root, "timeskip") && !Css.Has(root, "landing")) UiFx.Rise(root);
+            // .modal { animation: rise .3s }; .modal.timeskip fade .6s; .modal.landing fade .8s
+            if (Css.Has(root, "timeskip")) UiFx.Fade(root, .6f);
+            else if (Css.Has(root, "landing")) UiFx.Fade(root, .8f);
+            else UiFx.Rise(root);
             root.schedule.Execute(() => { if (!m.Closed && !Contains(root, Focused(root))) FocusFirst(root); });
             FocusFirst(root);
             return m;
