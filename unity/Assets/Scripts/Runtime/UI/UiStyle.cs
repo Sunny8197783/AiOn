@@ -94,7 +94,7 @@ namespace Gyeongbo.UI
             s.display = n; s.opacity = n; s.color = n; s.backgroundColor = n; s.visibility = n;
             s.borderTopColor = n; s.borderRightColor = n; s.borderBottomColor = n; s.borderLeftColor = n;
             s.borderTopWidth = n; s.borderRightWidth = n; s.borderBottomWidth = n; s.borderLeftWidth = n;
-            s.translate = n; s.scale = n; s.rotate = n; s.unityFontStyleAndWeight = n; s.backgroundImage = n;
+            s.translate = n; s.scale = n; s.rotate = n; s.unityFontStyleAndWeight = n;
         }
 
         static IEnumerable<string> Split(string[] names)
