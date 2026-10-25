@@ -36,7 +36,7 @@ namespace Gyeongbo.Story
                     Cs(C("ok", "지금 상황 보기", true))));
                 int water = Stock(G, "water_2l", "water_500"), food = Stock(G, "rice_instant", "canned", "bars", "ramen");
                 G.know.stayMove = await ctx.Card(Card("info", "지금 내 상황", "판단 재료",
-                    L($"마실 물 {water}병 · 먹을 것 {food}개", $"휴대폰 {Js.Num(G.phone.battery)}% · 몸 상태: 피로 {Js.Num(G.stats.fatigue)} · 긴장 {Js.Num(G.stats.tension)}",
+                    L($"마실 물 {water}병 · 먹을 것 {food}개", $"휴대폰 {N(G.phone.battery)}% · 몸 상태: 피로 {N(G.stats.fatigue)} · 긴장 {N(G.stats.tension)}",
                       "박 소장: \"저는 남아서 건물 봐야죠.\" · 서연: \"저는 주민센터에 이동 지원을 신청해 뒀어요.\"", G.know.clerkLeft ? "바로편의점 문에 쪽지: \"본가에 다녀옵니다 — 이수아\"" : "바로편의점은 문을 닫았다.",
                       "어느 쪽도 정답이 정해져 있지 않습니다. 지금의 조건으로 고르세요."),
                     Cs(C("stay", "집에 남는다"), C("move", "생활문화센터 임시 거처로 옮긴다"))));

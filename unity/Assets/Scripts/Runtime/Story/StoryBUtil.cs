@@ -9,6 +9,8 @@ namespace Gyeongbo.Story
 {
     static class SB
     {
+        // A JS number in a template string (64, 12.5).
+        public static string N(double n) => n.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
         public static List<string> L(params string[] a) => new List<string>(a);
         public static Choice C(string id, string label, bool primary = false) => new Choice(id, label, primary);
         public static List<Choice> Cs(params Choice[] a) => new List<Choice>(a);
