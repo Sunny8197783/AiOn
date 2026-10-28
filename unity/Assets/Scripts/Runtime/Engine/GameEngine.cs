@@ -258,7 +258,8 @@ namespace Gyeongbo.Engine
             if (loop != null) UnityEngine.Object.Destroy(loop.gameObject);
             controls.Dispose();
             UnityEngine.Object.Destroy(scene);
-            if (camera != null) UnityEngine.Object.Destroy(camera.gameObject);
+            // Deactivate first: Destroy waits for the frame's end, and a reload's new engine looks for an AudioListener.
+            if (camera != null) { camera.gameObject.SetActive(false); UnityEngine.Object.Destroy(camera.gameObject); }
         }
     }
 }

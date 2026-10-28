@@ -88,7 +88,7 @@ namespace Gyeongbo.Story
             {
                 var p = pins[i];
                 fx.Pin(i + 1, ANCHOR[p.anchor], p.was, p.now);
-                // ponytail: JS labels this pin '✕'; NoteCheck.Pin takes an int, so 0 stands in (contract request: string n).
+                // NoteCheck.Pin draws 0 as "✕" (the JS pin label).
                 if (p.also != null) fx.Pin(0, ANCHOR[p.also.anchor], Relay.ENTRANCES[p.also.anchor].label, p.also.now, 2.2f);
                 if (p.line != null) fx.Link(ANCHOR[p.anchor], ANCHOR[p.line]);
                 return p;

@@ -178,6 +178,13 @@ namespace Gyeongbo.Systems
             var wet = Gain(0.5f); wet.keep = true; Chain(verb, wet, master);
         }
 
+        // Reload (pause -> 메인 메뉴): stop this graph's output; the next GameApp builds its own.
+        public void Dispose()
+        {
+            if (pump != null) UnityEngine.Object.Destroy(pump.gameObject);
+            pump = null; ctx = null;
+        }
+
         public void Unlock()
         {
             if (ctx == null)

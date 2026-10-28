@@ -18,13 +18,15 @@ namespace Gyeongbo.URP
         static void Register() => Post.Backend = new UrpPost();
 
         Camera camera;
+        GameObject volumeGo;   // one per engine: a menu -> reload builds a new engine, so the old volume goes
         Tonemapping tone; ColorAdjustments color; SplitToning split; Bloom bloom; Vignette vignette; FilmGrain grain;
         ChromaticAberration chroma; MotionBlur blur;
 
         public void Init(Camera camera, string quality)
         {
             this.camera = camera;
-            var go = new GameObject("post-volume");
+            if (volumeGo != null) Object.Destroy(volumeGo);
+            var go = volumeGo = new GameObject("post-volume");
             var volume = go.AddComponent<Volume>();
             volume.isGlobal = true; volume.priority = 10;
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();

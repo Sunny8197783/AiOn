@@ -138,9 +138,9 @@ namespace Gyeongbo.UI
                     El("h3", null, Dom.Icon("people"), "만든 사람과 도구"),
                     El("ul", null,
                         El("li", null, "기획·개발: 〈경보 이전〉 제작팀 (Claude Code와 함께 제작)"),
-                        El("li", null, "3D 렌더링: Three.js r180 (MIT 라이선스)"),
-                        El("li", null, "소리: 녹음 파일 없이 Web Audio로 직접 합성"),
-                        El("li", null, "글꼴: 기기에 설치된 Pretendard · Noto Sans KR · 맑은 고딕"))));
+                        El("li", null, "3D 렌더링: Unity 6 (Universal Render Pipeline)"),
+                        El("li", null, "소리: 녹음 파일 없이 코드로 직접 합성"),
+                        El("li", null, "글꼴: 기기에 설치된 맑은 고딕 · Apple SD Gothic Neo · Noto Sans CJK KR · 나눔고딕"))));
             scroll.focusable = true; scroll.tabIndex = 0; scroll.tooltip = "내용";
             var content = El("div", "about-panel",
                 El("header", "nb-head", El("p", "eyebrow", Dom.Icon("book"), "출처와 만든 사람"), El("h2", null, "〈경보 이전〉에 대하여")),

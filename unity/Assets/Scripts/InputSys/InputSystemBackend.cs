@@ -13,7 +13,13 @@ namespace Gyeongbo.InputSys
     public sealed class InputSystemBackend : IInputBackend
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        static void Register() => GameInput.Backend = new InputSystemBackend();
+        static void Register()
+        {
+            // Active Input Handling = "Input Manager (Old)" leaves Keyboard.current null: keep the legacy fallback then.
+#if ENABLE_INPUT_SYSTEM
+            GameInput.Backend = new InputSystemBackend();
+#endif
+        }
 
         readonly Dictionary<string, Key> keys = new Dictionary<string, Key>();
         Keyboard typedFrom;

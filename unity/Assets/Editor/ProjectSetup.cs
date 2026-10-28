@@ -16,7 +16,7 @@ namespace Gyeongbo.Editor
     static class ProjectSetup
     {
         const string SCENE = "Assets/Scenes/Main.unity", SHADERS = "Assets/Scripts/Runtime/Engine/Shaders";
-        static readonly string[] BY_NAME = { "Universal Render Pipeline/Lit", "Universal Render Pipeline/Unlit", "Skybox/Procedural" };
+        static readonly string[] BY_NAME = { "Universal Render Pipeline/Lit", "Universal Render Pipeline/Unlit", "Universal Render Pipeline/Particles/Lit", "Universal Render Pipeline/Particles/Unlit", "Skybox/Procedural" };
 
         static ProjectSetup() { EditorApplication.delayCall += Run; }
 

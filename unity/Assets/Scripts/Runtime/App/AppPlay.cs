@@ -32,6 +32,7 @@ namespace Gyeongbo.App
         };
 
         string itemLabel;
+        Action<string> uiSound;
         bool flashOn;
         float flashT;
 
@@ -39,7 +40,7 @@ namespace Gyeongbo.App
         {
             settings = Settings.Load();
             audio = GameAudio.Create();
-            GameEvents.UiSound += n => audio.Ui(n);
+            GameEvents.UiSound += uiSound = n => audio.Ui(n);
             engine = GameEngine.Create(new EngineOptions { quality = settings.quality, reduceMotion = settings.reduceMotion, onQualityChange = q => { settings.quality = q; settings.Save(); } });
             UiRoot.Create();
             hud = Hud.Create(UiRoot.HudLayer);
@@ -175,11 +176,14 @@ namespace Gyeongbo.App
         }
 
         // location.reload(): drop this game object and the world, start a fresh GameApp (the world is all code).
-        // ponytail: the old chapter task is abandoned mid-await (never resumed) and UiRoot.Create must tolerate a
-        // second call; upgrade: a CancellationToken through the chapters plus a UiRoot.Clear.
+        // ponytail: the old chapter task is abandoned mid-await (its roam waits on the disposed engine's frames, so it
+        // never resumes); upgrade: a CancellationToken through the chapters.
         void Reload()
         {
+            GameEvents.UiSound -= uiSound;
             try { engine.Dispose(); } catch (Exception e) { Debug.LogException(e); }
+            try { audio.Dispose(); } catch (Exception e) { Debug.LogException(e); }
+            try { UiRoot.Destroy(); } catch (Exception e) { Debug.LogException(e); }
             Destroy(gameObject);
             var go = new GameObject("Gyeongbo");
             DontDestroyOnLoad(go);

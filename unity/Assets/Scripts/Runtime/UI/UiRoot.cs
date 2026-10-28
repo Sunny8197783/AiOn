@@ -94,6 +94,13 @@ namespace Gyeongbo.UI
             Debug.LogWarning("[ui] no Korean OS font found; UI text uses the default font");
         }
 
+        // Reload (pause -> 메인 메뉴): drop the whole UI tree so the next Create builds a fresh one (style rules stay).
+        public static void Destroy()
+        {
+            if (doc != null) { UnityEngine.Object.Destroy(doc.panelSettings); UnityEngine.Object.Destroy(doc.gameObject); }
+            doc = null; root = hud = overlay = modals = loading = lowVision = null; loadingText = live = null;
+        }
+
         public static VisualElement Root => root;
         public static VisualElement HudLayer => hud;
         public static VisualElement Overlay => overlay;
