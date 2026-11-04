@@ -1,7 +1,13 @@
 // Crowds: seeded neighbourhood people (people.createPerson 'crowd' preset) moving along polylines with
-// simple separation steering, a keep-right lane on sidewalks, player avoidance and distance LOD.
-// createCrowd({ count, seed, people, quality|kit, heightAt, player })
-//   -> { group, update(dt, ctx?), setMode(mode, opts), setPaths(paths), setArea(rect), mode, members, active, dispose }
+// simple separation steering, a keep-right lane on sidewalks, player avoidance and distance LOD. Members collide
+// with the level's solids (the same circle-vs-box push-out as the player, through the engine/space.js grid),
+// slide along them and side-step what they meet head-on; moving cars are left to the traffic. The player bumps
+// into them (engine/bodies.js).
+// createCrowd({ count, seed, people, quality|kit, heightAt, player, solids })
+//   solids: the level's solids (an array or a function returning it); default ctx.solids, else the solids of the
+//   level the player is in.
+//   -> { group, update(dt, ctx?), setMode(mode, opts), setPaths(paths), setArea(rect), positions(out?), mode, members,
+//        active, dispose }
 // Modes and their opts (all optional unless noted):
 //   stroll  wander along paths (keep right, change paths at shared ends, short stops: phone / talk / idle);
 //           with no paths: wander inside the area.
@@ -23,12 +29,15 @@
 import * as THREE from 'three';
 import { rng } from './kit.js';
 import { createPerson as basePerson } from './people.js';
+import { collide } from './geom.js';
+import { gridOf, activeLevel } from './space.js';
+import { addBodies } from './bodies.js';
 
 const CAP = { high: 40, medium: 24, low: 12 };
 const MODES = ['stroll', 'brisk', 'queue', 'sit', 'idle', 'none'];
 const STAND = ['idle', 'idle', 'phone', 'talk'];
 const SEP = 0.62, AVOID = 1.05, LOD_ANIM = 45, LOD_SHADOW = 25, RESPAWN_HIDE = 20;
-const TAU = Math.PI * 2;
+const TAU = Math.PI * 2, BODY = 0.24, PASS = new Set(['movingCar']); // solids people never collide with
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerpAngle = (a, b, k) => a + ((((b - a + Math.PI) % TAU) + TAU) % TAU - Math.PI) * k;
 const okPt = (q) => Number.isFinite(q?.x) && Number.isFinite(q?.z);
@@ -63,7 +72,7 @@ function project(paths, x, z) {
   return best;
 }
 
-export function createCrowd({ count = 24, seed = 1, people = null, quality, kit, heightAt = null, player = null } = {}) {
+export function createCrowd({ count = 24, seed = 1, people = null, quality, kit, heightAt = null, player = null, solids = null } = {}) {
   const q = quality ?? kit?.quality ?? 'high';
   const cap = CAP[q] ?? CAP.high;
   const make = typeof people?.createPerson === 'function' ? people.createPerson : basePerson;
@@ -91,7 +100,7 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
       p, i, x: 0, z: 0, vx: 0, vz: 0, yaw: 0, face: null, on: false, placed: false, state: 'stand', path: -1, s: 0, dir: 1,
       lane: 0, speed: 1.2, goal: null, timer: 0, stopT: 0, anim: '', standAnim: 'idle', moveAnim: 'walk', moving: false,
       acc: 0, sh: true, dy: 0, props: new Set(), jit: 0, slow: (p.spec?.stoop ?? 0) > 0.1 ? 0.72 : 1,
-      hurtT: 0, fleeT: 0, downT: 0, fx: 0, fz: 0,
+      hurtT: 0, fleeT: 0, downT: 0, fx: 0, fz: 0, detour: 0, side: 1, nx: 0, nz: 0, calm: 9, stuck: 0,
     };
     agents.push(a);
     // Hit by the player (engine/actions.js): flinch, then run from (x, z); ko = knocked down for a while.
@@ -251,11 +260,36 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     }
   }
 
+  // Out of the level's solids: push the body circle out, drop the velocity into the obstacle (slide along it), and
+  // when it was met head-on, walk round it for a moment to the side the goal lies on.
+  let grid = null;
+  const qa = [], qb = [];
+  function resolve(a, gx, gz, v) {
+    if (!grid) return;
+    grid.query(a.x - 0.6, a.x + 0.6, a.z - 0.6, a.z + 0.6, qa);
+    qb.length = 0; for (const s of qa) if (!PASS.has(s.id) && !s.npc) qb.push(s);
+    if (!qb.length) return;
+    const [cx, cz] = collide(a.x, a.z, H(a.x, a.z), qb, BODY, 1.7);
+    const nx = cx - a.x, nz = cz - a.z, l = Math.hypot(nx, nz);
+    if (l < 1e-6) return;
+    a.x = cx; a.z = cz;
+    const ux = nx / l, uz = nz / l, vn = a.vx * ux + a.vz * uz;
+    if (vn < 0) { a.vx -= vn * ux; a.vz -= vn * uz; }
+    if (v > 0.3 && a.detour <= 0 && Math.hypot(a.vx, a.vz) < 0.25 * v) {
+      const again = a.calm < 1.5; // blocked again right after a side-step: the other side, a little longer
+      a.nx = ux; a.nz = uz; a.detour = again ? 1.4 : 0.9; a.calm = 0;
+      a.side = again ? -a.side : (gx - a.x) * -uz + (gz - a.z) * ux >= 0 ? 1 : -1;
+      if (again && a.path >= 0) a.lane = clamp(a.lane + (r() < 0.5 ? -0.5 : 0.5), -1.2, 1.2); // and another line along the path
+      if (again && (a.stuck += 2) > 6 && mode === 'stroll' && a.path >= 0) { a.dir = -a.dir; a.stuck = 0; } // the way is shut: turn back
+    }
+  }
+
   // Steer toward (gx, gz) at speed v with separation and player avoidance. Returns the distance to the goal.
   function steer(a, gx, gz, v, dt, pl) {
     const dx = gx - a.x, dz = gz - a.z, d = Math.hypot(dx, dz);
     let wx = 0, wz = 0;
     if (d > 0.04) { const k = Math.min(v, d * 1.8) / d; wx = dx * k; wz = dz * k; }
+    if (a.detour > 0) { a.detour -= dt; wx += -a.nz * a.side * v + a.nx * 0.3 * v; wz += a.nx * a.side * v + a.nz * 0.3 * v; } else { a.calm += dt; if (a.calm > 3) a.stuck = 0; }
     for (const b of agents) {
       if (b === a || !b.on || b.state === 'gone') continue;
       const ex = a.x - b.x, ez = a.z - b.z, e2 = ex * ex + ez * ez;
@@ -271,12 +305,13 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     const k = Math.min(1, dt * 5);
     a.vx += (wx - a.vx) * k; a.vz += (wz - a.vz) * k;
     a.x += a.vx * dt; a.z += a.vz * dt;
+    resolve(a, gx, gz, v);
     return d;
   }
 
   function tick(a, dt, pl) {
     if (a.state === 'gone') { respawn(a, dt); return; }
-    if (a.hurtT > 0 || a.downT > 0 || a.fleeT > 0) { // ponytail: flees in a straight line, through walls; navmesh if it shows
+    if (a.hurtT > 0 || a.downT > 0 || a.fleeT > 0) { // flees in a straight line, sliding along whatever is in the way
       a.hurtT = Math.max(0, a.hurtT - dt);
       if (a.downT > 0) a.downT -= dt;
       if (a.hurtT > 0 || a.downT > 0) { steer(a, a.x, a.z, 0, dt, pl); return; }
@@ -343,6 +378,8 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     if (ctx?.camera?.matrixWorld) { viewer.setFromMatrixPosition(ctx.camera.matrixWorld); hasViewer = true; }
     const pl = ctx?.player ?? player ?? (hasViewer ? viewer : null);
     if (!active || !dt) return;
+    const S = (typeof solids === 'function' ? solids() : solids) ?? ctx?.solids ?? activeLevel()?.solids;
+    grid = Array.isArray(S) ? gridOf(S) : null;
     if (mode === 'queue') queueTick(dt);
     for (const a of agents) {
       if (!a.on) continue;
@@ -379,11 +416,14 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     if (reapply && (mode === 'sit' || ((mode === 'stroll' || mode === 'idle') && !paths.length))) apply();
   }
 
+  const members = agents.map(a => a.p), unbody = addBodies(members);
   return {
     group, update, setMode, setPaths, setArea,
     get mode() { return mode; },
     get active() { return active; },
-    members: agents.map(a => a.p),
-    dispose() { for (const a of agents) a.p.dispose?.(); group.removeFromParent(); },
+    members,
+    // Where the active, shown members are ([{ x, z }], `out` reused): for traffic that yields to people.
+    positions(out = []) { out.length = 0; for (const a of agents) if (a.on && a.state !== 'gone') out.push({ x: a.x, z: a.z }); return out; },
+    dispose() { unbody(); for (const a of agents) a.p.dispose?.(); group.removeFromParent(); },
   };
 }

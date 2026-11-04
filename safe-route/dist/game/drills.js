@@ -56,7 +56,7 @@ export const BAG_GOALS = {
 };
 
 // Why an item that fills no goal is worth a second look in a bag.
-const EXTRA_TIPS = { gas_stove: 'shelter_rules', butane: 'shelter_rules', candles: 'candle_no', ramen: 'bag_nocook', fridge_food: 'food_4h', cooked_meat: 'myth_meat' };
+const EXTRA_TIPS = { gas_stove: 'shelter_rules', butane: 'shelter_rules', candles: 'candle_no', ramen: 'bag_nocook', fridge_food: 'food_4h', cooked_meat: 'myth_meat', old_bars: 'bag_nocook' };
 const WATER_TRIP_KG = 2; // game number: the way back carries up to 10 L of water
 
 export const goalMet = (g, count, ready) => g.items.filter(ready).reduce((s, id) => s + count(id) * (g.per?.[id] ?? 1), 0) >= (g.min ?? 1);
@@ -98,12 +98,12 @@ export function radioSignal(freq, stations = []) {
 }
 
 // What stands between the player and the radio. An unchecked radio with spare batteries still
-// works, but loading them costs time at the worst moment.
+// works (a half-used pack too), but loading them costs time at the worst moment.
 export function radioNeeds(G) {
   const has = (id) => { const e = G.items[id]; return !!e && e.home + e.bag > 0; };
   if (!has('radio')) return { ok: false, blocks: ['noRadio'], extraSeconds: 0, tips: ['power_prep'] };
   if (G.items.radio.checked) return { ok: true, blocks: [], extraSeconds: 0, tips: [] };
-  if (!has('batteries_aa')) return { ok: false, blocks: ['noBatteries'], extraSeconds: 0, tips: ['radio_batt'] };
+  if (!has('batteries_aa') && !has('batteries_old')) return { ok: false, blocks: ['noBatteries'], extraSeconds: 0, tips: ['radio_batt'] };
   return { ok: true, blocks: ['notChecked'], extraSeconds: 40, tips: ['radio_batt'] };
 }
 

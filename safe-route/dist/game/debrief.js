@@ -5,26 +5,24 @@ import { fact } from './facts.js';
 import { bagLoad, hhmm } from './state.js';
 import { pickEnding } from './endings.js';
 import { EXT_STEPS } from './drills.js';
+import { PREP, ripples } from './ripples.js';
+import { planLine } from './ledger.js';
 
-const PEOPLE = { manager: '박영수 소장', clerk: '이수아', seoyeon: '오서연' };
+export { PREP };
+// 'help' / 'trade' who ids. elder and stranger have no G.rel entry (state.js PEOPLE); trader is the barter.
+export const PEOPLE = { manager: '박영수 소장', clerk: '이수아', seoyeon: '오서연', elder: '304호 어르신', stranger: '문을 두드린 이웃', trader: '102동 주민' };
 const CONTACT = { sms: '문자', door: '문 두드리기', both: '문자·문에 쪽지', office: '관리사무소 창구', store: '가게로 찾아가기' };
-const TOOL = { radio: '라디오', bag: '비상가방', route: '경로 정하기', extinguisher: '소화기', docs: '비상연락처 카드' };
+const TOOL = { radio: '라디오', bag: '비상가방', route: '경로 정하기', extinguisher: '소화기', docs: '비상연락처 카드', info: '정보 가려 듣기' };
 // Every result string the story passes to recordEncounter, so no raw id reaches the player.
 const RESULT = {
   out: '불을 껐습니다', 'retreat-ok': '대피하며 알렸습니다', escalated: '불이 커져 물러났습니다', incomplete: '끝까지 마치지 못했습니다',
   risky: '연기 속으로 바로 나섰습니다', practice: '사용 순서를 익혔습니다', tuned: '공식 방송을 찾아 들었습니다', opened: '라디오를 켜 보았습니다',
   missed: '공식 방송은 찾지 못했습니다', complete: '필요한 것을 다 챙겼습니다', partial: '몇 가지가 빠졌습니다', planned: '경로를 정해 두었습니다',
-  written: '카드를 적어 두었습니다',
+  written: '카드를 적어 두었습니다', sorted: '출처를 가려 들었습니다', misled: '소문을 따라갔습니다', checked: '한 번 더 확인했습니다',
 };
 const STAT = { health: '체력', thirst: '갈증', fatigue: '피로', tension: '긴장' };
 const LABEL = { official: '공식 안내', site: '현장 확인', neighbor: '이웃에게 들음', rumor: '소문·미확인', self: '내 기록' };
 
-// ctx.payoff(prep, moment) passes a preparation id; the player sees the Korean name.
-const PREP = {
-  bag: '비상가방', cash: '현금', docs: '비상연락처 카드·서류 사본', entrances: '대피소 출입구 확인', extinguisher: '소화기 위치·사용 순서',
-  flashlight: '손전등 건전지', judgement: '화재 상황 판단', powerbank: '보조배터리 충전', radio: '라디오 주파수·건전지',
-  route: '경로 확인', tub: '받아 둔 물', water_jug: '접이식 물통',
-};
 const payoffOf = (e) => ({ prep: PREP[e.details.prep] ?? e.details.prep, moment: e.details.moment, id: e.details.prep });
 const sourcesOf = (ids) => [...new Set(ids.map(id => fact(id)?.sourceId).filter(Boolean))];
 const lastEncounter = (G, tool) => G.events.findLast(e => e.type === 'encounter' && e.details?.tool === tool);
@@ -106,7 +104,15 @@ const FAIL = {
       facts: [factId, 'fire_small', 'ext_1'],
     };
   },
-  lostWay(G) {
+  // detail.via: 'rumor' when the player acted on a false post (game/rumors.js); otherwise lost on the way.
+  lostWay(G, { via } = {}) {
+    if (via === 'rumor') return {
+      title: '소문을 따라가느라 길을 잃었습니다',
+      seen: 'SNS 글에는 누가 언제 확인했는지가 없었습니다.',
+      missed: fact('info_rumor').text,
+      next: '재난문자·라디오·게시판으로 한 번 더 확인하고 움직이기',
+      facts: ['info_rumor', 'info_harm', 'evac_note'],
+    };
     const k = G.know;
     return {
       title: '길을 찾느라 시간이 걸렸습니다',
@@ -146,12 +152,18 @@ export function chapterSummary(G, chapter) {
     lines.push(`수첩에 적은 정보 ${notes.length}개 (${byLabel.map(([l, n]) => `${l} ${n}`).join(', ')})`);
   }
   for (const e of of('help')) lines.push(`${PEOPLE[e.details.who] ?? e.details.who}: ${e.details.what}`);
+  for (const e of of('trade')) lines.push(`물물교환(${PEOPLE[e.details.from] ?? e.details.from}): ${cartText(e.details.give)} → ${cartText(e.details.get)}`);
+  for (const e of of('ledger')) if (e.details.plan) lines.push(planLine(e.details.plan));
+  const dead = of('battery_dead').map(e => itemName(e.details.id));
+  if (dead.length) lines.push(`건전지가 다 닳은 것: ${[...new Set(dead)].join(', ')}`);
   lines.push(`지금 상태: ${Object.entries(STAT).map(([s, l]) => `${l} ${word(s, G.stats[s])}`).join(', ')}`);
   const payoffs = of('payoff').map(payoffOf);
   return { lines, payoffs };
 }
 
+const cartText = (cart) => Object.entries(cart ?? {}).map(([id, n]) => `${itemName(id)} ${n}${CATALOG[id]?.unit ?? '개'}`).join(', ');
 const CHECK_WHY = { batteries: '건전지를 넣지 않아 켜 볼 수 없었습니다.', charge: '충전해 두지 않아 쓸 수 없었습니다.' };
+const FIXTURE_DONE = { blackout_curtain: 'curtain' }; // a fixture counts as used once its know flag is set
 const KNOW_TEXT = {
   shelterLocated: '가까운 대피소 위치',
   entrancesChecked: '대피소 출입구 A·B·C와 경사로',
@@ -169,6 +181,17 @@ const PRACTICE = [
   ['radioChecked', 'radio_batt'], ['extinguisherLocated', 'ext_1'], ['docsCopied', 'bag_copies'], ['waterPoint', 'water_point'],
 ];
 
+// One row per person (the same help pressed twice is one row): their last two different moments, oldest first.
+function helpRows(G) {
+  const by = new Map();
+  for (const e of G.events) if (e.type === 'help' && e.details?.who && e.details.what) {
+    const list = by.get(e.details.who) ?? [];
+    if (!list.includes(e.details.what)) list.push(e.details.what);
+    by.set(e.details.who, list);
+  }
+  return [...by].map(([who, whats]) => ({ who: PEOPLE[who] ?? who, what: whats.slice(-2).join(' · ') }));
+}
+
 // Durable items count as used when items[id].used > 0 (state.use / state.consume).
 export function endingRecord(G) {
   const helped = G.events.filter(e => e.type === 'payoff').map(payoffOf);
@@ -176,12 +199,12 @@ export function endingRecord(G) {
   for (const [id, e] of Object.entries(G.items)) {
     const c = CATALOG[id];
     if (!c) continue;
-    if (c.needsCheck && !e.checked && e.home + e.bag > 0) unused.push({ item: c.name, why: CHECK_WHY[c.needsCheck] });
-    else if (e.bought > 0 && e.used === 0) unused.push({ item: c.name, why: '사 두었지만 쓸 일이 없었습니다.' });
+    if (c.needsCheck && !e.checked && e.home + e.bag > 0) unused.push({ item: c.name, why: e.charge === 0 ? '건전지가 다 닳아 더 켤 수 없었습니다.' : CHECK_WHY[c.needsCheck] });
+    else if (e.bought > 0 && e.used === 0 && !G.know[FIXTURE_DONE[id]]) unused.push({ item: c.name, why: '사 두었지만 쓸 일이 없었습니다.' });
   }
   const unchecked = Object.entries(KNOW_TEXT).filter(([k]) => !G.know[k]).map(([, t]) => t);
-  const people = G.events.filter(e => e.type === 'help').map(e => ({ who: PEOPLE[e.details.who] ?? e.details.who, what: e.details.what }));
+  const people = helpRows(G);
   for (const [k, r] of Object.entries(G.rel)) if (r.contact) people.push({ who: PEOPLE[k] ?? k, what: `비상 연락 방법을 정했습니다 (${CONTACT[r.contact] ?? r.contact})` });
   const f = fact(PRACTICE.find(([k]) => !G.know[k])?.[1] ?? 'shelter_know');
-  return { fate: pickEnding(G), helped, unused, unchecked, people, practice: { text: f.text, sourceId: f.sourceId } };
+  return { fate: pickEnding(G), helped, unused, unchecked, people, ripples: ripples(G), practice: { text: f.text, sourceId: f.sourceId } };
 }

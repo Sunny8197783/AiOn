@@ -1,10 +1,12 @@
 // Game state for 〈경보 이전〉: one plain JSON-safe object G plus the functions that change it.
 // Pure logic: no DOM, no three.js. Thrown errors are for developers; player text lives in the UI/story.
-import { CATALOG, START_HOME, BAG_LIMIT } from './items.js';
+import { CATALOG, START_HOME, BAG_LIMIT, POCKET_L, packable } from './items.js';
 
 const STATS = ['health', 'thirst', 'fatigue', 'tension'];
 const LABELS = ['official', 'site', 'neighbor', 'rumor', 'self'];
-const TOOLS = ['radio', 'bag', 'route', 'extinguisher', 'docs'];
+const TOOLS = ['radio', 'bag', 'route', 'extinguisher', 'docs', 'info'];
+// People with a relationship (trust, contact). 304호 어르신 ('elder') and the stranger at the door ('stranger')
+// only appear in 'help' events, so old saves need no new rel entries; game/debrief.js names them.
 const PEOPLE = ['manager', 'clerk', 'seoyeon'];
 
 // mulberry32, same as engine/kit.js rng (copied: game/* must not import three.js through kit).
@@ -68,6 +70,7 @@ export function createGame({ seed = Math.floor(Math.random() * 2 ** 31) } = {}) 
     info: [],
     cond: conditions(seed),
     events: [],
+    ledger: [], // day-ledger rows, game/ledger.js
     checkpoint: null,
   };
 }
@@ -147,15 +150,22 @@ export function buy(G, cart, prices) {
   return total;
 }
 
+// The front pocket is part of the bag: when the bag count drops below it, the pocket empties first.
+const fitPocket = (e) => { if (e.pocket > e.bag) e.pocket = e.bag; if (e.pocket === 0) delete e.pocket; };
+
 function move(G, id, n, from, to) {
   qty(n);
   const e = entry(G, id);
   if (e[from] < n) throw new Error(`only ${e[from]} ${id} at ${from}, asked to move ${n}`);
   e[from] -= n;
   e[to] += n;
+  fitPocket(e);
   return e;
 }
-export const pack = (G, id, n = 1) => move(G, id, n, 'home', 'bag');
+export const pack = (G, id, n = 1) => {
+  if (CATALOG[id] && !packable(id)) throw new Error(`${id} is a fixture and stays at home`);
+  return move(G, id, n, 'home', 'bag');
+};
 export const unpack = (G, id, n = 1) => move(G, id, n, 'bag', 'home');
 
 const round2 = (x) => Math.round(x * 100) / 100;
@@ -167,6 +177,25 @@ export function bagLoad(G) {
   return { weightKg, volumeL, over: { weight: weightKg > BAG_LIMIT.weightKg, volume: volumeL > BAG_LIMIT.volumeL } };
 }
 
+// Litres in the front pocket. setPocket(G, id, n) puts n of the packed id there (0 takes them out);
+// only CATALOG pocket items fit, n <= bag, and the pocket holds POCKET_L.
+export function pocketLoad(G) {
+  let v = 0;
+  for (const [id, e] of Object.entries(G.items)) v += (e.pocket ?? 0) * (CATALOG[id]?.volumeL ?? 0);
+  return round2(v);
+}
+export function setPocket(G, id, n) {
+  if (!Number.isInteger(n) || n < 0) throw new RangeError(`pocket count must be an integer >= 0, got ${n}`);
+  const e = entry(G, id), vol = CATALOG[id].volumeL;
+  if (n > 0 && !CATALOG[id].pocket) throw new Error(`${id} does not fit the front pocket`);
+  if (n > e.bag) throw new Error(`only ${e.bag} ${id} in the bag, asked to pocket ${n}`);
+  const after = round2(pocketLoad(G) + (n - (e.pocket ?? 0)) * vol);
+  if (after > POCKET_L) throw new Error(`front pocket full: ${after} L > ${POCKET_L} L`);
+  if (n) e.pocket = n; else delete e.pocket;
+  return e;
+}
+export const inPocket = (G, id) => (G.items[id]?.pocket ?? 0) > 0;
+
 const have = (G, id) => { const e = G.items[id]; return !!e && e.home + e.bag > 0; };
 
 // Owned is not usable: a flashlight without batteries does not count.
@@ -175,20 +204,39 @@ export function usable(G, id) {
   return CATALOG[id]?.needsCheck ? G.items[id].checked : true;
 }
 
-// Turns an owned item into a usable one. 'batteries' uses up one AA pack; 'charge' needs grid
-// power, which the director gates (before the blackout). Returns { ok, reason? } (reason is Korean).
-export function check(G, id) {
+const PACKS = ['batteries_aa', 'batteries_old']; // battery packs, best first (CATALOG[pack].charge)
+
+// Turns an owned item into a usable one. 'batteries' uses up one battery pack (a new AA pack unless
+// `using` names one) and sets the device's charge 0..100 from it (100 new, 30 half-used); 'charge' needs
+// grid power, which the director gates (before the blackout). Returns { ok, reason? } (reason is Korean).
+export function check(G, id, { using } = {}) {
   if (!CATALOG[id]) throw new Error(`unknown item: ${id}`);
+  if (using !== undefined && !PACKS.includes(using)) throw new Error(`not a battery pack: ${using}`);
   if (!have(G, id)) return { ok: false, reason: '가지고 있지 않습니다.' };
   const e = G.items[id];
   if (e.checked) return { ok: true };
   if (CATALOG[id].needsCheck === 'batteries') {
-    if (!have(G, 'batteries_aa')) return { ok: false, reason: '넣을 건전지가 없습니다.' };
-    consume(G, 'batteries_aa', 1, G.items.batteries_aa.home > 0 ? 'home' : 'bag');
+    const pack = using ?? PACKS.find(p => have(G, p));
+    if (!pack || !have(G, pack)) return { ok: false, reason: '넣을 건전지가 없습니다.' };
+    consume(G, pack, 1, G.items[pack].home > 0 ? 'home' : 'bag');
+    e.charge = CATALOG[pack].charge;
   }
   e.checked = true;
-  recordEvent(G, 'check', { id });
+  recordEvent(G, 'check', CATALOG[id].needsCheck === 'batteries' ? { id, charge: e.charge } : { id });
   return { ok: true };
+}
+
+// Runs a battery device down by pct (flashlight minutes, radio use, ledger days). At 0 it is no longer
+// usable (checked = false) and 'battery_dead' is recorded; check() with a new pack brings it back.
+// A device checked before charges existed counts as full. Returns the charge left (0 if not running).
+export function drainCharge(G, id, pct) {
+  if (CATALOG[id]?.needsCheck !== 'batteries') throw new Error(`${id} does not run on batteries`);
+  if (typeof pct !== 'number' || !Number.isFinite(pct) || pct < 0) throw new RangeError(`pct must be >= 0, got ${pct}`);
+  const e = G.items[id];
+  if (!e?.checked) return 0;
+  e.charge = Math.max(0, Math.round(((e.charge ?? 100) - pct) * 10) / 10);
+  if (e.charge === 0) { e.checked = false; recordEvent(G, 'battery_dead', { id }); }
+  return e.charge;
 }
 
 export function consume(G, id, n = 1, from = 'home') {
@@ -198,7 +246,29 @@ export function consume(G, id, n = 1, from = 'home') {
   if (e[from] < n) throw new Error(`only ${e[from]} ${id} at ${from}, asked to consume ${n}`);
   e[from] -= n;
   e.used += n;
+  fitPocket(e);
   return e;
+}
+
+// Barter: give { id: qty } for get { id: qty } with `from` (a debrief PEOPLE id or a Korean name).
+// Checked like buy(): all or nothing. Given items leave home first, then the bag, and count as used;
+// received items go home (not 'bought'). Records 'trade' { give, get, from }.
+export function trade(G, give, get, from) {
+  if (typeof from !== 'string' || !from.trim()) throw new TypeError('trade needs who it is with');
+  const out = Object.entries(give ?? {}), inn = Object.entries(get ?? {});
+  if (!out.length || !inn.length) throw new Error('a trade gives and gets at least one item');
+  for (const [id, n] of [...out, ...inn]) { if (!CATALOG[id]) throw new Error(`unknown item: ${id}`); qty(n); }
+  for (const [id, n] of out) {
+    const e = G.items[id], has = e ? e.home + e.bag : 0;
+    if (has < n) throw new Error(`only ${has} ${id} to give, asked ${n}`);
+  }
+  for (const [id, n] of out) {
+    const e = G.items[id], home = Math.min(e.home, n);
+    e.home -= home; e.bag -= n - home; e.used += n;
+    fitPocket(e);
+  }
+  for (const [id, n] of inn) entry(G, id).home += n;
+  return recordEvent(G, 'trade', { give: Object.fromEntries(out), get: Object.fromEntries(inn), from });
 }
 
 // Durable items (radio, flashlight, water_jug...) are used without being used up.
@@ -248,21 +318,34 @@ function validate(G, nested) {
   for (const [id, e] of Object.entries(G.items)) {
     if (!CATALOG[id]) { delete G.items[id]; continue; } // removed from the catalogue since this save
     if (!isObj(e) || !['home', 'bag', 'bought', 'used'].every(k => Number.isInteger(e[k]) && e[k] >= 0) || typeof e.checked !== 'boolean') fail(`item ${id}`);
+    if ('charge' in e && !num(e.charge, 0, 100)) fail(`item ${id} charge`);
+    if ('pocket' in e && !(Number.isInteger(e.pocket) && e.pocket >= 0 && e.pocket <= e.bag)) fail(`item ${id} pocket`);
   }
   if (!isObj(G.know) || !isObj(G.cond) || !isObj(G.rel) || !PEOPLE.every(p => isObj(G.rel[p]))) fail('know/cond/rel');
   if (!isObj(G.skill) || !TOOLS.every(t => Array.isArray(G.skill[t]))) fail('skill');
   if (!Array.isArray(G.info) || !G.info.every(i => isObj(i) && typeof i.text === 'string' && LABELS.includes(i.label))) fail('info');
   if (!Array.isArray(G.events) || !G.events.every(e => isObj(e) && Number.isInteger(e.seq) && typeof e.type === 'string')) fail('events');
+  if (G.ledger !== undefined && !(Array.isArray(G.ledger) && G.ledger.every(d => isObj(d) && Number.isInteger(d.day)))) fail('ledger');
   if (G.checkpoint !== null) {
     if (nested || !isObj(G.checkpoint) || typeof G.checkpoint.key !== 'string') fail('checkpoint');
     validate(G.checkpoint.state, true);
   }
 }
 
+// Saves stay v2: fields added since are filled here, before validate(), for G and its checkpoint state.
+// Added since the first v2 build: skill.info (the 'info' ladder), ledger. items.*.charge / pocket are optional.
+export function migrate(G) {
+  if (!isObj(G)) return G;
+  if (isObj(G.skill)) for (const t of TOOLS) G.skill[t] ??= [];
+  G.ledger ??= [];
+  if (isObj(G.checkpoint) && isObj(G.checkpoint.state)) migrate(G.checkpoint.state);
+  return G;
+}
+
 export function load(json) {
   let G;
   try { G = typeof json === 'string' ? JSON.parse(json) : structuredClone(json); } catch { fail('not JSON'); }
-  validate(G, false);
+  validate(migrate(G), false);
   return G;
 }
 

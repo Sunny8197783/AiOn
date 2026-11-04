@@ -48,16 +48,27 @@ export function collide(px, pz, feetY, solids, r = 0.32, h = 1.72) {
 }
 
 // Segment o→o+d (t in 0..1) against an AABB grown by pad; returns entry t, or Infinity (also when o is inside).
+// Scalar slab test: no allocation, it runs for every solid near the camera boom, a prompt or a thrown thing.
 export function segBox(o, d, s, pad) {
-  let t0 = 0, t1 = 1;
-  const lo = [s.x0 - pad, s.y0 - pad, s.z0 - pad], hi = [s.x1 + pad, s.y1 + pad, s.z1 + pad], O = [o.x, o.y, o.z], D = [d.x, d.y, d.z];
-  if (O[0] > lo[0] && O[0] < hi[0] && O[1] > lo[1] && O[1] < hi[1] && O[2] > lo[2] && O[2] < hi[2]) return Infinity;
-  for (let i = 0; i < 3; i++) {
-    if (Math.abs(D[i]) < 1e-9) { if (O[i] < lo[i] || O[i] > hi[i]) return Infinity; continue; }
-    let a = (lo[i] - O[i]) / D[i], b = (hi[i] - O[i]) / D[i];
-    if (a > b) [a, b] = [b, a];
-    t0 = Math.max(t0, a); t1 = Math.min(t1, b);
-    if (t0 > t1) return Infinity;
-  }
+  const x0 = s.x0 - pad, x1 = s.x1 + pad, y0 = s.y0 - pad, y1 = s.y1 + pad, z0 = s.z0 - pad, z1 = s.z1 + pad;
+  if (o.x > x0 && o.x < x1 && o.y > y0 && o.y < y1 && o.z > z0 && o.z < z1) return Infinity;
+  let t0 = 0, t1 = 1, a, b, k;
+  if (Math.abs(d.x) < 1e-9) { if (o.x < x0 || o.x > x1) return Infinity; }
+  else { a = (x0 - o.x) / d.x; b = (x1 - o.x) / d.x; if (a > b) { k = a; a = b; b = k; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) return Infinity; }
+  if (Math.abs(d.y) < 1e-9) { if (o.y < y0 || o.y > y1) return Infinity; }
+  else { a = (y0 - o.y) / d.y; b = (y1 - o.y) / d.y; if (a > b) { k = a; a = b; b = k; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) return Infinity; }
+  if (Math.abs(d.z) < 1e-9) { if (o.z < z0 || o.z > z1) return Infinity; }
+  else { a = (z0 - o.z) / d.z; b = (z1 - o.z) / d.z; if (a > b) { k = a; a = b; b = k; } if (a > t0) t0 = a; if (b < t1) t1 = b; if (t0 > t1) return Infinity; }
   return t0;
+}
+
+// Ceilings: optional level.ceilings [{x0,x1,z0,z1,y}] (y0 is read when y is missing). The lowest ceiling over
+// (x, z) above height y, or Infinity.
+export function ceilAt(ceilings, x, z, y) {
+  let c = Infinity;
+  if (ceilings) for (const k of ceilings) {
+    const cy = k.y ?? k.y0;
+    if (x >= k.x0 && x <= k.x1 && z >= k.z0 && z <= k.z1 && cy > y && cy < c) c = cy;
+  }
+  return c;
 }

@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { FAIL_TYPES, failDebrief, chapterSummary, endingRecord } from '../dist/game/debrief.js';
-import { createGame, recordEvent, buy, pack, check, consume, note, spendSlot, adjust, hhmm } from '../dist/game/state.js';
+import { FAIL_TYPES, failDebrief, chapterSummary, endingRecord, PREP, PEOPLE } from '../dist/game/debrief.js';
+import { simulateDays, applyLedger } from '../dist/game/ledger.js';
+import { createGame, recordEvent, buy, pack, check, consume, note, spendSlot, adjust, hhmm, trade, drainCharge } from '../dist/game/state.js';
 import { recordEncounter, evalExtinguisher, evalBag } from '../dist/game/drills.js';
 import { CATALOG, BAG_LIMIT } from '../dist/game/items.js';
 import { SOURCES, FACTS, fact } from '../dist/game/facts.js';
@@ -157,12 +158,18 @@ test('no raw result id or prep id reaches the player', () => {
   const results = [...storyResults, 'out', 'incomplete', 'escalated', 'retreat-ok', 'something-new',
     evalExtinguisher(['retreat'], { fire: 'large' }), evalBag(G, 'alert'), { station: null }, null];
   for (const r of results) recordEncounter(G, 'radio', r);
-  for (const prep of storyPreps) recordEvent(G, 'payoff', { prep, moment: '순간' });
+  for (const r of ['sorted', 'misled', 'checked']) recordEncounter(G, 'info', r);
+  for (const prep of [...storyPreps, ...Object.keys(PREP)]) recordEvent(G, 'payoff', { prep, moment: '순간' });
+  for (const who of Object.keys(PEOPLE)) recordEvent(G, 'help', { who, what: '도왔다' });
+  trade(G, { ramen: 1 }, { batteries_old: 1 }, 'trader');
+  G.items.flashlight.checked = true; drainCharge(G, 'flashlight', 100);
+  applyLedger(G, simulateDays(G, { water: 2, meals: 2, power: 'radio' }, 2));
   const s = chapterSummary(G, 'c');
-  for (const line of s.lines) assert.doesNotMatch(line, /[A-Za-z]/, line);
+  for (const line of s.lines) assert.doesNotMatch(line.replace(/AA|LED|\d+m?L/g, ''), /[A-Za-z]/, line); // units and item names (2L, 500mL, AA, LED) are fine
   for (const p of [...s.payoffs, ...endingRecord(G).helped]) assert.notEqual(p.prep, p.id, `label for payoff '${p.id}'`);
   assert.ok(storyContacts.length >= 3, 'contact literals were found');
-  for (const c of storyContacts) { G.rel.seoyeon.contact = c; for (const p of endingRecord(G).people) assert.doesNotMatch(p.what, /[A-Za-z]/, p.what); }
+  for (const c of storyContacts) { G.rel.seoyeon.contact = c; for (const p of endingRecord(G).people) assert.doesNotMatch(`${p.who}${p.what}`, /[A-Za-z]/, p.what); }
+  for (const x of endingRecord(G).ripples) assert.doesNotMatch(`${x.label}${x.cause.text}`, /[A-Za-z]/);
 });
 
 test('endingRecord on a fresh game', () => {
@@ -212,4 +219,52 @@ test('fire fail card follows the scene it came from', () => {
   assert.match(up.missed, /창문을 닫고|대기/);
   assert.notEqual(up.title, co.title); assert.notEqual(sh.title, co.title);
   for (const d of [up, sh]) assert.ok(d.sourceIds.length && d.next);
+});
+
+test('lostWay via rumor: three calm lines and the info sources', () => {
+  const G = createGame({ seed: 2 });
+  const d = failDebrief(G, 'lostWay', { via: 'rumor' });
+  assert.equal(d.title, '소문을 따라가느라 길을 잃었습니다');
+  assert.equal(d.missed, fact('info_rumor').text);
+  assert.match(d.next, /한 번 더 확인/);
+  for (const k of ['seen', 'missed', 'next']) assert.doesNotMatch(d[k], BLAME);
+  assert.deepEqual(d.sourceIds, [...new Set(['info_rumor', 'info_harm', 'evac_note'].map(id => fact(id).sourceId))]);
+  assert.notEqual(failDebrief(G, 'lostWay').title, d.title, 'the plain lostWay card stays');
+});
+
+test('chapter summary lists trades, the day ledger and flat batteries in Korean', () => {
+  const G = game({ bars: 3, radio: 1, batteries_aa: 1 });
+  check(G, 'radio');
+  G.chapter = 'endure';
+  trade(G, { bars: 3 }, { batteries_old: 1 }, 'trader');
+  applyLedger(G, simulateDays(G, { water: 2, meals: 2, power: 'powerbank' }, 2));
+  drainCharge(G, 'radio', 100);
+  const lines = chapterSummary(G, 'endure').lines;
+  assert.ok(lines.includes('물물교환(102동 주민): 건빵·에너지바 3봉 → AA 건전지(쓰던 것) 1팩'), lines.join('\n'));
+  assert.ok(lines.includes('하루 배분: 물 2L · 두 끼 · 보조배터리'));
+  assert.ok(lines.includes('건전지가 다 닳은 것: 휴대용 라디오(건전지식)'));
+  const why = Object.fromEntries(endingRecord(G).unused.map(u => [u.item, u.why]));
+  assert.equal(why['휴대용 라디오(건전지식)'], '건전지가 다 닳아 더 켤 수 없었습니다.');
+});
+
+test('endingRecord: one people row per person, new neighbours named, ripples, curtain counted', () => {
+  const G = game({ blackout_curtain: 1 });
+  for (let i = 0; i < 3; i++) recordEvent(G, 'help', { who: 'manager', what: '마지막까지 건물을 지키며 길을 안내했다' });
+  recordEvent(G, 'help', { who: 'seoyeon', what: '계단에서 보행기를 옆에서 들어 주었다' });
+  recordEvent(G, 'help', { who: 'seoyeon', what: '급수소에서 물 한 통을 받아 3층까지 날라 주었다' });
+  recordEvent(G, 'help', { who: 'elder', what: '304호 어르신을 부축해 함께 내려갔다' });
+  recordEvent(G, 'help', { who: 'stranger', what: '정보' });
+  const r = endingRecord(G);
+  assert.deepEqual(r.people, [
+    { who: '박영수 소장', what: '마지막까지 건물을 지키며 길을 안내했다' },
+    { who: '오서연', what: '계단에서 보행기를 옆에서 들어 주었다 · 급수소에서 물 한 통을 받아 3층까지 날라 주었다' },
+    { who: '304호 어르신', what: '304호 어르신을 부축해 함께 내려갔다' },
+    { who: '문을 두드린 이웃', what: '정보' },
+  ]);
+  assert.deepEqual(r.ripples, []);
+  assert.ok(r.unused.some(u => u.item === '암막 커튼'), 'bought and never hung');
+  G.know.curtain = true;
+  assert.ok(!endingRecord(G).unused.some(u => u.item === '암막 커튼'), 'hung: used');
+  G.chapter = 'prep'; recordEvent(G, 'tub_filled', {}); G.day = 1; recordEvent(G, 'payoff', { prep: 'tub', moment: '세수했다' });
+  assert.equal(endingRecord(G).ripples.length, 1);
 });

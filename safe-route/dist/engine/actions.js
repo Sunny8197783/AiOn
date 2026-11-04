@@ -2,10 +2,13 @@
 // Loose things (bricks, bottles, cans...) are scattered on each level's walk zones the first time it is
 // entered; thrown ones fly with gravity, bounce off solids and floors and knock people back.
 // People are engine.persons (every createPerson); a crowd member answers p.onHit (flee / knocked down),
-// anyone else is pushed back and may hit back.
+// anyone else is pushed back (sliding along solids) and may hit back. They are also the bodies the player bumps
+// into (engine/bodies.js). Thrown things sweep their path against solids, so no wall is too thin at a low frame rate.
 // createActions(engine, { onHit(person, how, ko), onHurt(damage, why), onSound(name), onNear(label|null) })
 import * as THREE from 'three';
-import { groundAt, collide } from './geom.js';
+import { groundAt, collide, segBox } from './geom.js';
+import { gridOf } from './space.js';
+import { addBodies } from './bodies.js';
 
 const KINDS = {
   brick: { name: '벽돌', geo: () => new THREE.BoxGeometry(0.21, 0.065, 0.1), color: 0x9a4a32, rough: 0.95, r: 0.06, power: 2 },
@@ -31,6 +34,9 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
   const byLevel = new Map(); // level -> items [{ kind, mesh, v, flying }]
   let held = null, near = null, punchT = 0, enabled = true;
   const reactions = new Map(); // person -> { t, vx, vz, back }
+  addBodies(() => engine.persons);
+  const qs = [];
+  const solidsNear = (L, x0, x1, z0, z1) => gridOf(L.solids || []).query(x0, x1, z0, z1, qs);
 
   function scatter(L) {
     const [n, kinds] = SCATTER[L.id] || SCATTER.default, r = rng(L.id.length * 7919 + 13), zones = (L.walk || []).filter((w) => !w.ramp && (w.x1 - w.x0) * (w.z1 - w.z0) > 4);
@@ -121,14 +127,29 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
     else if (code === 'Mouse0' || code === 'KeyQ') { if (held) toss(); else punch(); }
   });
 
-  const tmp = new THREE.Vector3();
+  const tmp = new THREE.Vector3(), from = new THREE.Vector3(), step = new THREE.Vector3();
+  // The face of the box (grown by r) that the point p lies on: 'x', 'y' or 'z'.
+  function faceOf(p, s, r) {
+    const fx = Math.min(Math.abs(p.x - (s.x0 - r)), Math.abs(p.x - (s.x1 + r))), fz = Math.min(Math.abs(p.z - (s.z0 - r)), Math.abs(p.z - (s.z1 + r)));
+    const fy = Math.min(Math.abs(p.y - (s.y0 - r)), Math.abs(p.y - (s.y1 + r)));
+    return fy <= fx && fy <= fz ? 'y' : fx <= fz ? 'x' : 'z';
+  }
   function fly(it, L, dt) {
-    const k = KINDS[it.kind], m = it.mesh, v = it.v;
+    const k = KINDS[it.kind], m = it.mesh, v = it.v, p = m.position;
     v.y -= G * dt;
-    m.position.addScaledVector(v, dt); m.rotation.x += dt * 9; m.rotation.z += dt * 5;
-    const p = m.position;
-    for (const s of L.solids || []) { // bounce off the face it went through least
-      if (!s || s.off || p.x < s.x0 - k.r || p.x > s.x1 + k.r || p.z < s.z0 - k.r || p.z > s.z1 + k.r || p.y < s.y0 || p.y > s.y1 + k.r) continue;
+    from.copy(p); step.copy(v).multiplyScalar(dt);
+    // Swept: the first solid the path enters stops it there and it bounces off that face.
+    let tHit = Infinity, hitS = null;
+    const list = solidsNear(L, Math.min(from.x, from.x + step.x) - k.r, Math.max(from.x, from.x + step.x) + k.r, Math.min(from.z, from.z + step.z) - k.r, Math.max(from.z, from.z + step.z) + k.r);
+    for (const s of list) { const t = segBox(from, step, s, k.r); if (t < tHit) { tHit = t; hitS = s; } }
+    if (hitS) {
+      p.copy(from).addScaledVector(step, Math.max(0, tHit - 1e-3));
+      const ax = faceOf(p, hitS, k.r); v[ax] *= -0.35; v.multiplyScalar(0.7);
+      if (v.length() > 2) onSound('thud');
+    } else p.add(step);
+    m.rotation.x += dt * 9; m.rotation.z += dt * 5;
+    for (const s of solidsNear(L, p.x - k.r, p.x + k.r, p.z - k.r, p.z + k.r)) { // started inside one: out by the face it went through least
+      if (p.x < s.x0 - k.r || p.x > s.x1 + k.r || p.z < s.z0 - k.r || p.z > s.z1 + k.r || p.y < s.y0 || p.y > s.y1 + k.r) continue;
       const pen = [[p.x - (s.x0 - k.r), 'x', -1], [s.x1 + k.r - p.x, 'x', 1], [p.z - (s.z0 - k.r), 'z', -1], [s.z1 + k.r - p.z, 'z', 1], [s.y1 + k.r - p.y, 'y', 1]].sort((a, b) => a[0] - b[0])[0];
       p[pen[1]] += pen[2] * pen[0]; v[pen[1]] *= -0.35; v.multiplyScalar(0.7);
       if (v.length() > 2) onSound('thud');
@@ -140,9 +161,13 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
       v.y *= -0.3; v.x *= 0.55; v.z *= 0.55;
       if (v.length() < 0.5) { it.flying = false; m.rotation.x = it.kind === 'bottle' || it.kind === 'can' ? Math.PI / 2 : 0; m.rotation.z = 0; }
     }
+    // People along the path flown this frame (it stopped at a wall, so nobody behind one is hit).
+    const sx = p.x - from.x, sz = p.z - from.z, s2 = sx * sx + sz * sz;
     if (v.length() > 3) for (const per of people()) {
       per.group.getWorldPosition(tmp);
-      if (Math.hypot(tmp.x - p.x, tmp.z - p.z) < 0.45 && p.y > tmp.y && p.y < tmp.y + 1.8) { hit(per, it.from.x, it.from.z, it.byPlayer ? 'throw' : 'debris', k.power); v.multiplyScalar(-0.2); break; }
+      const u = s2 > 1e-9 ? Math.min(1, Math.max(0, ((tmp.x - from.x) * sx + (tmp.z - from.z) * sz) / s2)) : 1;
+      const hx = from.x + sx * u, hz = from.z + sz * u, hy = from.y + (p.y - from.y) * u;
+      if (Math.hypot(tmp.x - hx, tmp.z - hz) < 0.45 && hy > tmp.y && hy < tmp.y + 1.8) { hit(per, it.from.x, it.from.z, it.byPlayer ? 'throw' : 'debris', k.power); v.multiplyScalar(-0.2); break; }
     }
   }
 
@@ -155,7 +180,11 @@ export function createActions(engine, { onHit = () => {}, onHurt = () => {}, onS
     for (const [p, r] of reactions) {
       if (!(r.t > 0)) continue;
       r.t -= dt;
-      if (r.push > 0) { const k = r.push / 0.45; r.push -= dt; p.group.position.x += r.vx * dt * k * 2; p.group.position.z += r.vz * dt * k * 2; }
+      if (r.push > 0) { // pushed back, sliding along whatever stands behind them
+        const k = r.push / 0.45, gp = p.group.position; r.push -= dt;
+        const nx = gp.x + r.vx * dt * k * 2, nz = gp.z + r.vz * dt * k * 2;
+        [gp.x, gp.z] = collide(nx, nz, gp.y, solidsNear(L, nx - 1, nx + 1, nz - 1, nz + 1), 0.24, 1.7);
+      }
       if (r.back > 0 && (r.back -= dt) <= 0 && Math.hypot(P.x - p.group.position.x, P.z - p.group.position.z) < 1.8) {
         p.setAnim?.('punch'); p.lookAt?.(P.x, P.z); onSound('punch'); engine.act('hurt', 0.4); engine.shake(0.12, 0.35);
         onHurt(8 + Math.round(Math.random() * 6), 'fight');

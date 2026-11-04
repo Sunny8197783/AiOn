@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {
   createGame, conditions, recordEvent, fmtClock, hhmm, advance, adjust, spendSlot, buy, pack, unpack, bagLoad,
   usable, check, consume, use, note, speedMul, save, load, checkpoint, restore,
+  migrate, trade, drainCharge, setPocket, pocketLoad, inPocket,
 } from '../dist/game/state.js';
-import { CATALOG, START_HOME, BAG_LIMIT, STORE_ITEMS } from '../dist/game/items.js';
+import { CATALOG, START_HOME, BAG_LIMIT, STORE_ITEMS, POCKET_L, packable } from '../dist/game/items.js';
+import { readFileSync } from 'node:fs';
 
 const martPrices = Object.fromEntries(Object.entries(CATALOG).filter(([, c]) => !c.notSold && !c.atmOnly).map(([id, c]) => [id, c.price]));
 
@@ -24,7 +26,8 @@ test('createGame starts from the spec state and START_HOME', () => {
   assert.deepEqual(G.cond, conditions(7));
   assert.equal(G.know.meetPoint, null);
   assert.deepEqual(G.rel.seoyeon, { trust: 0, contact: null });
-  assert.deepEqual(Object.keys(G.skill), ['radio', 'bag', 'route', 'extinguisher', 'docs']);
+  assert.deepEqual(Object.keys(G.skill), ['radio', 'bag', 'route', 'extinguisher', 'docs', 'info']);
+  assert.deepEqual(G.ledger, []);
   assert.equal(G.checkpoint, null);
   assert.ok(Number.isInteger(createGame().seed), 'random seed when none is given');
   assert.throws(() => createGame({ seed: 'x' }));
@@ -253,4 +256,112 @@ test('a broken leg slows the run for good', () => {
   G.injury = ['leg'];
   assert.equal(speedMul(G), Math.round(base * 0.7 * 100) / 100);
   assert.deepEqual(load(save(G)).injury, ['leg']);
+});
+
+// A save written by the build before skill.info, ledger, charge and pocket existed (tests/fixtures).
+const OLD_SAVE = readFileSync(new URL('./fixtures/save-v2-pre-ledger.json', import.meta.url), 'utf8');
+
+test('migrate: a pre-ledger save and its nested checkpoint still load', () => {
+  const raw = JSON.parse(OLD_SAVE);
+  assert.equal(raw.skill.info, undefined, 'fixture really is the old shape');
+  assert.equal(raw.ledger, undefined);
+  assert.equal(raw.checkpoint.state.skill.info, undefined);
+  const G = load(OLD_SAVE);
+  assert.deepEqual(G.skill.info, []);
+  assert.deepEqual(G.ledger, []);
+  assert.deepEqual(G.checkpoint.state.skill.info, []);
+  assert.deepEqual(G.checkpoint.state.ledger, []);
+  assert.equal(G.skill.bag.length, 1, 'old ladder kept');
+  assert.equal(usable(G, 'radio'), true, 'checked before charges existed: still usable');
+  assert.equal(drainCharge(G, 'radio', 10), 90, 'and counts as full');
+  restore(G);
+  assert.deepEqual(load(save(G)), G);
+  assert.equal(migrate(null), null);
+  assert.deepEqual(load(JSON.stringify({ ...raw, skill: { radio: [] }, checkpoint: null })).skill.info, [], 'any missing ladder is filled');
+  assert.throws(() => load(JSON.stringify({ ...raw, skill: null })), /skill/);
+});
+
+test('validate: charge 0..100, pocket <= bag, ledger rows', () => {
+  const G = createGame({ seed: 2 });
+  const bad = (f) => { const o = JSON.parse(save(G)); f(o); return JSON.stringify(o); };
+  assert.throws(() => load(bad(o => { o.items.flashlight.charge = 150; })), /charge/);
+  assert.throws(() => load(bad(o => { o.items.meds.pocket = 1; })), /pocket/);
+  assert.throws(() => load(bad(o => { o.ledger = [{ day: 'x' }]; })), /ledger/);
+  assert.throws(() => load(bad(o => { o.ledger = {}; })), /ledger/);
+  assert.ok(load(bad(o => { o.items.meds.bag = 1; o.items.meds.pocket = 1; o.items.flashlight.charge = 30; })));
+});
+
+test('check sets charge from the pack; drainCharge runs it down to 0', () => {
+  const G = createGame({ seed: 1 });
+  G.money = 1e6;
+  buy(G, { radio: 1, batteries_aa: 1 }, martPrices);
+  trade(G, { ramen: 1 }, { batteries_old: 1 }, 'trader');
+  check(G, 'radio');
+  assert.equal(G.items.radio.charge, 100, 'a new pack first');
+  assert.equal(G.items.batteries_aa.home, 0);
+  check(G, 'flashlight');
+  assert.equal(G.items.flashlight.charge, 30, 'then the half-used one');
+  assert.equal(G.items.batteries_old.used, 1);
+  assert.equal(check(G, 'flashlight').ok, true);
+  assert.equal(drainCharge(G, 'flashlight', 12.5), 17.5);
+  assert.equal(drainCharge(G, 'flashlight', 50), 0);
+  assert.equal(usable(G, 'flashlight'), false, 'dead batteries: not usable');
+  assert.equal(G.events.filter(e => e.type === 'battery_dead').length, 1);
+  assert.equal(drainCharge(G, 'flashlight', 5), 0, 'a dead device stays at 0');
+  assert.equal(check(G, 'flashlight').ok, false, 'no packs left');
+  buy(G, { batteries_aa: 1 }, martPrices);
+  check(G, 'flashlight');
+  assert.equal(G.items.flashlight.charge, 100, 'a spare pack revives it');
+  assert.throws(() => drainCharge(G, 'water_2l', 1), /batteries/);
+  assert.throws(() => drainCharge(G, 'radio', -1));
+  assert.throws(() => check(G, 'radio', { using: 'water_2l' }), /battery pack/);
+  assert.deepEqual(G.events.filter(e => e.type === 'check').map(e => e.details), [{ id: 'radio', charge: 100 }, { id: 'flashlight', charge: 30 }, { id: 'flashlight', charge: 100 }]);
+});
+
+test('trade is all or nothing and records the barter', () => {
+  const G = createGame({ seed: 1 });
+  G.money = 1e6;
+  buy(G, { bars: 3 }, martPrices);
+  pack(G, 'bars', 2);
+  assert.throws(() => trade(G, { bars: 4 }, { batteries_aa: 1 }, 'trader'), /only 3/);
+  assert.throws(() => trade(G, { bars: 1 }, { nope: 1 }, 'trader'), /unknown item/);
+  assert.throws(() => trade(G, { bars: 1 }, {}, 'trader'));
+  assert.throws(() => trade(G, { bars: 1.5 }, { batteries_aa: 1 }, 'trader'));
+  assert.throws(() => trade(G, { bars: 1 }, { batteries_aa: 1 }, ''));
+  assert.deepEqual(G.items.bars, { home: 1, bag: 2, bought: 3, checked: false, used: 0 }, 'failed trades change nothing');
+  const e = trade(G, { bars: 3 }, { batteries_old: 1 }, 'trader');
+  assert.deepEqual(G.items.bars, { home: 0, bag: 0, bought: 3, checked: false, used: 3 }, 'home first, then the bag');
+  assert.deepEqual(G.items.batteries_old, { home: 1, bag: 0, bought: 0, checked: false, used: 0 });
+  assert.deepEqual(e.details, { give: { bars: 3 }, get: { batteries_old: 1 }, from: 'trader' });
+  assert.equal(e.type, 'trade');
+});
+
+test('front pocket: pocket items only, up to POCKET_L, emptied first when the bag shrinks', () => {
+  const G = createGame({ seed: 1 });
+  G.money = 1e6;
+  buy(G, { powerbank: 4 }, martPrices);
+  pack(G, 'powerbank', 4); pack(G, 'meds'); pack(G, 'water_2l');
+  setPocket(G, 'powerbank', 3);
+  assert.equal(pocketLoad(G), 0.45);
+  assert.throws(() => setPocket(G, 'powerbank', 4), /pocket full/);
+  assert.throws(() => setPocket(G, 'meds', 1), /pocket full/, `${POCKET_L} L is the limit`);
+  assert.throws(() => setPocket(G, 'water_2l', 1), /does not fit/);
+  assert.throws(() => setPocket(G, 'bars', 1), /only 0/);
+  setPocket(G, 'powerbank', 2);
+  setPocket(G, 'meds', 1);
+  assert.equal(inPocket(G, 'meds'), true);
+  unpack(G, 'powerbank', 3);
+  assert.equal(G.items.powerbank.pocket, 1, 'pocket never holds more than the bag');
+  consume(G, 'meds', 1, 'bag');
+  assert.equal(inPocket(G, 'meds'), false);
+  assert.equal('pocket' in G.items.meds, false);
+  assert.deepEqual(load(save(G)), G);
+});
+
+test('fixtures stay at home', () => {
+  const G = createGame({ seed: 1 });
+  buy(G, { blackout_curtain: 1 }, martPrices);
+  assert.equal(packable('blackout_curtain'), false);
+  assert.equal(packable('water_2l'), true);
+  assert.throws(() => pack(G, 'blackout_curtain'), /fixture/);
 });
