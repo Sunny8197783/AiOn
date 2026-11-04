@@ -7,7 +7,8 @@
 // fire 'none'|'large' (a camping-burner fire on stacked cartons in the north-west corner: flames reach the cable
 // tray and sprinkler main, a smoke layer spreads under the slab, nearby evacuees have moved away, a solid blocks it),
 // boardText string[]|null (lines the director pins on the notice board; no text is invented here),
-// ways string[] (open entrances among stairs|ramp|access|east, default all; arrivals and leavers use only these).
+// ways string[] (open entrances among stairs|ramp|access|east, default all; arrivals and leavers use only these),
+// elder 'off'|'on' (304호 어르신 seated on a mat beside the player's spot).
 import { shelterTextures } from './shelter-tex.js';
 import { buildShell, ROOM } from './shelter-shell.js';
 import { buildServices } from './shelter-services.js';
@@ -18,6 +19,7 @@ const FIRE = { x: -18.6, z: -9.2 };
 const STATES = {
   crowd: ['arriving', 'settled', 'leaving'], phase: ['alert', 'calm'], power: ['grid', 'emergency'], fire: ['none', 'large'],
   boardText: [null, ['연무 생활문화센터 지하주차장 · 민방위 대피소']], ways: ENTRANCES,   // ways: any non-empty subset
+  elder: ['off', 'on'],
 };
 // Faulty tube: steady, with a short starter stutter every 9 s (steady when reduceMotion).
 const flicker = (t) => (t % 9 < 1.1 ? (Math.sin(t * 71) * Math.sin(t * 23) > 0 ? 0.95 : 0.08) : 0.9);
@@ -71,12 +73,13 @@ export function buildShelter(kit, people, fx) {
   const fireSolid = { id: 'fire', x0: FIRE.x - 1.0, x1: FIRE.x + 1.2, z0: FIRE.z - 0.9, z1: FIRE.z + 1.0, y0: -1, y1: 3, off: true };
   const solids = [...shell.solids, ...camp.solids, fireSolid];
 
-  const P = (id, label, x, z, kind, r = 1.6) => ({ id, label, x, y: 0, z, r, kind });
+  // desc: what E shows when no chapter handles the point (story/world.js); y: the floor the point is on.
+  const P = (id, label, x, z, kind, r = 1.6, desc, y = 0) => ({ id, label, x, y, z, r, kind, ...(desc && { desc }) });
   const points = [
-    P('fromStairs', '출입구 A · 계단', 2.9, -15.2, 'entrance', 1.3),
-    P('shelterExit', '계단으로 나가기 · 지상', 5, -16.7, 'door', 1.4),
-    P('fromRamp', '출입구 B · 차량 진출입로', 11, 15.0, 'entrance', 1.8),
-    P('fromAccess', '출입구 C · 경사로', -13, -15.2, 'entrance', 1.6),
+    P('fromStairs', '출입구 A · 계단', 2.9, -15.2, 'entrance', 1.3, ['출입구 A 계단. 지상으로 나가는 문은 계단을 올라간 위층참에 있다.']),
+    P('shelterExit', '계단으로 나가기 · 지상', 5.9, -16.85, 'door', 1.3, undefined, 3.4),   // at the exit door on the top landing
+    P('fromRamp', '출입구 B · 차량 진출입로', 11, 15.0, 'entrance', 1.8, ['출입구 B 차량 진출입로. 경사로를 올라가면 차단기 너머가 도로다.']),
+    P('fromAccess', '출입구 C · 경사로', -13, -15.2, 'entrance', 1.6, ['출입구 C 경사로. 계단 없이 오르내릴 수 있는 완만한 길이다.']),
     P('reception', '접수대 · 대피자 명부', RECEPTION.x, RECEPTION.z - 0.85, 'counter', 1.7),
     P('shelterBoard', '대피소 게시판', BOARD.x, BOARD.z + 0.9, 'notice', 1.7),
     P('shelterRadio', '공용 라디오', RADIO.x, RADIO.z - 0.75, 'radio', 1.6),
@@ -95,7 +98,7 @@ export function buildShelter(kit, people, fx) {
   };
 
   // ---- states ----
-  const state = { crowd: 'settled', phase: 'calm', power: 'grid', fire: 'none', boardText: null, ways: ENTRANCES };
+  const state = { crowd: 'settled', phase: 'calm', power: 'grid', fire: 'none', boardText: null, ways: ENTRANCES, elder: 'off' };
   function setState(key, v) {
     if (key === 'boardText') { state.boardText = Array.isArray(v) ? v.map(String) : null; camp.boardMat.map = T.drawBoard(state.boardText); return; }
     if (key === 'ways') {
@@ -108,6 +111,7 @@ export function buildShelter(kit, people, fx) {
     state[key] = v;
     if (key === 'crowd') crowd.setCrowd(v);
     else if (key === 'phase') crowd.setPhase(v);
+    else if (key === 'elder') crowd.setElder(v);
     else if (key === 'fire') {
       const on = v === 'large';
       flames.setLevel(on ? 1 : 0); lick.setLevel(on ? 0.8 : 0); smoke.setDensity(on ? 0.9 : 0);   // smoke thins out over seconds
@@ -132,12 +136,12 @@ export function buildShelter(kit, people, fx) {
     camp.banner.rotation.x = rm ? 0 : Math.sin(t * 0.55) * 0.02 * (0.3 + fan / 14);   // ventilation draught
     ember.emissiveIntensity = state.fire === 'large' ? 0.9 + (rm ? 0 : 0.35 * Math.sin(t * 9.1) * Math.sin(t * 3.7)) : 0;
     flames.update(dt); lick.update(dt); smoke.update(dt, ctx.camera); motes.update(dt, ctx.camera);
-    crowd.update(dt, t, ctx.player);
+    crowd.update(dt, t, ctx.player, ctx.camera);
   }
   crowd.setPhase(state.phase);
 
   return {
-    id: 'shelter', group, env: 'underground', walk: shell.walk, solids, points, spawns,
+    id: 'shelter', group, env: 'underground', walk: shell.walk, solids, points, spawns, ceilings: shell.ceilings,
     npcs: crowd.npcs, states: STATES, setState, update, anchors,
   };
 }

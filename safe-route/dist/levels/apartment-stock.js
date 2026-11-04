@@ -71,10 +71,16 @@ export function buildStock(B, g, dyn) {
     return { id, per, mesh, cap: slots.length };
   });
   B.point('homeStock', '베란다 수납장', -0.75, BF, 8.7, 'stock', 1.6);
+  // The 2 L bottles that overflow onto the floor (after the 16 shelf slots) get a body sized to the row(s) shown;
+  // it is taller than a step, so the player is not walked up onto the bottles.
+  const floorRow = B.solid(0, 0, 0, 0, BF, BF + 0.5); floorRow.off = true; floorRow.noVault = floorRow.noClimb = true;
 
   // counts: { itemId: n } (missing ids -> 0). Shown units = n * per, capped by the slots.
   function setStock(counts = {}) {
     for (const k of kinds) k.mesh.count = Math.max(0, Math.min(k.cap, Math.round((Number(counts[k.id]) || 0) * k.per)));
+    const n = kinds[0].mesh.count - 16, cols = Math.min(12, n);
+    floorRow.off = n <= 0;
+    if (n > 0) Object.assign(floorRow, { x0: -0.32 - (cols - 1) * 0.108 - 0.06, x1: -0.26, z0: (n > 12 ? 9.142 : 9.25) - 0.06, z1: 9.31 });
   }
   return { setStock, ids: kinds.map(k => k.id) };
 }

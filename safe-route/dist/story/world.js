@@ -9,7 +9,7 @@ const has = (G, id) => (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0) > 0;
 // level:point -> lines (or (ctx) => lines). Chapters that handle a point override these.
 const DESC = {
   'apartment:homeSink': (c) => (c.G.day >= 1 ? ['수도꼭지를 돌려도 물이 나오지 않는다. 단수다.'] : ['설거지가 조금 남아 있다. 물은 잘 나온다.']),
-  'apartment:homeWindow': (c) => (c.power ? ['건너편 동 창문마다 불이 켜져 있다. 평소와 같은 저녁 풍경.'] : ['건너편 동이 캄캄하다. 창문 몇 곳에서 손전등 불빛이 흔들린다.']),
+  'apartment:homeWindow': (c) => (c.G.know.curtain ? [c.G.know.curtainSealed ? '암막 커튼 가장자리를 테이프로 막아 두었다. 틈으로 새는 불빛이 없다.' : '암막 커튼이 쳐져 있다. 가장자리 틈으로 빛이 조금 샌다.'] : c.power ? ['건너편 동 창문마다 불이 켜져 있다. 평소와 같은 저녁 풍경.'] : ['건너편 동이 캄캄하다. 창문 몇 곳에서 손전등 불빛이 흔들린다.']),
   'apartment:homeFridge': (c) => (c.power ? ['반찬 통 몇 개와 남은 고기. 냉장고는 잘 돌아간다.'] : ['냉장고가 조용하다. 문을 자주 열면 안의 냉기가 빨리 빠진다.', fact('food_door')?.text].filter(Boolean)),
   'apartment:homeGas': ['레인지 옆 가스 중간밸브. 손잡이가 배관과 나란하면 열림, 직각이면 잠김이다.'],
   'apartment:homeBreaker': ['현관 위 분전반. 누전차단기와 개폐기가 줄지어 있다.'],

@@ -18,7 +18,7 @@ const RESULT = {
   out: '불을 껐습니다', 'retreat-ok': '대피하며 알렸습니다', escalated: '불이 커져 물러났습니다', incomplete: '끝까지 마치지 못했습니다',
   risky: '연기 속으로 바로 나섰습니다', practice: '사용 순서를 익혔습니다', tuned: '공식 방송을 찾아 들었습니다', opened: '라디오를 켜 보았습니다',
   missed: '공식 방송은 찾지 못했습니다', complete: '필요한 것을 다 챙겼습니다', partial: '몇 가지가 빠졌습니다', planned: '경로를 정해 두었습니다',
-  written: '카드를 적어 두었습니다', sorted: '출처를 가려 들었습니다', misled: '소문을 따라갔습니다', checked: '한 번 더 확인했습니다',
+  written: '카드를 적어 두었습니다', sorted: '출처를 가려 들었습니다', misled: '소문을 따라갔습니다', doubted: '확인된 소식도 한 번 더 의심했습니다', checked: '한 번 더 확인했습니다',
 };
 const STAT = { health: '체력', thirst: '갈증', fatigue: '피로', tension: '긴장' };
 const LABEL = { official: '공식 안내', site: '현장 확인', neighbor: '이웃에게 들음', rumor: '소문·미확인', self: '내 기록' };
@@ -62,9 +62,17 @@ const FAIL = {
       facts: ['shelter_know', 'shelter_near', 'bag_take'],
     };
   },
-  exhausted(G) {
+  // detail.why: 'thirst' (default) or 'carry' (walking water home from the water point without a rest).
+  exhausted(G, { why } = {}) {
     const s = G.stats, load = bagLoad(G);
     const water = ['water_500', 'water_2l'].some(id => (G.items[id]?.bag ?? 0) > 0);
+    if (why === 'carry') return {
+      title: '더 걷기 어려울 만큼 지쳤습니다',
+      seen: `그때 피로는 ${word('fatigue', s.fatigue)}, 갈증은 ${word('thirst', s.thirst)} 상태였습니다.`,
+      missed: '무거운 물통을 들고 쉬지 않고 걸었습니다. 물 1리터는 1kg입니다.',
+      next: '급수소에서 돌아올 때는 중간중간 멈춰 서서 숨을 고르고, 접이식 물통으로 나눠 들기',
+      facts: ['bag_days'],
+    };
     return {
       title: '더 걷기 어려울 만큼 지쳤습니다',
       seen: `그때 갈증은 ${word('thirst', s.thirst)}, 피로는 ${word('fatigue', s.fatigue)} 상태였습니다.`,
@@ -151,7 +159,7 @@ export function chapterSummary(G, chapter) {
     const byLabel = Object.entries(LABEL).map(([k, l]) => [l, notes.filter(i => i.label === k).length]).filter(([, n]) => n);
     lines.push(`수첩에 적은 정보 ${notes.length}개 (${byLabel.map(([l, n]) => `${l} ${n}`).join(', ')})`);
   }
-  for (const e of of('help')) lines.push(`${PEOPLE[e.details.who] ?? e.details.who}: ${e.details.what}`);
+  for (const t of new Set(of('help').map(e => `${PEOPLE[e.details.who] ?? e.details.who}: ${e.details.what}`))) lines.push(t);
   for (const e of of('trade')) lines.push(`물물교환(${PEOPLE[e.details.from] ?? e.details.from}): ${cartText(e.details.give)} → ${cartText(e.details.get)}`);
   for (const e of of('ledger')) if (e.details.plan) lines.push(planLine(e.details.plan));
   const dead = of('battery_dead').map(e => itemName(e.details.id));

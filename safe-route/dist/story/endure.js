@@ -1,11 +1,15 @@
 // 3장 버티기 · D+1 ~ D+3. Blackout and water cut. Food safety, the water point, a rumour,
 // a small fire in the corridor. Helping costs rest; refusing costs nothing but the help.
-import { recordEvent, consume, use, usable, adjust } from '../game/state.js';
+import { recordEvent, consume, use, adjust } from '../game/state.js';
 import { ladderStage, recordEncounter, evalExtinguisher } from '../game/drills.js';
 import { chapterSummary } from '../game/debrief.js';
 import { STORE_ITEMS, CATALOG } from '../game/items.js';
 import { applyHome, goOut } from './prep-actions.js';
 import { radioScene, factCard } from './common.js';
+import { storeRumor, barter, knock } from './neighbors.js';
+import { smokeEscape } from './escape.js';
+import { elderSafeEarly } from './elder.js';
+import { carryStep, CARRY } from './strain.js';
 
 const waterId = (G) => ['water_500', 'water_2l'].find(id => (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0) > 0);
 
@@ -19,7 +23,13 @@ function drink(ctx) {
 }
 
 // The body giving out is a soft failure: a neighbour finds 정민, and the day starts over.
-const bodyCheck = (ctx) => () => { const s = ctx.G.stats; if (s.thirst >= 95 || s.health <= 8) ctx.fail('exhausted'); };
+// Injuries are left to roam (dead { why }); exhaustion comes from thirst or from effort (carrying water home).
+const bodyCheck = (ctx, why = 'thirst') => () => {
+  const s = ctx.G.stats;
+  if (s.health <= 0) return;
+  if (s.thirst >= 95) ctx.fail('exhausted', { why: 'thirst' });
+  if (s.fatigue >= 100) ctx.fail('exhausted', { why });
+};
 const onThird = (ctx) => ctx.engine.level?.id === 'apartment' && ctx.engine.player.y > 4;
 
 export async function endure(ctx) {
@@ -30,6 +40,9 @@ export async function endure(ctx) {
   ctx.setLevelState('apartment', 'power', 'off');
   ctx.setLevelState('store', 'power', 'off');
   ctx.setLevelState('store', 'clerk', 'out'); // 이수아 left town the morning after the alert
+  ctx.setLevelState('apartment', 'elder304', 'off');
+  G.know.bagOn = false; // at home the bag sits by the door (older saves may still have it on)
+  ctx.refresh();
   if (ctx.resume !== 'fire') {
     await ctx.skip('D-day 금 밤', 'D+1 토 07:00', '전기는 밤새 돌아오지 않았다. 아침에는 수도꼭지에서도 물이 나오지 않았다.');
     G.day = 1; G.minute = 7 * 60;
@@ -40,6 +53,7 @@ export async function endure(ctx) {
     await morning(ctx);
     await waterTrip(ctx);
     await evening(ctx);
+    await ctx.skip('D+1 토 밤', 'D+2 일 21:40', '하루가 더 지났다. 낮에는 물을 아껴 마시며 집에서 버텼다.');
     ctx.checkpoint('fire');
   }
   await corridorFire(ctx);
@@ -86,7 +100,7 @@ async function morning(ctx) {
     homeDoor: async () => { await ctx.goto('apartment', 'homeEntry'); },
     seoyeonDoor: async () => {
       if (ctx.seoyeonAsk) return void ctx.toast('"이따 봬요."', 'neighbor');
-      if (G.rel.seoyeon.trust < 1) return void ctx.ui.talk({ speaker: '303호', role: '문 너머', lines: ['"누구세요? …아, 302호요. 지금은 좀 바빠서요."'] });
+      if (G.rel.seoyeon.trust < 1) return void await ctx.ui.talk({ speaker: '303호', role: '문 너머', lines: ['"누구세요? …아, 302호요. 지금은 좀 바빠서요."'] });
       const pick = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['아침 라디오에서 들었어요. 행정복지센터 마당에서 비상급수를 한대요. 9시 반부터요.', '저는 계단이 어려워서… 제 것도 한 통 부탁드려도 될까요? 물통은 제 걸 빌려 드릴게요. 대신 충전해 둔 보조배터리 하나 드릴게요.'],
         choices: [{ id: 'yes', label: '같이 받아 올게요' }, { id: 'no', label: '오늘은 제 것만 겨우 들 것 같아요' }] });
       ctx.seoyeonAsk = pick;
@@ -116,7 +130,7 @@ async function waterTrip(ctx) {
   ctx.outdoorEnv = 'day';
   await goOut(ctx, '비상급수시설로', '행정복지센터 마당의 비상급수시설로 갑니다.');
   ctx.objective('물 받기', '행정복지센터 마당 급수대에서 줄을 섭니다.', []);
-  await ctx.roam({ rate: 2, tick: bodyCheck(ctx), on: { water: async () => 'queue' } });
+  await ctx.roam({ rate: 2, tick: bodyCheck(ctx, 'carry'), on: { water: async () => 'queue' } });
   await factCard(ctx, '비상급수시설', ['water_point', 'water_sphere', 'water_hands']);
   ctx.pass(25);
   let carry;
@@ -128,8 +142,20 @@ async function waterTrip(ctx) {
   ctx.engine.player.carrying = 'water';
   adjust(G, 'fatigue', carry > 12 ? 14 : 8);
   ctx.refresh();
-  ctx.objective('집으로', `물 ${carry}리터를 들고 103동 3층까지 돌아갑니다. 무겁다.`, []);
-  await ctx.roam({ rate: 2, tick: () => { bodyCheck(ctx)(); return onThird(ctx) ? 'up' : undefined; }, on: {
+  ctx.objective('집으로', `물 ${carry}리터를 들고 103동 3층까지 돌아갑니다. 무겁다. 지치면 멈춰 서서 숨을 고르세요.`, []);
+  // Effort: walking with the load tires (running more), standing still lets you catch your breath (story/strain.js).
+  const P = ctx.engine.player, check = bodyCheck(ctx, 'carry');
+  let last = { x: P.x, z: P.z }, warned = false, hudT = 0;
+  const strain = (dt) => {
+    const speed = dt > 0 ? Math.hypot(P.x - last.x, P.z - last.z) / dt : 0; last = { x: P.x, z: P.z };
+    if (speed > 8) return; // a door or a teleport, not a step
+    const d = carryStep(dt, speed, carry);
+    adjust(G, 'fatigue', d.fatigue); adjust(G, 'thirst', d.thirst);
+    if ((hudT += dt) > 0.5) { hudT = 0; ctx.refresh(); }
+    if (!warned && G.stats.fatigue >= CARRY.warn) { warned = true; ctx.toast('팔이 떨린다. 잠깐 물통을 내려놓고 숨을 고르자 (멈춰 서기).', 'self', 4600); }
+    else if (warned && G.stats.fatigue < CARRY.warn - 10) warned = false;
+  };
+  await ctx.roam({ rate: 2, tick: (dt) => { strain(dt); check(); return onThird(ctx) ? 'up' : undefined; }, on: {
     elevator: async () => { ctx.toast('엘리베이터가 멈춰 있다. 계단으로.'); },
   } });
   ctx.speedOverride = null;
@@ -158,7 +184,7 @@ async function evening(ctx) {
   ctx.setLevelState('town', 'waterPoint', 'off'); // closed at 17:00: tank, table and E all go
   ctx.setLevelState('apartment', 'windowView', 'dusk');
   ctx.refresh();
-  let visited = false;
+  let visited = false, knocked = false;
   ctx.objective('저녁 · 할 수 있는 일', '편의점에 들러 볼 수도 있고, 집에서 쉴 수도 있습니다. 침대에서 하루를 마칩니다.', [{ text: '바로편의점 (선택)', done: false }, { text: '침대에서 쉬기', done: false }]);
   await ctx.roam({ tick: bodyCheck(ctx), on: {
     homeExitDoor: async () => { await ctx.goto('apartment', 'corridor3F'); },
@@ -170,7 +196,10 @@ async function evening(ctx) {
       await storeEvening(ctx);
       ctx.objective('저녁 · 할 수 있는 일', '집으로 돌아가 침대에서 하루를 마칩니다.', [{ text: '바로편의점 (선택)', done: true }, { text: '침대에서 쉬기', done: false }]);
     },
-    homeBed: async () => 'sleep',
+    homeBed: async () => {
+      if (!knocked) { knocked = true; G.minute = Math.max(G.minute, 21 * 60); ctx.refresh(); await knock(ctx); }
+      return 'sleep';
+    },
   } });
   adjust(G, 'fatigue', -30); adjust(G, 'tension', -8);
   G.day = 2; G.minute = 21 * 60;
@@ -193,16 +222,8 @@ async function storeEvening(ctx) {
       ctx.payoff('cash', '카드가 안 되는 편의점에서 현금으로 건전지와 물을 샀다');
     }
   } else await ctx.ui.talk({ speaker: '정민', role: '지갑', lines: ['현금이 없다. 카드뿐이다. 카드로는 아무것도 살 수 없다.'] });
-  const pick = await ctx.ui.talk({ speaker: '102동 주민', role: '바로편의점 앞', lines: ['여기 주인도 떠났나 봐요. 참, 그 얘기 들었어요? 생활문화센터 대피소가 폐쇄됐대요. SNS에 돌던데… 저도 확실한 건 모르겠어요.'],
-    choices: [{ id: 'spread', label: '큰일이네요. 다른 이웃들한테도 알려야겠어요' }, { id: 'check', label: '어디서 나온 말인지 먼저 확인해 볼게요' }] });
-  recordEvent(G, pick === 'check' ? 'rumor_checked' : 'rumor_spread', {});
-  ctx.note('SNS: 생활문화센터 대피소 폐쇄? (출처 불명)', 'rumor', 'store');
-  if (pick === 'check') {
-    const heard = usable(G, 'radio') ? await radioScene(ctx, 'rumor') : null;
-    await ctx.ui.talk({ speaker: heard ? '재난방송' : '행정복지센터 게시판(주민의 휴대폰 사진)', role: '공식 안내', lines: ['생활문화센터 대피소는 정상 운영 중입니다. 확인되지 않은 정보에 주의해 주십시오. (가상 안내)'] });
-    ctx.note('생활문화센터 대피소 정상 운영 (공식 안내로 확인)', 'official');
-  }
-  await factCard(ctx, '소문을 만났을 때', ['info_rumor', 'shelter_rumor', 'info_harm']);
+  await storeRumor(ctx); // story/neighbors.js: judge the claim by its source, then spread or check
+  await barter(ctx);
   recordEvent(G, 'help', { who: 'clerk', what: '가게를 닫으며 쪽지와 현금 통을 남겨 이웃이 필요한 물건을 가져가게 했다' });
   G.know.clerkLeft = true;
 }
@@ -218,8 +239,14 @@ async function corridorFire(ctx) {
   await ctx.goto('apartment', 'home', 'interiorDark');
   ctx.refresh();
   ctx.audio.fire(0.4);
-  await ctx.caption('복도에서 타는 냄새가 난다. 문틈으로 주황빛이 흔들린다.', null, 3200);
-  let size = 'small', t = 0, shouted = false, resolved = null;
+  // Butterfly (story/elder.js): if 어르신 came down with someone on D-day, she knocks the moment it starts.
+  const knocked = elderSafeEarly(G.know);
+  if (knocked) {
+    await ctx.caption('쾅쾅— "302호! 302호! 내가 초를 넘어뜨렸어요! 불이야!" 304호 어르신이 문을 두드린다.', '304호 어르신', 4200);
+    ctx.payoff('elder', '어르신이 먼저 문을 두드려, 불이 작을 때 알았다');
+  } else await ctx.caption('복도에서 타는 냄새가 난다. 문틈으로 주황빛이 흔들린다.', null, 3200);
+  let size = 'small', t = 0, shouted = knocked, resolved = null;
+  const growAt = knocked ? 45 : 28;
   const grow = () => { if (size === 'small' && !resolved) { size = 'large'; ctx.setLevelState('apartment', 'hallFire', 'large'); ctx.setLevelState('apartment', 'smoke', 0.7); ctx.audio.fire(0.9); ctx.toast('불이 상자 더미로 번졌다. 천장까지 닿을 것 같다.', 'site'); } };
   ctx.objective('복도의 불', '판단하세요. 작은 불이면 소화기로, 커졌다면 알리고 대피합니다.', []);
   const fight = async () => {
@@ -237,17 +264,21 @@ async function corridorFire(ctx) {
     if (ev.result === 'escalated') { ctx.audio.fire(0); ctx.fail('fire'); }
     grow();
   };
+  // Leaving is a short walk down through the smoke (story/escape.js), then 박 소장 in the lobby.
   const retreat = async () => {
     resolved = 'retreat';
-    await factCard(ctx, '대피하며 알리기', ['fire_shout', 'fire_119', 'fire_lift', 'fire_big']);
-    ctx.audio.fire(0);
-    ctx.setLevelState('apartment', 'hallFire', 'out');
     recordEvent(G, 'fire_retreat', { size });
+    await factCard(ctx, '대피하며 알리기', ['fire_shout', 'fire_119', 'fire_lift', 'fire_big']);
+    ctx.engine.setControls(true); // the escape is its own roam, inside this handler's dialog pause
+    await smokeEscape(ctx, { size, grow: () => { ctx.setLevelState('apartment', 'hallFire', 'large'); ctx.setLevelState('apartment', 'smoke', 0.75); ctx.audio.fire(0.9); } });
+    ctx.engine.setControls(false);
+    ctx.audio.fire(0);
+    ctx.setLevelState('apartment', 'hallFire', 'out'); ctx.setLevelState('apartment', 'smoke', 0.1);
     await ctx.ui.talk({ speaker: '박영수 소장', role: '1층', lines: ['다들 내려왔죠? 119에 신고했어요. 소방대가 금방 껐대요. 304호 어르신도 무사하시고요.'] });
     return 'retreat';
   };
   // The fire spreads only while the player is free to act; dialogs and the drill have their own pace.
-  await ctx.roam({ rate: 0, tick: (dt) => { if (!resolved && ctx.engine.controlsEnabled && (t += dt) > 28) grow(); }, on: {
+  await ctx.roam({ rate: 0, tick: (dt) => { if (!resolved && ctx.engine.controlsEnabled && (t += dt) > growAt) grow(); }, on: {
     homeExitDoor: async () => { await ctx.goto('apartment', 'corridor3F'); },
     hallFire: async () => {
       const pick = await ctx.ui.talk({ speaker: '복도', role: size === 'small' ? '택배 상자에 붙은 작은 불' : '천장까지 닿는 불길', lines: [size === 'small' ? '304호 앞 택배 상자 위로 촛불이 넘어져 있다. 불길은 아직 작다.' : '불길이 천장에 닿았다. 연기가 복도를 채운다.'],

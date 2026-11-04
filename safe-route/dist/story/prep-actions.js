@@ -1,8 +1,8 @@
 // The six preparation actions, each played in 3D (walk there, look, decide).
-import { buy, pack, unpack, check, consume, recordEvent } from '../game/state.js';
+import { buy, pack, unpack, check, consume, use, recordEvent } from '../game/state.js';
 import { routeOptions } from '../game/routes.js';
 import { evalBag, recordEncounter, ladderStage, BAG_GOALS } from '../game/drills.js';
-import { CATALOG, MART_SECTIONS, BAG_LIMIT } from '../game/items.js';
+import { CATALOG, MART_SECTIONS, BAG_LIMIT, packable } from '../game/items.js';
 import { fact } from '../game/facts.js';
 
 export const SEOYEON_CARD = ['보행 보조기를 씁니다', '평지와 완만한 경사로는 혼자 갑니다', '계단과 가파른 내리막은 혼자 내려가지 않습니다', '보조기와 떨어지지 않습니다', '도움이 필요하면 제가 말합니다'];
@@ -47,9 +47,10 @@ export async function goOut(ctx, title, body) {
   }, tick: () => (ctx.engine.level?.id === 'town' ? 'out' : undefined) });
 }
 
-// What the bag UI lists: everything at home or already packed. ready = usable now (checked, or needs no check).
+// What the bag UI lists: everything at home or already packed that can go in a bag (not the curtain).
+// ready = usable now (checked, or needs no check).
 export function bagItems(G, withTips = false) {
-  return Object.entries(G.items).filter(([id, v]) => CATALOG[id] && v.home + v.bag > 0).map(([id, v]) => ({ id, name: CATALOG[id].name, weightKg: CATALOG[id].weightKg, volumeL: CATALOG[id].volumeL,
+  return Object.entries(G.items).filter(([id, v]) => packable(id) && v.home + v.bag > 0).map(([id, v]) => ({ id, name: CATALOG[id].name, weightKg: CATALOG[id].weightKg, volumeL: CATALOG[id].volumeL,
     home: v.home, bag: v.bag, tip: withTips ? fact(CATALOG[id].facts?.[0])?.text ?? '' : '', tags: [CATALOG[id].category, CATALOG[id].risk].filter(Boolean), ready: !CATALOG[id].needsCheck || !!v.checked }));
 }
 
@@ -270,7 +271,7 @@ async function talkSeoyeon(ctx) {
     const b = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['건전지 있으세요? 저 두 팩 사 놨는데 한 팩 나눠 드릴까요?'], choices: [{ id: 'yes', label: '고마워요, 받을게요' }, { id: 'no', label: '괜찮아요' }] });
     if (b === 'yes') { G.items.batteries_aa = { home: 0, bag: 0, bought: 0, checked: false, used: 0, ...(G.items.batteries_aa || {}) }; G.items.batteries_aa.home += 1; ctx.event('gift', { from: 'seoyeon', item: 'batteries_aa' }); }
   }
-  await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['내일 저녁엔 병원 진료가 있어서 좀 늦게 들어와요. 무슨 일 있으면 문자 주세요.'] });
+  await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['금요일 저녁엔 병원 진료가 있어서 좀 늦게 들어와요. 무슨 일 있으면 문자 주세요.'] });
   ctx.note('서연(303호): 문자로 연락. 출입구 상황은 확인한 것과 못 한 것을 나눠서.', 'neighbor', 'apartment');
   ctx.setLevelState('apartment', 'seoyeonDoor', 'closed');
 }
@@ -289,6 +290,73 @@ async function talkClerk(ctx) {
   await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['무슨 일 있으면 가게로 오세요. 근데 저도 언제까지 일할지는 몰라요. 본가가 지방이라서요.'] });
   G.rel.clerk.contact = 'store'; G.rel.clerk.trust += 1;
   ctx.note('수아: 건전지 내일 오전 입고 예정(확실하지 않음). 정전 시 현금만 받을 수도 있음.', 'neighbor', 'store');
+}
+
+// Water in big pots before the taps stop (home_tub). Shared by '집 안 대비' and the D-1 evening.
+export async function fillWater(ctx) {
+  const { G } = ctx;
+  if (G.know.tubFilled) return void ctx.toast('큰 통과 냄비에 물을 받아 두었다.');
+  const pick = await ctx.ui.talk({ speaker: '주방', role: '단수 대비', lines: ['단수에 대비해 큰 통과 냄비에 물을 받아 둘까? 씻거나 변기 물을 내리는 데 쓸 수 있다.'], choices: [{ id: 'yes', label: '받아 둔다' }, { id: 'no', label: '그만둔다' }] });
+  if (pick !== 'yes') return false;
+  G.know.tubFilled = true; recordEvent(G, 'tub_filled', {}); ctx.toast(ctx.factLine('home_tub'), 'official', 6000);
+  return true;
+}
+
+// 집 안 대비 (design M4a): the blackout curtain on the living-room glass with its edges taped (night_lights),
+// water put by early (home_tub), and the dates on the stored food read (bag_nocook). Tape seals the curtain
+// edges against light only; the game never teaches taping windows as protection.
+export async function doHome(ctx) {
+  const { G } = ctx;
+  const done = { window: false, water: !!G.know.tubFilled, stock: false };
+  const curtain = () => owned(G, 'blackout_curtain');
+  const steps = () => [{ text: curtain() ? '거실 창: 암막 커튼 달기' : '거실 창: 불빛이 새는지 살피기', done: done.window },
+    { text: '주방: 큰 통·냄비에 물 받아 두기', done: done.water }, { text: '베란다 수납장: 비상식량 기한 확인', done: done.stock }];
+  const show = () => ctx.objective('집 안 대비', '집 안을 돌며 하나씩 해 둡니다. 다 마치면 달력(계획판)에서 끝냅니다.', steps());
+  const finished = () => (done.window && done.water && done.stock ? 'done' : undefined);
+  show();
+  await ctx.roam({ on: {
+    homeWindow: async () => {
+      if (done.window) return void ctx.toast(G.know.curtain ? '암막 커튼을 달아 두었다.' : '창은 살펴보았다.');
+      done.window = true;
+      if (!curtain()) {
+        await ctx.ui.talk({ speaker: '거실 창', role: '집 안 대비', lines: ['지금 커튼은 얇아서 밤에 불을 켜면 밖에서 다 비친다.', '연무마트 생활용품 코너에 암막 커튼이 있었다.', fact('night_lights').text] });
+        show(); return finished();
+      }
+      use(G, 'blackout_curtain');
+      G.know.curtain = true;
+      ctx.setLevelState('apartment', 'curtain', 'hung');
+      let sealed = false;
+      if (owned(G, 'tape')) {
+        const pick = await ctx.ui.talk({ speaker: '거실 창', role: '암막 커튼', lines: ['암막 커튼을 거실 창에 달았다. 가장자리 틈으로 불빛이 조금 샐 것 같다.'],
+          choices: [{ id: 'tape', label: '청테이프로 커튼 가장자리를 창틀에 붙인다' }, { id: 'no', label: '이대로 둔다' }] });
+        if (pick === 'tape') { use(G, 'tape'); sealed = true; G.know.curtainSealed = true; ctx.setLevelState('apartment', 'curtain', 'sealed'); }
+      } else await ctx.ui.talk({ speaker: '거실 창', role: '암막 커튼', lines: ['암막 커튼을 거실 창에 달았다. 가장자리 틈으로 불빛이 조금 샌다. 테이프가 있으면 막을 수 있겠다.'] });
+      recordEvent(G, 'home_ready', { curtain: true, sealed });
+      ctx.toast(fact('night_lights').text, 'official', 6000);
+      show(); return finished();
+    },
+    homeSink: async () => { if (done.water) return void ctx.toast('큰 통과 냄비에 물을 받아 두었다.'); if (await fillWater(ctx)) { done.water = true; show(); return finished(); } },
+    homeStock: async () => {
+      if (done.stock) return void ctx.toast('비상식량 기한은 확인했다.');
+      done.stock = true; G.know.expiryChecked = true;
+      const old = (G.items.old_bars?.home ?? 0) + (G.items.old_bars?.bag ?? 0);
+      recordEvent(G, 'expiry_checked', { old });
+      if (!old) { await ctx.ui.talk({ speaker: '베란다 수납장', role: '기한 확인', lines: ['통조림과 즉석밥의 날짜를 하나씩 확인했다. 기한이 지난 것은 없다.', fact('bag_nocook').text] }); show(); return finished(); }
+      const pick = await ctx.ui.talk({ speaker: '베란다 수납장', role: '기한 확인', lines: [`안쪽에서 작년 비상가방에 넣어 두었던 건빵 ${old}봉이 나왔다. 날짜를 보니 기한이 한참 지났다.`, fact('bag_nocook').text],
+        choices: [{ id: 'toss', label: '기한 지난 건빵은 버린다' }, { id: 'keep', label: '일단 둔다' }] });
+      if (pick === 'toss') {
+        for (const where of ['home', 'bag']) { const n = G.items.old_bars[where]; if (n > 0) consume(G, 'old_bars', n, where); }
+        recordEvent(G, 'old_bars_tossed', { n: old });
+        ctx.toast('기한 지난 건빵을 정리했다. 다음에 장을 보면 새것으로 채워 두자.', 'self');
+      }
+      show(); return finished();
+    },
+    homePlanner: async () => {
+      const pick = await ctx.ui.talk({ speaker: '집 안 대비', role: '달력', lines: ['이 정도로 마칠까?'], choices: [{ id: 'yes', label: '마친다' }, { id: 'no', label: '조금 더 한다' }] });
+      if (pick === 'yes') return 'done';
+    },
+  } });
+  ctx.event('home_done', { ...done, curtain: !!G.know.curtain, sealed: !!G.know.curtainSealed });
 }
 
 export async function doBag(ctx) {

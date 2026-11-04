@@ -1,7 +1,7 @@
 // 1장 준비 · D-2 수요일 18:30 ~ D-1 목요일 밤. Six time slots, more things to do than fit.
 import { spendSlot, usable, adjust } from '../game/state.js';
-import { CATALOG } from '../game/items.js';
-import { doMart, doShelterCheck, doEquip, doDocs, doNeighbors, doBag, goHome, applyHome } from './prep-actions.js';
+import { doMart, doShelterCheck, doEquip, doDocs, doNeighbors, doBag, doHome, fillWater, goHome, applyHome } from './prep-actions.js';
+import { stockLook, lookAlbum } from './common.js';
 
 // Slot start times: [day, minute]. Slot 0 is tonight; slots 1-5 are tomorrow.
 const SLOT_AT = [[-2, 18 * 60 + 30], [-1, 9 * 60], [-1, 11 * 60], [-1, 13 * 60 + 30], [-1, 15 * 60 + 30], [-1, 17 * 60 + 30], [-1, 19 * 60 + 30]];
@@ -14,6 +14,7 @@ export const ACTIONS = [
   { id: 'docs', label: '서류·연락처 정리', cost: 1, icon: '🗂', desc: '비상연락카드를 쓰고 중요 서류 사본을 만든다.' },
   { id: 'neighbors', label: '이웃과 비상 연락 정하기', cost: 1, icon: '🤝', desc: '303호 서연, 관리사무소 박 소장, 편의점 수아와 이야기한다.' },
   { id: 'bag', label: '비상가방 꾸리기', cost: 1, icon: '🎒', desc: '집에 있는 물품 가운데 들고 나갈 것을 배낭에 담아 현관에 둔다.' },
+  { id: 'home', label: '집 안 대비', cost: 1, icon: '🏠', desc: '창에 암막 커튼을 달고(사 두었다면) 가장자리를 테이프로 막는다. 물을 미리 받아 두고, 비상식량 기한을 확인한다.' },
   { id: 'rest', label: '휴식', cost: 1, icon: '🛏', desc: '쉬면서 피로와 긴장을 덜어 낸다.' },
 ];
 
@@ -81,6 +82,7 @@ async function runAction(ctx, action, slot) {
     case 'docs': await doDocs(ctx); break;
     case 'neighbors': await doNeighbors(ctx); break;
     case 'bag': await doBag(ctx); break;
+    case 'home': await doHome(ctx); break;
     case 'rest':
       await ctx.card({ kind: 'info', title: '휴식', meta: SLOT_LABEL[slot], body: ['휴대폰을 내려놓고 잠깐 눈을 붙였다. 몸이 조금 가벼워졌다.'], actions: [{ id: 'ok', label: '계속', primary: true }] });
       adjust(G, 'fatigue', -25); adjust(G, 'tension', -12);
@@ -98,10 +100,7 @@ function homeFree(ctx) {
   return {
     homeWindow: async () => { await ctx.ui.talk({ speaker: '창밖', role: '연무동', lines: [ctx.outdoorEnv === 'day' ? '평소처럼 버스가 다닌다. 마트 주차장 쪽에 차가 많다.' : '건너편 동의 불빛이 하나둘 켜진다. 평소와 다를 것 없어 보인다.'] }); },
     homeFridge: async () => { await ctx.ui.talk({ speaker: '냉장고', role: '주방', lines: ['반찬 통 네 개, 어제 남은 익힌 고기 한 통. 전기가 끊기면 오래 버티지 못하는 것들이다.'] }); },
-    homeStock: async () => {
-      const lines = Object.entries(G.items).filter(([, v]) => v.home > 0).map(([id, v]) => `${CATALOG[id]?.name ?? id} ${v.home}${CATALOG[id]?.unit ?? ''}${CATALOG[id]?.needsCheck && !v.checked ? ' (아직 점검 안 함)' : ''}`);
-      await ctx.ui.talk({ speaker: '베란다 수납장', role: '집 비축품', lines: [lines.join(' · ') || '비어 있다.'] });
-    },
+    homeStock: () => stockLook(ctx),
     homeBed: async () => { ctx.toast('아직 잘 시간이 아니다.'); },
     homeDesk: async () => {
       if (G.know.shelterLocated) return void ctx.toast('지도앱에 생활문화센터 대피소를 저장해 두었다.');
@@ -131,12 +130,15 @@ async function eveningBeforeAlert(ctx) {
   show();
   await ctx.roam({ doors: false, on: {
     ...homeFree(ctx),
-    homeSink: async () => {
-      if (G.know.tubFilled) return void ctx.toast('큰 통과 냄비에 물을 받아 두었다.');
-      const pick = await ctx.ui.talk({ speaker: '주방', role: '단수 대비', lines: ['단수에 대비해 큰 통과 냄비에 물을 받아 둘까? 씻거나 변기 물을 내리는 데 쓸 수 있다.'], choices: [{ id: 'yes', label: '받아 둔다' }, { id: 'no', label: '그만둔다' }] });
-      if (pick === 'yes') { G.know.tubFilled = true; ctx.event('tub_filled', {}); ctx.toast(ctx.factLine('home_tub'), 'official', 6000); show(); }
+    homeSink: async () => { if (await fillWater(ctx)) show(); },
+    homeBed: async () => {
+      // A quiet night at home: the album on the shelf, once, before sleep.
+      if ((G.items.photo_album?.home ?? 0) > 0 && !G.know.albumSeen) {
+        const pick = await ctx.ui.talk({ speaker: '침대', role: '잠들기 전에', lines: ['책장에 가족사진 앨범이 꽂혀 있다.'], choices: [{ id: 'look', label: '앨범을 넘겨 보고 잔다' }, { id: 'sleep', label: '그냥 잔다' }] });
+        if (pick === 'look') await lookAlbum(ctx);
+      }
+      return 'sleep';
     },
-    homeBed: async () => 'sleep',
   } });
   await ctx.skip('D-1 목 밤', 'D-day 금 19:30', '다음 날, 회사는 오후 4시에 문을 닫았다. 정민은 일찍 집에 들어와 저녁을 먹었다.');
   G.day = 0; G.minute = 19 * 60 + 30;

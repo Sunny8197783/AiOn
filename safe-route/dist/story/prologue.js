@@ -1,6 +1,7 @@
 // 프롤로그 · D-3 화요일 17:30 · 한결물류 연무센터 운영팀.
 // Signals pile up at work. None of them proves a war; the player sorts what is known from what is guessed.
 import { FONT } from '../engine/kit.js';
+import { recordEncounter } from '../game/drills.js';
 
 const SIGNALS = [
   { id: 'cancel', from: '운영 대시보드', meta: '사내 데이터 · 17:25 집계', text: '오늘 배송 취소 접수 1,284건. 지난주 같은 요일의 3.2배입니다.', answer: 'fact',
@@ -57,15 +58,19 @@ export async function prologue(ctx) {
         if (sorted) return void ctx.toast('이미 확인했습니다. 팀장과 이야기해 보세요.');
         await ctx.ui.card({ kind: 'notice', title: '오늘 들어온 신호 다섯 가지', meta: '무엇이 확인된 것이고 무엇이 짐작일까?',
           body: ['각 신호를 확인된 사실 · 추정·해석 · 소문·미확인 가운데 하나로 나눠 보세요.', '정답보다 "어떻게 알게 됐는가"가 중요합니다.'], actions: [{ id: 'ok', label: '나눠 보기', primary: true }] });
+        let right = 0;
         for (const s of SIGNALS) {
           const pick = await ctx.ui.talk({ speaker: s.from, role: s.meta, lines: [s.text], choices: Object.entries(LABELS).map(([id, label]) => ({ id, label })) });
           const ok = pick === s.answer;
+          right += ok ? 1 : 0;
           ctx.event('signal_sorted', { id: s.id, pick, ok });
           if (ok) ctx.toast(`맞아요 · ${LABELS[s.answer]}`, 'self', 2200); // only a miss stops to explain
           else await ctx.ui.talk({ speaker: `"${LABELS[s.answer]}"에 가깝습니다`, role: LABELS[s.answer], lines: [s.why] });
           if (s.answer === 'fact') ctx.note(s.text, 'site');
         }
         sorted = SIGNALS.length;
+        // The first of the 정보 가려 듣기 encounters (guided): the rumours of D+3 and D+12 build on it.
+        recordEncounter(G, 'info', right >= SIGNALS.length - 1 ? 'sorted' : 'checked');
         ctx.setLevelState('office', 'dashboard', dashboardCanvas(3));
         ctx.setLevelState('office', 'alerts', 3);
         ctx.objective('팀장과 이야기하기', '윤 팀장이 자리에 있습니다.', [{ text: '대시보드 확인', done: true }, { text: '팀장과 이야기', done: false }, { text: '퇴근', done: false }]);

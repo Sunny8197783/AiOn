@@ -1,12 +1,14 @@
 // Traffic: three procedural vehicle types (sedan, SUV, 1t box truck) drawn as instanced parts with
 // clear-coat paint tinted per car, parked cars in every marked bay row, moving cars on LANES that follow
-// each other (IDM), stop at red/amber and for the player, signal heads and pedestrian signals that run
-// the CYCLE from town-plan, headlights and road glow at night. Moving cars carry live solids.
+// each other (IDM), stop at red/amber, for people on the road (player and crowd, ctx.peds) and short of a
+// zebra someone is on, signal heads and pedestrian signals that run the CYCLE from town-plan, headlights
+// and road glow at night. Moving cars carry live solids.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CROSSWALKS, ROADS } from '../game/townmap.js';
 import { LANES, LANE_SPAN, CURB, signalAt } from './town-plan.js';
 import { yawTo } from './town-util.js';
+import { zebraZones, busyZebras } from './town-geo.js';
 
 const NG = (g) => (g.index ? g.toNonIndexed() : g);
 const merge = (list) => mergeGeometries(list.map(NG));
@@ -56,10 +58,12 @@ function vehicleGeo(T) {
 }
 
 // Rows of marked bays (same lines as town-ground): [x0, x1, zLine, depth, step, kind]
+// The 102/101 rows stop short of the entrance canopies (x 84..92); trucks back onto the dock face (z -59.1).
 const ROWS = [[-35, 3, -22, 5, 2.5], [6, 40, -51.5, 5, 2.5], [6, 40, -10.5, -5, 2.5], [6, 40, -31, 5, 2.5], [6, 40, -31, -5, 2.5],
-  [74.5, 82, -10.5, -5.5, 2.5], [92, 126, -10.5, -5.5, 2.5], [104.4, 123.6, -60, 6, 3.2, 'truck'], [-124, -90, 59.5, -5, 2.5],
-  [60, 126, 13.5, 5, 2.5], [62, 116, 57, -5, 2.5], [62, 116, 85, -5, 2.5], [14, 40, 51.5, -5, 2.5], [14, 40, 22.5, 5, 2.5]];
-const KEEP_CLEAR = [{ x0: -20.5, x1: -11.5, z0: -23, z1: -16 }, { x0: -9.5, x1: -5.5, z0: -23, z1: -16 }];
+  [74.5, 82, -10.5, -5.5, 2.5], [92, 126, -10.5, -5.5, 2.5], [104.4, 123.6, -59.1, 6, 3.2, 'truck'], [-124, -90, 59.5, -5, 2.5],
+  [60, 126, 13.5, 5, 2.5], [62, 84, 57, -5, 2.5], [92, 116, 57, -5, 2.5], [62, 84, 85, -5, 2.5], [92, 116, 85, -5, 2.5], [14, 40, 51.5, -5, 2.5], [14, 40, 22.5, 5, 2.5]];
+const KEEP_CLEAR = [{ x0: -20.5, x1: -11.5, z0: -23, z1: -16 }, { x0: -9.5, x1: -5.5, z0: -23, z1: -16 }, { x0: 83.5, x1: 92.5, z0: 51, z1: 58 }, { x0: 83.5, x1: 92.5, z0: 79, z1: 86 }];
+const YIELD = 2.4; // a person this close to a lane's centre line (on or stepping onto it) stops the cars coming at them
 const PALETTE = [['#f2f2ef', 35], ['#8d9196', 20], ['#16181b', 15], ['#c4c7ca', 12], ['#1f2f4f', 8], ['#8e1f22', 4], ['#c9b89a', 3], ['#2f4a3a', 3]];
 
 export function buildTraffic(kit) {
@@ -206,19 +210,33 @@ export function buildTraffic(kit) {
     }
     return s;
   }
-  const _beam = new THREE.Matrix4(), _fwd = new THREE.Matrix4();
+  const _beam = new THREE.Matrix4(), _fwd = new THREE.Matrix4(), inLane = [], zebra = [];
+  // Zebra crossings (town-geo) and, per lane, the indices of the ones on its road; busy: someone is on it now.
+  const ZONES = zebraZones(CROSSWALKS, ROADS), ZEBRA = LANES.map(lane => {
+    const road = lane.axis === 'x' ? ROADS[0] : ROADS.find(r => r.z1 - r.z0 > r.x1 - r.x0 && lane.c > r.x0 && lane.c < r.x1);
+    return CROSSWALKS.map((c, k) => (c.road === road.id ? k : -1)).filter(k => k >= 0);
+  });
+  const busy = new Set(), onFoot = [];
   function update(dt, t, ctx = {}) {
     const env = ctx.env;
     power = ctx.power !== false && env !== 'blackout';
     const isNight = env === 'night' || env === 'blackout' || env === 'dusk';
     if (isNight !== night) { night = isNight; lampMat.emissiveIntensity = night ? 3 : 0.25; }
     beams.visible = night && mode !== 'none';
-    const s = setLamps(t), pl = ctx.player;
+    const s = setLamps(t), pl = ctx.player, peds = ctx.peds || [];
+    onFoot.length = 0; if (pl && pl.y < 0.6) onFoot.push(pl); for (const p of peds) onFoot.push(p);
+    busyZebras(ZONES, onFoot, busy);
     for (let li = 0; li < LANES.length; li++) {
       const lane = LANES[li], cars = pool.filter(c => c.lane === li && c.active).sort((a, b) => a.u - b.u);
       const stopsU = lane.stops.map(x => x * lane.dir).sort((a, b) => a - b);
       const light = power ? s[lane.group] : 'green';
-      const pu = pl && pl.y < 0.6 && Math.abs((lane.axis === 'x' ? pl.z : pl.x) - lane.c) < 1.7 ? (lane.axis === 'x' ? pl.x : pl.z) * lane.dir : null;
+      // people on this lane, as lane coordinates u (the player only when on the road, not up on the curb)
+      inLane.length = 0;
+      if (pl && pl.y < 0.6 && Math.abs((lane.axis === 'x' ? pl.z : pl.x) - lane.c) < YIELD) inLane.push((lane.axis === 'x' ? pl.x : pl.z) * lane.dir);
+      for (const p of peds) if (Math.abs((lane.axis === 'x' ? p.z : p.x) - lane.c) < YIELD) inLane.push((lane.axis === 'x' ? p.x : p.z) * lane.dir);
+      // anyone on a zebra of this road: wait at its stop line (1.2 m short of the stripes) until it is clear
+      zebra.length = 0;
+      for (const k of ZEBRA[li]) if (busy.has(k)) zebra.push(CROSSWALKS[k].at * lane.dir - 3.2);
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i], lead = cars[i + 1] || (cars.length > 1 ? { u: cars[0].u + 2 * LANE_SPAN, v: cars[0].v, len: cars[0].len } : null);
         const front = c.u + c.len / 2;
@@ -228,7 +246,8 @@ export function buildTraffic(kit) {
           if (d < 80 && (light === 'red' || d > c.v * c.v / 8 + 2) && d < gap) { gap = Math.max(0.05, d); vl = 0; }
           break;
         }
-        if (pu !== null) { const d = pu - front - 1.4; if (d > -2.5 && d < 30 && d < gap) { gap = Math.max(0.05, d); vl = 0; } }
+        for (const pu of inLane) { const d = pu - front - 1.4; if (d > -2.5 && d < 30 && d < gap) { gap = Math.max(0.05, d); vl = 0; } }
+        for (const su of zebra) { const d = su - front; if (d > -0.5 && d < 40 && d < gap) { gap = Math.max(0.05, d); vl = 0; } }
         const dv = c.v - vl, sStar = 1.6 + Math.max(0, c.v * 1.2 + c.v * dv / (2 * Math.sqrt(2.2 * 3.2)));
         const acc = Math.max(-9, 2.2 * (1 - (c.v / c.v0) ** 4 - (sStar / Math.max(gap, 0.05)) ** 2));
         c.v = Math.max(0, c.v + acc * dt); c.u += c.v * dt;

@@ -50,10 +50,6 @@ export function flat(r, y, material, receive = true) {
   m.receiveShadow = receive; m.castShadow = false;
   return m;
 }
-// Fence line -> blocking AABB (0.4 m thick, 2 m tall), ends padded so corners close.
-export function lineSolid([x0, z0, x1, z1], t = 0.2, y0 = -0.5, y1 = 2) {
-  return { x0: Math.min(x0, x1) - t, x1: Math.max(x0, x1) + t, z0: Math.min(z0, z1) - t, z1: Math.max(z0, z1) + t, y0, y1 };
-}
 export const rectSolid = (r, y0 = -0.5, y1 = 3, extra = {}) => ({ x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1, y0, y1, ...extra });
 
 // Shared wind uniforms. sway() patches a material so vertices move with height above their origin.

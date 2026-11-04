@@ -4,15 +4,17 @@
 import * as THREE from 'three';
 import { FH } from './apartment-parts.js';
 import { FONT } from '../engine/kit.js';
+import { STAIR, tread, flightRamps } from './apartment-geo.js';
 
+export { STAIR };
 const yOf = (n) => FH * (n - 1);
-export const STAIR = { x0: 3.4, x1: 6.6, laneA: [5.1, 6.6], laneB: [3.4, 4.9], zLand: 1.4, zMid: 3.6, zEnd: 5.0, top: 11.2 };
 
 export function buildLobby(B, g) {
   const { kit, M } = B;
   g.add(kit.slab(10, 0.2, 6.6, M.lobbyFloor, { x: 4, y: -0.2, z: -3.3 }));
   B.floor(-1, 9, -6.5, 0, 0);
   g.add(kit.slab(10.2, 0.08, 6.7, M.ceiling, { x: 4, y: 2.6, z: -3.3 }));
+  B.ceiling(-1, 9, -6.5, 0, 2.6);
   g.add(kit.slab(10.6, 0.45, 7.0, M.concrete, { x: 4, y: 2.68, z: -3.45 })); // roof of the entrance volume
   B.wallX(g, -1, -6.5, 0, 0, 2.6, M.lobbyWall, { side: 1 });
   const win = [{ a: -5.2, b: -3.0, y0: 0.95, y1: 2.0 }];
@@ -78,7 +80,7 @@ export function buildLobby(B, g) {
   g.add(kit.box(0.32, 0.5, 0.1, M.red, { x: 6.2, y: 1.0, z: -0.15 }));
   g.add(kit.cyl(0.07, 0.07, 0.04, M.metal, { x: 6.2, y: 1.35, z: -0.2, rx: Math.PI / 2 }));
   g.add(kit.cyl(0.035, 0.035, 0.03, B.redLamp ||= kit.lit('emergency', B.glowMat('#ff2a1a', 3), 3), { x: 6.2, y: 1.52, z: -0.2 }));
-  for (const x of [0, 8]) { g.add(kit.cyl(0.24, 0.19, 0.5, M.stone, { x, z: -5.9 })); const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), kit.mat('foliage')); f.position.set(x, 0.95, -5.9); f.scale.set(1, 1.25, 1); f.castShadow = true; g.add(f); }
+  for (const x of [0, 8]) { g.add(kit.cyl(0.24, 0.19, 0.5, M.stone, { x, z: -5.9 })); const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), kit.mat('foliage')); f.position.set(x, 0.95, -5.9); f.scale.set(1, 1.25, 1); f.castShadow = true; g.add(f); B.solid(x - 0.3, x + 0.3, -6.2, -5.6, 0, 1.3); }
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.darkMetal); dome.rotation.x = Math.PI; dome.position.set(8.5, 2.6, -6.0); g.add(dome);
   for (const [x, z] of [[1.5, -2], [4, -2], [6.5, -2], [1.5, -4.6], [4, -4.6], [6.5, -4.6]]) g.add(kit.cyl(0.11, 0.11, 0.015, B.lobbyLamp ||= B.onPower(B.glowMat('#fff3e2', 3.2)), { x, y: 2.585, z, cast: false }));
   B.exitSign(g, 5.0, 2.42, -0.12, Math.PI, 'exit'); // above the stair door, lobby side (faces north)
@@ -120,7 +122,7 @@ export function buildLobby(B, g) {
   g.add(kit.box(0.1, 0.06, 0.012, B.onPower(B.glowMat('#62c1ff', 1.5)), { x: 5.5, y: 1.12, z: -6.81, cast: false }));
   B.point('lobbyExit', '밖으로 나가기', 4, 0, -6.0, 'door');
   B.point('elevator', '엘리베이터', 1.2, 0, -0.6, 'elevator');
-  B.point('stairs1F', '계단', 5.0, 0, -0.7, 'stairs');
+  B.point('stairs1F', '계단', 5.0, 0, -0.7, 'stairs').host = 'stairDoor1';
 }
 
 // Elevator front at floor level y: brushed doors, surround, floor indicator (shared canvas), call buttons.
@@ -166,8 +168,8 @@ function tickElevator(H, dt) { // the car wanders between floors; one floor per 
 export function buildStairs(B, g, dyn) {
   const { kit, M } = B, S = STAIR;
   for (const n of [1, 2, 3, 4]) { // fire doors: 1F opens toward the lobby, 3F into the stairwell; 2F/4F stay shut
-    const auto = n === 1 || n === 3;
-    const D = B.door(auto ? dyn : g, 'z', 0, 4.55, 5.45, yOf(n), 2.1, M.fireDoor, { hinge: 'a', dir: n === 1 ? -1 : 1 }); // 2F/4F keep a solid: the wall's door gap runs full height
+    const auto = n === 1 || n === 3; // live doors hinge on the east jamb: the open leaf rests clear of lane B and the lobby path
+    const D = B.door(auto ? dyn : g, 'z', 0, 4.55, 5.45, yOf(n), 2.1, M.fireDoor, { hinge: auto ? 'b' : 'a', dir: n === 1 ? -1 : 1, id: 'stairDoor' + n }); // 2F/4F keep a solid: the wall's door gap runs full height
     if (auto) B.autoDoor(D);
   }
   B.wallX(g, 3.3, 0, 5.1, -0.2, S.top, M.stairWall, { side: 1 });
@@ -180,8 +182,9 @@ export function buildStairs(B, g, dyn) {
   const balusters = [], A = S.laneA, Bl = S.laneB;
   const flight = (y0, lane) => {
     const [xa, xb] = lane === 'A' ? A : Bl, w = xb - xa, cx = (xa + xb) / 2;
+    const base = lane === 'A' ? y0 : y0 + 1.4; // lane B climbs from the mid landing to the next floor
     for (let i = 0; i < 8; i++) {
-      const top = y0 + (i + 1) * 0.175, z0 = lane === 'A' ? S.zLand + i * 0.275 : S.zMid - (i + 1) * 0.275;
+      const { top, z0 } = tread(y0, lane, i);
       g.add(kit.slab(w, 0.375, 0.275, M.step, { x: cx, y: top - 0.375, z: z0 + 0.1375 }));
       g.add(kit.box(w - 0.12, 0.006, 0.05, M.nosing, { x: cx, y: top, z: lane === 'A' ? z0 + 0.03 : z0 + 0.245, cast: false }));
       const bx = lane === 'A' ? xa + 0.04 : xb - 0.04;
@@ -189,7 +192,7 @@ export function buildStairs(B, g, dyn) {
     }
     const L = Math.hypot(2.2, 1.4), ang = Math.atan2(1.4, 2.2);
     const soffit = new THREE.Mesh(new THREE.BoxGeometry(w, 0.16, L + 0.12), M.step);
-    soffit.position.set(cx, y0 + 0.7 - 0.27, (S.zLand + S.zMid) / 2); soffit.rotation.x = lane === 'A' ? -ang : ang;
+    soffit.position.set(cx, base + 0.7 - 0.27, (S.zLand + S.zMid) / 2); soffit.rotation.x = lane === 'A' ? -ang : ang;
     soffit.castShadow = soffit.receiveShadow = true; g.add(soffit);
     const rx = lane === 'A' ? xa + 0.04 : xb - 0.04, wx = lane === 'A' ? xb - 0.06 : xa + 0.06;
     const lo = lane === 'A' ? [S.zLand, y0] : [S.zMid, y0 + 1.4], hi = lane === 'A' ? [S.zMid, y0 + 1.4] : [S.zLand, y0 + 2.8];
@@ -205,7 +208,9 @@ export function buildStairs(B, g, dyn) {
     B.sensors.push({ x: 5.0, y: y + 2.58, z: 0.75, kind: 'sensor', floor: n });
     emergencyLamp(B, g, 3.41, y + 2.25, 0.75);
     if (n <= 3) B.floor(3.4, 6.6, 0.1, 1.6, y);
+    if (n >= 2) B.ceiling(3.4, 6.6, 0.1, 1.4, y - 0.2); // underside of this landing, over the one below (camera only)
     if (n === 4) continue;
+    if (n >= 2) B.ceiling(3.4, 6.6, 3.6, 5.0, y + 1.2); // underside of this mid landing, over the one below
     g.add(kit.slab(3.2, 0.2, 1.4, M.step, { x: 5, y: y + 1.2, z: 4.3 }));
     for (const x of [3.407, 6.593]) g.add(kit.box(0.012, 0.9, 1.4, M.stairBand, { x, y: y + 1.4, z: 4.3, cast: false }));
     g.add(kit.box(3.2, 0.9, 0.012, M.stairBand, { x: 5, y: y + 1.4, z: 4.993, cast: false }));
@@ -213,20 +218,36 @@ export function buildStairs(B, g, dyn) {
     emergencyLamp(B, g, 3.41, y + 3.65, 4.3);
     flight(y, 'A'); flight(y, 'B');
     B.rod(g, [A[0] + 0.04, y + 2.3, S.zMid], [Bl[1] - 0.04, y + 2.3, S.zMid], 0.028, M.darkWood); // well guard at the mid landing
-    if (n < 3) { B.ramp(A[0], A[1], 1.2625, 3.4625, 'z', y, y + 1.4); B.floor(3.4, 6.6, 3.4, 5.0, y + 1.4); B.ramp(Bl[0], Bl[1], 1.5375, 3.7375, 'z', y + 2.8, y + 1.4); }
+    if (n < 3) { const [ra, rb] = flightRamps(y); B.walk.push(ra, rb); B.floor(3.4, 6.6, 3.4, 5.0, y + 1.4); } // 3F -> 4F is barred
   }
   for (const n of [1, 2, 3]) for (const zz of [S.zLand, S.zMid]) balusters.push({ x: 5.0, y: yOf(n) + (zz === S.zLand ? 0 : 1.4) + 0.45, z: zz, sy: 0.9 });
   g.add(kit.instanced(new THREE.BoxGeometry(0.022, 1, 0.022), M.rail, balusters, { cast: true }));
 
   // Lane divider between the flights, closet under the first flight, and the cleaning sign blocking 3F -> 4F.
   B.solid(4.9, 5.1, 1.4, 3.6, 0, S.top);
-  g.add(kit.slab(1.5, 2.35, 0.06, M.stairWall, { x: 4.15, y: 0, z: 1.43 }));
+  g.add(kit.slab(1.5, 2.42, 0.06, M.stairWall, { x: 4.15, y: 0, z: 1.43 })); // up to the underside of lane B's top tread
   g.add(kit.box(0.7, 1.9, 0.02, M.fireDoor, { x: 4.15, y: 0.02, z: 1.465 }));
   B.solid(3.4, 4.9, 1.4, 3.6, 0, 1.3);
+  B.solid(3.4, 4.9, 1.40, 1.49, 0, 2.42).noClimb = true; // the closet's front wall (too tall to climb; under the 2F landing's feet)
   const wet = new THREE.Group(); wet.position.set(5.85, yOf(3), 1.15); g.add(wet);
   const wetTex = B.tex('wetSign', 256, 384, (c, w, h) => { c.fillStyle = '#f2c230'; c.fillRect(0, 0, w, h); c.fillStyle = '#1b1b1b'; c.font = `800 46px ${FONT}`; c.textAlign = 'center'; c.fillText('물청소 중', w / 2, 120); c.font = `600 30px ${FONT}`; c.fillText('계단 이용 주의', w / 2, 180); c.beginPath(); c.moveTo(w / 2, 230); c.lineTo(w / 2 + 60, 340); c.lineTo(w / 2 - 60, 340); c.closePath(); c.lineWidth = 10; c.stroke(); });
   for (const s of [-1, 1]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.6), new THREE.MeshStandardMaterial({ map: wetTex, roughness: 0.5, side: THREE.DoubleSide })); p.position.set(0, 0.3, s * 0.1); p.rotation.x = s * 0.17; p.castShadow = true; wet.add(p); }
-  B.solid(5.1, 6.6, 1.25, 1.75, yOf(3), yOf(4));
+  // The barrier: two stanchions with bases, yellow-black tape between them and a hanging notice, so the block is seen
+  // and explained (E on it says why). The collider covers the A-frame sign and the tape.
+  const Y3 = yOf(3), tape = kit.mat('paint:#e7b400', { roughness: 0.5 }), tapeDark = kit.mat('paint:#1b1b1b', { roughness: 0.5 });
+  for (const x of [5.2, 6.5]) {
+    g.add(kit.cyl(0.14, 0.15, 0.03, M.darkMetal, { x, y: Y3, z: 1.3 }, 20), kit.cyl(0.025, 0.025, 0.95, M.steel, { x, y: Y3 + 0.03, z: 1.3 }, 12));
+    g.add(kit.cyl(0.04, 0.04, 0.05, M.darkMetal, { x, y: Y3 + 0.95, z: 1.3 }, 12));
+  }
+  for (let i = 0; i < 6; i++) { // tape in alternating yellow / black lengths
+    const x0 = 5.22 + i * (1.26 / 6);
+    B.rod(g, [x0, Y3 + 0.92, 1.3], [x0 + 1.26 / 6, Y3 + 0.92, 1.3], 0.014, i % 2 ? tapeDark : tape, 6);
+  }
+  B.plate(g, ['통행 금지', '계단 물청소 중'], { x: 5.85, y: Y3 + 0.8, z: 1.29, ry: Math.PI, w: 0.42, h: 0.2, bg: '#f2c230', fg: '#1b1b1b', border: '#1b1b1b' });
+  B.solid(5.1, 6.6, 1.02, 1.75, Y3, yOf(4)).noVault = true; // from the A-frame sign back past the tape
+  const wetPt = B.point('stairsWet', '위층 계단 (물청소 중)', 5.85, Y3, 0.95, 'inspect', 1.4);
+  wetPt.host = 'stairDoor3'; // the open fire-door leaf beside it never hides it
+  wetPt.desc = ['위층으로 가는 계단에 출입 금지 줄이 쳐 있다. "계단 물청소 중 · 미끄럼 주의".', '젖은 계단은 미끄럽다. 오늘은 위층으로 올라가지 않는다.'];
   B.exitSign(g, 5.0, 2.42, 0.12, 0, 'exit'); // above the 1F door, stair side
 }
 

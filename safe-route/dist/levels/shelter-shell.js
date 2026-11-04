@@ -161,7 +161,8 @@ export function buildShell(kit, T) {
   add(kit.box(sx1 - sx0, 1.7, zLand - zEnd, M.step, { x: 5, z: (zLand + zEnd) / 2 }));               // landing
   add(kit.box(sx1 - sx0, 0.22, -16.25 - zFoot, M.step, { x: 5, y: 3.4 - 0.22, z: (zFoot - 16.25) / 2 })); // top landing
   add(kit.box(sx1 - sm1, 3.0, 0.08, M.wall, { x: (sm1 + sx1) / 2, z: zFoot + 0.04 }));                // closes the space under flight 2
-  solids.push({ x0: sm1, x1: sx1, z0: zLand, z1: zFoot + 0.1, y0: -1, y1: 1.6 });
+  // its body is the wall itself, 3 m tall (never a climbable block); people on flight 2 there stand above it
+  solids.push({ x0: sm1, x1: sx1, z0: zFoot - 0.02, z1: zFoot + 0.1, y0: -1, y1: 3.0 });
   for (const y of [3.9, 4.5]) add(rod(THREE, { x: sx0, y, z: zFoot - 0.04 }, { x: sm, y, z: zFoot - 0.04 }, 0.022, M.stainless)); // top landing guard over flight 1
   solid(sx0, sm1, zFoot - 0.12, zFoot, 3.2, 4.6);
   for (const [x, ya, za, yb, zb] of [[sx0 + 0.06, 0.9, zFoot, 2.6, zLand], [sm - 0.06, 0.9, zFoot, 2.6, zLand], [sx1 - 0.06, 2.6, zLand, 4.3, zFoot], [sm1 + 0.06, 2.6, zLand, 4.3, zFoot]]) {
@@ -171,9 +172,9 @@ export function buildShell(kit, T) {
   add(kit.box(0.06, 2.1, 0.95, M.door, { x: sx1 - 0.03, y: 3.4, z: -16.85 }));                        // exit door at the top
   add(kit.box(0.05, 0.05, 0.7, M.metal, { x: sx1 - 0.09, y: 4.45, z: -16.85 }));
   walk.push({ x0: sx0, x1: sx1, z0: zFoot, z1: ROOM.z0, y: 0 },
-    { x0: sx0, x1: sm, z0: zLand, z1: zFoot, ramp: { axis: 'z', y0: 1.7, y1: 0 } },
+    { x0: sx0, x1: sm, z0: zLand, z1: zFoot, ramp: { axis: 'z', y0: 1.615, y1: 0.085 } },   // through the tread centres
     { x0: sx0, x1: sx1, z0: zEnd, z1: zLand, y: 1.7 },
-    { x0: sm1, x1: sx1, z0: zLand, z1: zFoot, ramp: { axis: 'z', y0: 1.7, y1: 3.4 } },
+    { x0: sm1, x1: sx1, z0: zLand, z1: zFoot, ramp: { axis: 'z', y0: 1.785, y1: 3.315 } },
     { x0: sx0, x1: sx1, z0: zFoot, z1: -16.25, y: 3.4 });
   add(kit.box(sx1 - sx0 + 0.5, 0.3, 0.32, M.dark, { x: 5, y: 2.2, z: -15.84 }));                      // rolled-up fire shutter box
   for (const x of [sx0 - 0.08, sx1 + 0.08]) add(kit.box(0.08, 2.2, 0.1, M.steel, { x, z: -15.95 }));
@@ -264,5 +265,15 @@ export function buildShell(kit, T) {
   fixtures.push({ x: 24.6, y: 2.58, z: 0, ry: Math.PI / 2, panel: true });
   lights.push({ pos: [24.6, 2.3, 0], color: 0xfff4e6, base: 5, dist: 8, circuit: 'A' });
 
-  return { group: g, walk, solids, fixtures, lights, dyn, M };
+  // ---- ceilings (camera / headroom only, never solids): the slab, the drop panels, the stair core and top landing,
+  // ramp C's stepped slabs, ramp B's sloped soffit in 2 m steps (each at its lowest point) and the lift hall ----
+  const ceilings = [{ x0: ROOM.x0 - 0.25, x1: ROOM.x1 + 0.25, z0: ROOM.z0 - 0.25, z1: ROOM.z1 + 0.25, y: ROOM.ceil }];
+  for (const px of GRID.xs) for (const pz of GRID.zs) ceilings.push({ x0: px - 1.2, x1: px + 1.2, z0: pz - 1.2, z1: pz + 1.2, y: ROOM.drop });
+  ceilings.push({ x0: sx0, x1: sx1, z0: zFoot, z1: -16.25, y: 3.4 - 0.22 }, { x0: sx0, x1: sx1, z0: zEnd, z1: zFoot, y: 6.2 }, { x0: sx0, x1: sx1, z0: zFoot, z1: -16.25, y: 6.2 });
+  for (const [z0, z1, y] of [[az[1], az[0], 3.0], [az[3], az[1], 3.8], [az[4] - 0.25, az[3], 4.2]]) ceilings.push({ x0: ax0, x1: ax1, z0, z1, y });
+  ceilings.push({ x0: ax1, x1: -7.3, z0: az[4], z1: az[3], y: 4.3 });
+  for (let z = rz0; z < bz + 1; z += 2) ceilings.push({ x0: RAMP.x0, x1: RAMP.x1, z0: z, z1: z + 2, y: ry(z) + 2.75 - 0.31 });
+  ceilings.push({ x0: ROOM.x1, x1: ex1, z0: -4, z1: 4, y: 2.6 });
+
+  return { group: g, walk, solids, fixtures, lights, dyn, M, ceilings };
 }

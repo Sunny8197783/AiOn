@@ -18,7 +18,8 @@ import { extinguisher } from './ui/extinguisher.js';
 import { docs } from './ui/docs.js';
 import { routemap } from './ui/routemap.js';
 import { createAudio } from './audio.js';
-import { createGame, save, load, checkpoint, restore, bagLoad } from './game/state.js';
+import { createGame, save, load, checkpoint, restore, bagLoad, usable, check, drainCharge } from './game/state.js';
+import { seenRumors } from './game/rumors.js';
 import { failDebrief } from './game/debrief.js';
 import { SOURCES } from './game/facts.js';
 import { CATALOG, BAG_LIMIT } from './game/items.js';
@@ -191,11 +192,13 @@ function firstAid() {
 { const goto = ctx.goto; ctx.goto = (...a) => { actions.drop(); return goto(...a); }; }
 
 // Global keys while roaming. Menus open only during free roam, so no scripted step runs behind them.
-let flashOn = false, flashT = 0;
+let flashOn = false, flashT = 0, litT = 0;
 engine.onKey(async ({ code }) => {
   if (!G || !engine.controlsEnabled) return;
   if (code === 'KeyF') {
-    if (!flashOn && (!ctx.lightSource || (ctx.lightSource === 'phone' && G.phone.battery <= 0))) return void ctx.toast('켤 수 있는 불빛이 없다.');
+    if (!flashOn) relight();
+    const lit = ctx.lightSource === 'flashlight' ? usable(G, 'flashlight') : ctx.lightSource === 'phone' && G.phone.battery > 0;
+    if (!flashOn && !lit) return void ctx.toast('켤 수 있는 불빛이 없다.');
     flashOn = !flashOn; engine.player.setFlashlight(flashOn);
   } else if (code === 'KeyV') { settings.view = settings.view === 'first' ? 'third' : 'first'; store.set(SETTINGS_KEY, JSON.stringify(settings)); }
   else if (!ctx.roaming) return;
@@ -208,6 +211,15 @@ engine.onKey(async ({ code }) => {
   else if (code === 'KeyM') await ctx.modal(() => routemap({ mode: 'view', from: nearestNode(), to: 'shelter', options: [], closures: knownClosures(), gates: {}, known: { closures: [] }, playerAt: engine.level?.id === 'town' ? { x: engine.player.x, z: engine.player.z } : null }));
   else if (code === 'Escape') await openPause();
 });
+// Before switching the light on: a flashlight that ran down takes a spare battery pack if there is one,
+// otherwise the phone's light stands in; a flashlight made usable later replaces the phone.
+function relight() {
+  if (!ctx.lightSource) return; // no light in hand before the blackout
+  const has = (G.items.flashlight?.home ?? 0) + (G.items.flashlight?.bag ?? 0) > 0;
+  if (has && !usable(G, 'flashlight') && G.items.flashlight.charge === 0 && check(G, 'flashlight').ok) ctx.toast('다 닳은 건전지를 빼고 손전등에 새 건전지를 넣었다.', 'self', 4200);
+  const next = lightSource(ctx);
+  if (next !== ctx.lightSource && next) { if (ctx.lightSource === 'flashlight') ctx.toast('손전등 건전지가 다 닳았다. 휴대폰 불빛을 켠다.', 'self', 4200); ctx.lightSource = next; }
+}
 // The map shows closures in force now, and only once the player has learned of them this phase.
 function knownClosures() {
   const knows = G.chapter === 'evac' ? G.know.evacClosuresKnown : G.know.closureSeen || G.know.closureHeard;
@@ -215,8 +227,8 @@ function knownClosures() {
 }
 // Per-scene state that must not leak into a retry or the next run.
 function resetTransient() {
-  ctx.speedOverride = null; engine.player.carrying = null;
-  flashOn = false; engine.player.setFlashlight(false);
+  ctx.speedOverride = null; ctx.calm = false; engine.player.carrying = null;
+  flashOn = false; litT = 0; engine.player.setFlashlight(false);
   ctx.setPlayer('jeongmin'); hud.setCinematic(false); engine.setControls(true);
   actions.drop(); danger.reset(); ctx.deathCause = null; applySettings();
 }
@@ -228,8 +240,19 @@ function resetRun(snap) {
   if (!ctx.lightSource && G.events.some(e => e.type === 'blackout')) ctx.lightSource = lightSource(ctx);
   resetTransient();
 }
+// The light in hand runs down: the flashlight 1 % of its charge per real minute lit (design M3), the phone 1 % per 20 s.
 engine.onFrame((dt) => {
-  if (!flashOn || ctx.lightSource !== 'phone' || !G) return;
+  if (!flashOn || !G) return;
+  if (ctx.lightSource === 'flashlight') {
+    if (!engine.controlsEnabled || (litT += dt) < 60) return;
+    litT -= 60;
+    if (!G.items.flashlight?.checked || drainCharge(G, 'flashlight', 1) > 0) return;
+    flashOn = false; engine.player.setFlashlight(false);
+    const spare = ['batteries_aa', 'batteries_old'].some(id => (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0) > 0);
+    ctx.toast(`손전등 불빛이 점점 흐려지더니 꺼졌다. 건전지가 다 닳았다.${spare ? ' 남은 건전지가 있으니 F를 누르면 갈아 끼운다.' : ''}`, 'self', 5600);
+    return;
+  }
+  if (ctx.lightSource !== 'phone') return;
   if ((flashT += dt) > 20) { flashT = 0; G.phone.battery = Math.max(0, G.phone.battery - 1); hud.setBattery(G.phone.battery); if (!G.phone.battery) { flashOn = false; engine.player.setFlashlight(false); ctx.toast('휴대폰이 꺼졌다.'); } }
 });
 function nearestNode() {
@@ -266,6 +289,8 @@ async function intro() {
 async function openPhone() {
   if (G.phone.battery <= 0) return void ctx.toast('휴대폰이 꺼져 있다.');
   const messages = G.info.filter((i) => i.label === 'official').slice(-4).map((i) => ({ from: '알림', kind: 'safety', time: '', text: i.text }));
+  // Posts from the neighbourhood chat that reached 정민 (game/rumors.js), to reread next to the official texts.
+  for (const { claim } of seenRumors(G).slice(-3)) messages.push({ from: claim.from, kind: 'sns', time: claim.meta, text: claim.text });
   const pick = await phone({ battery: G.phone.battery, signal: G.phone.signal || 'ok', messages, actions: [{ id: 'radio', label: 'FM 라디오 앱' }, { id: 'close', label: '닫기' }] });
   if (pick === 'radio') await radioScene(ctx, currentBroadcast(G), { device: 'phone', title: '휴대폰' });
 }
@@ -370,8 +395,7 @@ async function run(start, resumeKey) {
         if (pick !== 'retry') { engine.setControls(true); return 'menu'; }
         const key = G.checkpoint.key;
         restore(G);
-        Object.assign(ctx, readSnap(ctx.snap));
-        resetTransient();
+        resetRun(ctx.snap); // runtime fields the snapshot does not list (seoyeonAsk, lightSource) go too (F5)
         ctx.resume = key === id ? null : key;
       }
     }

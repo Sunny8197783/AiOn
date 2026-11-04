@@ -9,6 +9,7 @@ import { fact } from '../game/facts.js';
 import { applyHome, applyBag, bagItems } from './prep-actions.js';
 import { radioScene, emergencyText, factCard, lightSource, drainBattery, has, AREA, BROADCASTS } from './common.js';
 import { seoyeonRelay } from './seoyeon.js';
+import { createElderDilemma } from './elder.js';
 import { strikeScene, blackoutScene, sirenScene } from './cutscenes.js';
 
 const ALERT = 20 * 60 + 5, LATE = 20 * 60 + 30;
@@ -93,6 +94,7 @@ async function evening(ctx) {
   ctx.lightSource = src;
   ctx.toast(src === 'flashlight' ? 'F 키: 손전등 켜기/끄기' : src === 'phone' ? 'F 키: 휴대폰 손전등 (배터리가 빨리 닳습니다)' : '빛이 없다. 천천히 움직이자.', 'self', 5000);
   if (src === 'flashlight') { use(G, 'flashlight'); ctx.payoff('flashlight', '정전 직후 손전등을 바로 켰다'); }
+  if (G.know.curtain) ctx.payoff('curtain', G.know.curtainSealed ? '테이프로 가장자리를 막은 암막 커튼 덕분에 불빛이 밖으로 새지 않았다' : '암막 커튼을 쳐서 집 안 불빛이 밖으로 덜 새어 나갔다');
 
   const done = new Set();
   while (!done.has('radio') && !done.has('phone')) {
@@ -142,6 +144,7 @@ async function alert(ctx) {
   ctx.setLevelState('town', 'closures', closures);
   ctx.setLevelState('town', 'gates', { east: 'closed', stairs: 'open', ramp: 'open', access: 'closed' });
   ctx.setLevelState('town', 'notices', 'dday');
+  if (!G.know.elderPick) ctx.setLevelState('apartment', 'elder304', 'on'); // 304호 어르신 at her door (story/elder.js)
   try { await sirenScene(ctx); } catch (err) { console.error('[cine] siren scene failed', err); ctx.caption('공습경보 사이렌 — 1분간 오르내리는 소리 (5초 상승 · 3초 하강 반복)', null, 6000); }
   await emergencyText(ctx, { kind: '위급재난문자', time: '20:05', text: `[위급재난문자] 20:05 미사일 발사, 연무동지역 공습경보, 지하시설 또는 건물 내로 대피. EVACUATION, MISSILES ATTACK ${AREA}` });
   recordEvent(G, 'alert', { minute: ALERT });
@@ -153,6 +156,7 @@ async function alert(ctx) {
   let left = false, inStairs = false, outT = 0;
   const blasts = farBlasts(ctx);
   const trail = ctx.trail = [];
+  const elder = createElderDilemma(ctx);
   const steps = () => [{ text: '배낭 챙기기', done: !!G.know.bagOn || left }, { text: '계단으로 1층까지', done: inStairs }, { text: '가까운 대피소로', done: false }];
   const show = () => ctx.objective('대피하기', '지하시설이나 유리창 없는 건물 안으로. 엘리베이터는 쓰지 않습니다.', steps());
   show();
@@ -160,7 +164,7 @@ async function alert(ctx) {
 
   const takeBag = async () => {
     if (G.know.bagOn) return;
-    if (G.know.bagPacked && Object.values(G.items).some(e => e.bag > 0)) { G.know.bagOn = true; ctx.payoff('bag', '현관에 둔 배낭을 메고 바로 나섰다'); recordEvent(G, 'departure', { bag: 'packed' }); return; }
+    if (G.know.bagPacked && Object.values(G.items).some(e => e.bag > 0)) { G.know.bagOn = true; ctx.setLevelState('apartment', 'bag', 'none'); ctx.payoff('bag', '현관에 둔 배낭을 메고 바로 나섰다'); recordEvent(G, 'departure', { bag: 'packed' }); return; }
     const pick = await ctx.ui.talk({ speaker: '현관', role: '배낭이 비어 있다', lines: ['지금 챙길까, 그냥 나갈까?'], choices: [{ id: 'pack', label: '급히 챙긴다 (시간이 든다)' }, { id: 'go', label: '휴대폰만 들고 나간다' }] });
     if (pick !== 'pack') { recordEvent(G, 'departure', { bag: 'none' }); return; }
     const items = bagItems(G);
@@ -170,15 +174,17 @@ async function alert(ctx) {
     const ev = evalBag(G, 'alert');
     recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
     ctx.pass(4);
-    G.know.bagOn = true;
+    G.know.bagOn = true; ctx.setLevelState('apartment', 'bag', 'none');
     ctx.toast('물건을 고르느라 4분이 지났다.', 'self');
     recordEvent(G, 'departure', { bag: 'late', delay: 4 });
   };
 
   await ctx.roam({
-    rate: 3, deadline: { day: 0, minute: LATE, type: 'late' },
+    // Out in town after meeting a closure or a long walk: lost the way; otherwise the time ran out before leaving.
+    rate: 3, deadline: { day: 0, minute: LATE, type: () => (ctx.engine.level?.id === 'town' && (G.know.closureSeen || trail.length > 60) && !G.know.closureHeard ? 'lostWay' : 'late') },
     tick: (dt) => {
       const p = ctx.engine.player;
+      if (left) elder.tick(dt);
       if (ctx.engine.level?.id === 'town') { const last = trail.at(-1); if (!last || Math.hypot(last.x - p.x, last.z - p.z) > 1.5) trail.push({ x: p.x, z: p.z }); }
       if (ctx.engine.level?.id === 'town' && !G.know.strikeSeen && (outT += dt) > 4) strike(ctx);
       else if (G.know.strikeSeen) blasts(dt);
@@ -204,6 +210,7 @@ async function alert(ctx) {
       },
       elevator: async () => { ctx.toast(`정전으로 멈춰 있다. ${fact('alert_stairs').text}`, 'official', 5000); recordEvent(G, 'elevator_tried', {}); },
       managerWindow: async () => {
+        if (await elder.managerLine()) return;
         if (G.rel.manager.contact) {
           await ctx.ui.talk({ speaker: '박영수 소장', role: '1층 현관', lines: [`정민 씨! 생활문화센터로 가요. 연무로 가운데는 통제한대요. ${detour}로 돌아가요!`] });
           G.know.closureHeard = true; ctx.note(`박 소장: 연무로 중앙 구간 통제, ${detour}로 우회`, 'neighbor');
@@ -214,7 +221,13 @@ async function alert(ctx) {
         G.know.closureSeen = true; ctx.note(`${CLOSURES[id].label} (현장 안내 요원)`, 'site');
       }])),
       shelterNotice: async () => { await ctx.ui.talk({ speaker: '현장 안내판', role: hhmm(G.minute), lines: ['동쪽 출입구 폐쇄 · A 계단 운영 · B 진출입로 운영 (차량 통제) · C 경사로 준비 중'] }); },
-      '*': async (point) => { if (point.kind === 'notice') await ctx.ui.talk({ speaker: point.label, role: '안내', lines: ['대피소: 연무 생활문화센터 지하주차장. 유도표지판의 화살표를 따라가세요.'] }); },
+      elder304: async () => { ctx.toast(!G.know.elderPick ? '어르신이 손잡이를 붙들고 서 있다.' : G.know.elderPick === 'manager' && !G.know.elderTold ? '"소장님한테 말 좀 해 줘요."' : '"나는 괜찮아요. 어서 가요."', 'neighbor'); },
+      // Every notice board tonight says one thing (runtime runs '*' before the boards' everyday text).
+      '*': async (point) => {
+        if (point.kind !== 'notice') return;
+        await ctx.ui.talk({ speaker: point.label, role: '안내', lines: ['대피소: 연무 생활문화센터 지하주차장. 유도표지판의 화살표를 따라가세요.'] });
+        return ctx.handled;
+      },
     },
     shelter: (point) => enterGate(ctx, point),
   });
@@ -247,6 +260,7 @@ async function shelter(ctx) {
   ctx.setLevelState('shelter', 'ways', ['stairs', 'ramp']); // east closed, C not open yet: nobody walks in there
   ctx.setLevelState('shelter', 'phase', 'alert');
   ctx.setLevelState('shelter', 'power', 'emergency');
+  if (G.know.elderPick) ctx.setLevelState('shelter', 'elder', 'on'); // helped down, or brought by 박 소장
   ctx.engine.setEnv('underground', { seconds: 0.8 });
   let signed = false;
   ctx.objective('대피소 안에서', '접수대에서 명부를 쓰고 자리를 잡습니다.', [{ text: '명부 쓰기 (접수대)', done: false }, { text: '자리 잡기', done: false }]);
@@ -276,7 +290,7 @@ async function afterAlert(ctx) {
   ctx.setLevelState('shelter', 'ways', ['stairs', 'ramp', 'access']);
   await ctx.goto('shelter', 'spot');
   ctx.setLevelState('shelter', 'crowd', 'settled');
-  ctx.engine.level?.npcs?.seoyeon && (ctx.engine.level.npcs.seoyeon.group.visible = true);
+  ctx.setLevelState('shelter', 'seoyeon', 'shown'); // runtime state: a retry or a new run hides her again
   const lines = !h ? ['정민 씨! 다행이다. 저는 C로 들어왔어요. 안내판에 C가 열렸다고 해서요.']
     : h.kind === 'generalized' ? ['메시지 고마워요. 대피소가 닫혔다길래 잠깐 놀랐는데, 안내판엔 C가 열렸다고 해서 다시 봤어요.']
     : h.kind === 'precise' ? ['메시지 고마워요. 언제 뭘 봤는지, 뭘 모르는지 써 줘서 판단하기 쉬웠어요. 저는 C로 왔어요.']
@@ -285,11 +299,12 @@ async function afterAlert(ctx) {
   G.rel.seoyeon.trust += 1;
 
   const later = (m) => { G.minute = Math.max(G.minute, m); ctx.refresh(); }; // 서연's walk may already be past these
+  // Stamped with the clock as it is: after a late arrival and 서연's walk it can already be past 20:35.
   later(20 * 60 + 35);
-  await emergencyText(ctx, { kind: '위급재난문자', time: '20:35', text: `[위급재난문자] 20:35 연무동지역 경계경보로 변경, 대피소에서 나와 경계 태세를 유지하며 이동 가능 ${AREA}` });
+  await emergencyText(ctx, { kind: '위급재난문자', time: hhmm(G.minute), text: `[위급재난문자] ${hhmm(G.minute)} 연무동지역 경계경보로 변경, 대피소에서 나와 경계 태세를 유지하며 이동 가능 ${AREA}` });
   await factCard(ctx, '경계경보로 바뀌었습니다', ['alert_downgrade', 'alert_caution']);
-  later(20 * 60 + 50);
-  await emergencyText(ctx, { kind: '안전안내문자', time: '20:50', text: `[안전안내문자] 20:50 연무동지역 경보해제. 정부 안내방송을 계속 들어 주십시오 ${AREA}` });
+  later(Math.max(20 * 60 + 50, G.minute + 10));
+  await emergencyText(ctx, { kind: '안전안내문자', time: hhmm(G.minute), text: `[안전안내문자] ${hhmm(G.minute)} 연무동지역 경보해제. 정부 안내방송을 계속 들어 주십시오 ${AREA}` });
 
   // Home together. The building is still dark; 서연 lives on the same floor.
   ctx.outdoorEnv = 'blackout';
@@ -307,7 +322,10 @@ async function afterAlert(ctx) {
     await ctx.say('오서연', ['네, 천천히 갈게요. 소장님이 계단 비춰 주신대요.'], null, '1층 계단 앞');
   }
   later(21 * 60 + 20);
+  ctx.setLevelState('apartment', 'elder304', 'off'); // back home in 304 too
   await ctx.goto('apartment', 'home');
+  // The bag comes off at the door: its weight no longer slows or tires the walk (evac.js puts it on again).
+  if (G.know.bagOn) { G.know.bagOn = false; applyHome(ctx); ctx.refresh(); ctx.toast('배낭을 현관에 내려놓았다.', 'self', 2600); }
   const sum = chapterSummary(G, 'dday');
   await ctx.modal(() => ctx.ui.chapterCard({ chapter: '2장', title: '정전과 경보', lines: sum.lines, payoffs: sum.payoffs }));
 }

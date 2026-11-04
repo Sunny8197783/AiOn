@@ -319,7 +319,7 @@ function validate(G, nested) {
     if (!CATALOG[id]) { delete G.items[id]; continue; } // removed from the catalogue since this save
     if (!isObj(e) || !['home', 'bag', 'bought', 'used'].every(k => Number.isInteger(e[k]) && e[k] >= 0) || typeof e.checked !== 'boolean') fail(`item ${id}`);
     if ('charge' in e && !num(e.charge, 0, 100)) fail(`item ${id} charge`);
-    if ('pocket' in e && !(Number.isInteger(e.pocket) && e.pocket >= 0 && e.pocket <= e.bag)) fail(`item ${id} pocket`);
+    if ('pocket' in e && !(Number.isInteger(e.pocket) && e.pocket >= 0 && e.pocket <= e.bag && (e.pocket === 0 || CATALOG[id].pocket))) fail(`item ${id} pocket`);
   }
   if (!isObj(G.know) || !isObj(G.cond) || !isObj(G.rel) || !PEOPLE.every(p => isObj(G.rel[p]))) fail('know/cond/rel');
   if (!isObj(G.skill) || !TOOLS.every(t => Array.isArray(G.skill[t]))) fail('skill');
@@ -334,11 +334,11 @@ function validate(G, nested) {
 
 // Saves stay v2: fields added since are filled here, before validate(), for G and its checkpoint state.
 // Added since the first v2 build: skill.info (the 'info' ladder), ledger. items.*.charge / pocket are optional.
-export function migrate(G) {
+export function migrate(G, nested = false) {
   if (!isObj(G)) return G;
   if (isObj(G.skill)) for (const t of TOOLS) G.skill[t] ??= [];
   G.ledger ??= [];
-  if (isObj(G.checkpoint) && isObj(G.checkpoint.state)) migrate(G.checkpoint.state);
+  if (!nested && isObj(G.checkpoint) && isObj(G.checkpoint.state)) migrate(G.checkpoint.state, true);
   return G;
 }
 

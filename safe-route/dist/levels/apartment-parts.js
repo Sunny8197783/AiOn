@@ -3,12 +3,14 @@
 // Frame: x east, z south, metres. Floor N stands at y = FH * (N - 1).
 import * as THREE from 'three';
 import { FONT } from '../engine/kit.js';
+import { leafBoxes } from './apartment-geo.js';
 
 export const FH = 2.8, F3 = 5.6, FL = 5.75; // floor-to-floor, 3rd floor, 302호 main floor (현관 step 0.15)
 
 export function createBuilder(kit) {
   const B = {
     kit, walk: [], solids: [], points: [], spawns: {}, anchors: {},
+    ceilings: [], // camera/headroom-only room ceilings { x0, x1, z0, z1, y } (never solids: they would push the player out)
     powered: [],  // { obj, base }: on while the building has power
     backup: [],   // battery emergency lamps: on only while the power is off
     sensors: [],  // motion-sensor ceiling lamps { x, y, z, b, hold }
@@ -21,6 +23,7 @@ export function createBuilder(kit) {
   B.solid = (x0, x1, z0, z1, y0, y1, id) => { const s = { x0, x1, z0, z1, y0, y1 }; if (id) s.id = id; B.solids.push(s); return s; };
   B.floor = (x0, x1, z0, z1, y) => B.walk.push({ x0, x1, z0, z1, y });
   B.ramp = (x0, x1, z0, z1, axis, y0, y1) => B.walk.push({ x0, x1, z0, z1, ramp: { axis, y0, y1 } });
+  B.ceiling = (x0, x1, z0, z1, y) => B.ceilings.push({ x0, x1, z0, z1, y });
   B.point = (id, label, x, y, z, kind, r) => { const p = { id, label, x, y, z, kind }; if (r) p.r = r; B.points.push(p); return p; };
 
   // ---- materials ----
@@ -79,7 +82,10 @@ export function createBuilder(kit) {
   };
 
   // ---- hinged door in an opening [a,b] on plane c. hinge 'a'|'b'; dir: which side it swings to (-1|+1 along the normal) ----
-  B.door = (g, axis, c, a, b, y, h, mat, { hinge = 'a', dir = 1, t = 0.05, open = 0, solid = true, lock = false, frameMat = B.M.darkFrame, maxAngle = 1.5 } = {}) => {
+  // An open leaf (k >= 0.5, at rest) collides as three thin boxes along it, skipping the 15 cm by the hinge (the
+  // doorway itself is the wall's job); a swinging leaf (set(k, false)) does not shove the player. opts.id names the
+  // leaf boxes, so the door's own points can list it as their host (a leaf never hides its door's prompt).
+  B.door = (g, axis, c, a, b, y, h, mat, { hinge = 'a', dir = 1, t = 0.05, open = 0, solid = true, lock = false, frameMat = B.M.darkFrame, maxAngle = Math.PI / 2, id } = {}) => {
     const w = b - a, lw = w - 0.03, pivot = new THREE.Group(), sgn = hinge === 'a' ? 1 : -1;
     const hu = hinge === 'a' ? a + 0.015 : b - 0.015;
     if (axis === 'z') pivot.position.set(hu, y, c); else pivot.position.set(c, y, hu);
@@ -103,8 +109,15 @@ export function createBuilder(kit) {
       g.add(axis === 'z' ? kit.box(w + 2 * ft, ft, fd, frameMat, { x: (a + b) / 2, y: y + h, z: c }) : kit.box(fd, ft, w + 2 * ft, frameMat, { x: c, y: y + h, z: (a + b) / 2 }));
     }
     const ang = axis === 'z' ? (hinge === 'a' ? -dir : dir) : (hinge === 'a' ? dir : -dir);
-    const D = { pivot, k: open, target: open, x: axis === 'z' ? (a + b) / 2 : c, z: axis === 'z' ? c : (a + b) / 2, y, solid: null,
-      set(k) { D.k = k; pivot.rotation.y = ang * k * maxAngle; if (D.solid) D.solid.off = k > 0.12; } };
+    const leaf = [0, 1, 2].map(() => { const s = B.solid(0, 0, 0, 0, y, y + h, id); s.off = true; s.noVault = s.noClimb = true; return s; });
+    const lx = axis === 'z' ? sgn * lw : 0, lz = axis === 'z' ? 0 : sgn * lw, px = pivot.position.x, pz = pivot.position.z, pad = t / 2 + 0.005;
+    const D = { pivot, k: open, target: open, x: axis === 'z' ? (a + b) / 2 : c, z: axis === 'z' ? c : (a + b) / 2, y, solid: null, leaf,
+      set(k, still = true) {
+        D.k = k; const phi = ang * k * maxAngle; pivot.rotation.y = phi;
+        if (D.solid) D.solid.off = k > 0.12;
+        leafBoxes(px, pz, lx, lz, phi, pad, leaf);
+        for (const s of leaf) s.off = !still || k < 0.5;
+      } };
     if (solid) D.solid = axis === 'z' ? B.solid(a, b, c - 0.1, c + 0.1, y, y + h) : B.solid(c - 0.1, c + 0.1, a, b, y, y + h);
     D.set(open);
     return D;

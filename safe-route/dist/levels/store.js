@@ -191,6 +191,8 @@ export function buildStore(kit, people) {
   sign(['관계자 외 출입금지'], { w: 0.5, h: 0.14, bg: '#c4161c', fg: '#ffffff' }, { x: 4.93, y: 1.6, z: -6.95, ry: -Math.PI / 2 });
 
   // ---- counter, POS, steamer, impulse rack, back shelf, coffee machine, ATM ----
+  // The clerk's aisle is closed on all sides: these bodies (counter .. ATM) cannot be vaulted or climbed.
+  const behind0 = solids.length;
   add(kit.rbox(0.6, 0.92, 3.0, 0.02, M.white, { x: 2.95, z: -3.4 }), true);
   stat.add(kit.box(0.7, 0.04, 3.08, M.top, { x: 2.95, y: 0.92, z: -3.4 }));
   stat.add(kit.box(0.02, 0.22, 3.0, M.teal, { x: 2.64, y: 0.55, z: -3.4 })); stat.add(kit.box(0.02, 0.03, 3.0, M.orange, { x: 2.64, y: 0.5, z: -3.4 }));
@@ -216,9 +218,10 @@ export function buildStore(kit, people) {
   sign(['안전상비의약품 · 건전지 · 충전기'], { w: 1.6, h: 0.2, bg: '#1f4f8c', fg: '#ffffff', emissive: 0.6 }, { x: 4.97, y: 2.35, z: -3.4, ry: -Math.PI / 2 }, 'indoor');
   add(kit.box(1.75, 0.92, 0.4, M.white, { x: 4.125, z: -1.7 }), true);
   add(kit.box(1.75, 0.92, 0.36, M.white, { x: 4.125, z: -5.1 }), true);
-  stat.add(kit.box(0.42, 0.58, 0.42, M.dark, { x: 4.4, y: 0.92, z: -1.72 }));
-  sign(['원두커피', '셀프'], { w: 0.3, h: 0.2, bg: '#3b2416', fg: '#f2dcc0', emissive: 0.7 }, { x: 4.4, y: 1.3, z: -1.505 }, 'indoor');
-  for (let k = 0; k < 5; k++) stat.add(kit.cyl(0.045, 0.035, 0.1, M.white, { x: 3.75, y: 0.92 + k * 0.03, z: -1.7 }));
+  // the self-service coffee machine stands at the open west end of its counter, facing the shop floor
+  stat.add(kit.box(0.42, 0.58, 0.42, M.dark, { x: 3.5, y: 0.92, z: -1.7 }));
+  sign(['원두커피', '셀프'], { w: 0.3, h: 0.2, bg: '#3b2416', fg: '#f2dcc0', emissive: 0.7 }, { x: 3.285, y: 1.3, z: -1.7, ry: -Math.PI / 2 }, 'indoor');
+  for (let k = 0; k < 5; k++) stat.add(kit.cyl(0.045, 0.035, 0.1, M.white, { x: 4.3, y: 0.92 + k * 0.03, z: -1.7 }));
   const hang = sign(['계산대 · 택배 접수 · 교통카드 충전'], { w: 1.9, h: 0.3, bg: '#18a58f', fg: '#ffffff', emissive: 0.6 }, { x: 2.5, y: 2.35, z: -3.4, ry: -Math.PI / 2 }, 'indoor');
   hang.material.side = THREE.DoubleSide;
   for (const s of [-1, 1]) stat.add(kit.cyl(0.004, 0.004, H - 2.5, M.steel, { x: 2.5, y: 2.5, z: -3.4 + s * 0.8, cast: false }));
@@ -227,6 +230,7 @@ export function buildStore(kit, people) {
   atm.add(kit.box(0.78, 0.28, 0.92, M.green, { x: 4.62, y: 1.75, z: -0.62 }));
   atm.add(kit.box(0.18, 0.1, 0.3, M.dark, { x: 4.2, y: 0.95, z: -0.62, rz: 0.4 }));
   add(atm, true);
+  for (let i = behind0; i < solids.length; i++) solids[i].noVault = solids[i].noClimb = true;
   sign(['24시 자동화기기', '현금 인출 · 입금 · 이체'], { w: 0.44, h: 0.32, bg: '#0f3d6e', fg: '#e8f4ff', emissive: 0.9 }, { x: 4.235, y: 1.32, z: -0.62, ry: -Math.PI / 2 }, 'indoor');
   sign(['ATM'], { w: 0.5, h: 0.2, bg: '#2f8a57', fg: '#ffffff', emissive: 0.7 }, { x: 4.225, y: 1.89, z: -0.62, ry: -Math.PI / 2 }, 'indoor');
   stat.add(kit.box(1.4, 0.012, 0.9, M.rubber, { x: DOOR, z: -0.7, cast: false }));
@@ -301,9 +305,9 @@ export function buildStore(kit, people) {
     P('storeExit', '밖으로 나가기', DOOR, -0.75, 'door', 1.4), P('storeCounter', '계산대 · 이수아', 2.1, -3.3, 'npc', 1.7),
     P('storeShelf', '진열대 살펴보기', -1.1, -4.6, 'shelf', 2.4), P('storeFridge', '음료 냉장고', -1.6, -7.5, 'shelf', 2.2),
     P('storeAtm', 'ATM (자동화기기)', 4.05, -0.62, 'atm', 1.2),
-    P('storeCoffee', '셀프 커피머신', 4.0, -1.75, 'look', 1.0, (c) => dark(c) ? '전원이 꺼져 있다. 버튼을 눌러도 아무 반응이 없다.' : '원두커피 셀프 머신. 컵은 계산대에서 받는다.'),
-    P('storeSteamer', '찐빵 찜기', 2.5, -2.25, 'look', 0.9, (c) => dark(c) ? '찜기가 식어 있다. 안의 찐빵도 차갑다.' : '김이 서린 유리 너머로 찐빵이 따뜻하게 데워지고 있다.'),
-    P('storeRack', '건전지 진열대', 2.4, -4.3, 'look', 0.9, ['AA·AAA 건전지와 휴대폰 충전 케이블이 걸려 있다.', '라디오와 손전등은 건전지가 들어 있어야 쓸 수 있다.']),
+    P('storeCoffee', '셀프 커피머신', 3.0, -1.7, 'look', 1.3, (c) => dark(c) ? '전원이 꺼져 있다. 버튼을 눌러도 아무 반응이 없다.' : '원두커피 셀프 머신. 컵은 계산대에서 받는다.'),
+    P('storeSteamer', '찐빵 찜기', 2.5, -2.25, 'look', 1.2, (c) => dark(c) ? '찜기가 식어 있다. 안의 찐빵도 차갑다.' : '김이 서린 유리 너머로 찐빵이 따뜻하게 데워지고 있다.'),
+    P('storeRack', '건전지 진열대', 2.4, -4.3, 'look', 1.2, ['AA·AAA 건전지와 휴대폰 충전 케이블이 걸려 있다.', '라디오와 손전등은 건전지가 들어 있어야 쓸 수 있다.']),
     P('storeRamen', '라면 조리대', -4.35, -2.15, 'look', 1.2, (c) => dark(c) ? '온수기가 꺼져 있다. 정전에는 컵라면도 끓는 물이 없으면 못 먹는다.' : '온수기, 전자레인지, 분리수거함. 컵라면 국물은 여기 버린다.'),
     P('storeIce', '아이스크림 냉동고', 2.2, -7.9, 'look', 1.2, (c) => dark(c) ? '냉동고가 멈췄다. 뚜껑 안쪽에 물방울이 맺혀 있다. 열지 않는 게 낫겠다.' : '하드와 콘이 가득하다. 가을인데도 잘 팔린다고 한다.'),
     P('storeWindowBar', '창가 자리', -2.5, -1.4, 'look', 1.4, ['창밖으로 단지 앞 도로가 보인다. 플라스틱 의자가 몇 개 놓여 있다.']),
@@ -314,7 +318,7 @@ export function buildStore(kit, people) {
   return {
     id: 'store', group, env: 'interior',
     walk: [{ x0: -5, x1: 5, z0: -9, z1: 0, y: 0 }],
-    solids, points,
+    solids, points, ceilings: [{ x0: -5.25, x1: 5.25, z0: -9.25, z1: 0.25, y: H }], // camera/headroom only
     spawns: { entry: { x: DOOR, y: 0, z: -1.35, yaw: 0 }, counter: { x: 2.0, y: 0, z: -3.3, yaw: -Math.PI / 2 } },
     npcs: { clerk },
     states: { soldOut: [[], ['water'], ['batteries'], ['water', 'batteries'], ['water', 'batteries', 'food']], power: ['on', 'off'], outside: [null, ...MOODS] },

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { PLACES } from '../game/townmap.js';
 import { CURB } from './town-plan.js';
+import { STAIR_A, stairTreads } from './town-geo.js';
 
 const Y = CURB;
 export const SHELTER_HOLES = [
@@ -35,7 +36,7 @@ export function buildShelterSite(kit) {
   const stat = new THREE.Group(); group.add(stat);
   const dyn = new THREE.Group(); group.add(dyn);
   const solids = [], walk = [];
-  const solid = (x0, x1, z0, z1, id, y0 = -3, y1 = 3) => { const s = { x0, x1, z0, z1, y0, y1, id }; solids.push(s); return s; };
+  const solid = (x0, x1, z0, z1, id, y0 = -3, y1 = 3, extra) => { const s = { x0, x1, z0, z1, y0, y1, id, ...extra }; solids.push(s); return s; };
   const conc = kit.surface('concrete', { color: 0xb3b0a8 }), darkConc = kit.surface('concrete', { color: 0x55585a });
   const steel = kit.mat('steel'), dark = kit.mat('darkMetal'), glass = kit.mat('glass', { opacity: 0.4 }), yellow = kit.mat('paint:#f2c230', { roughness: 0.5 });
   const tex = (key, w, h, draw, o) => kit.memo(`town:sh:${key}`, () => kit.texture(kit.canvas(w, h, draw), o));
@@ -54,21 +55,22 @@ export function buildShelterSite(kit) {
 
   // ================= A: stair kiosk =================
   {
-    const x0 = -87.3, x1 = -84.7, cx = (x0 + x1) / 2, zt = 13.6, n = 8, rise = 0.17, run = 0.28;
-    for (let i = 0; i < n; i++) {
-      const top = Y - rise * (i + 1), z = zt + run * (i + 0.5);
-      stat.add(kit.slab(x1 - x0, top + 1.6, run, conc, { x: cx, y: -1.6, z }));
-      stat.add(kit.box(x1 - x0 - 0.2, 0.012, 0.05, yellow, { x: cx, y: top, z: z - run / 2 + 0.03, cast: false }));
+    // 7 risers of 0.17 m: 6 treads of 0.28 m, the 7th lands on a 0.72 m landing in front of the fire door.
+    const { x0, x1, zt, n, rise, run } = STAIR_A, cx = (x0 + x1) / 2, zl = zt + run * (n - 1);
+    for (const { z0, z1, top } of stairTreads(Y)) { // each tread (the last: the landing), yellow nosing strip
+      stat.add(kit.slab(x1 - x0, top + 1.6, z1 - z0, conc, { x: cx, y: -1.6, z: (z0 + z1) / 2 }));
+      stat.add(kit.box(x1 - x0 - 0.2, 0.012, 0.05, yellow, { x: cx, y: top, z: z0 + 0.03, cast: false }));
     }
     const bottom = Y - rise * n;
     stat.add(kit.box(x1 - x0, 0.22, 0.04, conc, { x: cx, y: Y - 0.21, z: zt + 0.02 })); // nosing of the top riser
-    stat.add(kit.slab(x1 - x0, 0.1, 16 - (zt + run * n), conc, { x: cx, y: bottom - 0.1, z: (zt + run * n + 16) / 2 }));
     for (const x of [x0 - 0.15, x1 + 0.15]) {
       stat.add(kit.slab(0.3, Y + 1.6 + 1.0, 16 - 12.8, conc, { x, y: -1.6, z: (12.8 + 16) / 2 }));
       const gp = kit.box(0.02, 1.3, 3.1, glass, { x, y: Y + 1.0, z: (12.9 + 16) / 2, cast: false }); gp.userData.keep = true; stat.add(gp);
       stat.add(kit.box(0.08, 2.5, 0.08, steel, { x, y: Y, z: 12.85 }));
-      rail([x + (x < cx ? 0.2 : -0.2), Y + 0.85, zt], [x + (x < cx ? 0.2 : -0.2), bottom + 0.85, zt + run * n]);
+      const rx = x + (x < cx ? 0.2 : -0.2); // handrail 0.85 m over the nosings, level along the landing
+      rail([rx, Y + 0.85, zt], [rx, bottom + rise + 0.85, zl]); rail([rx, bottom + rise + 0.85, zl], [rx, bottom + rise + 0.85, 15.8]);
     }
+    for (const x of [x0 + 0.1, x1 - 0.1]) stat.add(kit.box(0.2, 2.3, 0.08, conc, { x, y: bottom, z: 15.95 })); // door jambs fill the pit width (no gap under the facade)
     stat.add(kit.box(3.5, 0.12, 3.6, kit.mat('paint:#5a6670', { roughness: 0.4, metalness: 0.6 }), { x: cx, y: Y + 2.5, z: 14.3, rx: 0.04 }));
     const roofGlass = kit.box(3.3, 0.03, 3.4, glass, { x: cx, y: Y + 2.64, z: 14.3, rx: 0.04, cast: false }); roofGlass.userData.keep = true; stat.add(roofGlass);
     const lintel = kit.sign(['민방위 대피시설 · 출입구 A'], { w: 2.9, h: 0.32, bg: '#1f4e8c', single: true, emissive: 0.3 });
@@ -122,6 +124,7 @@ export function buildShelterSite(kit) {
     // boom barrier (차단기) on the ramp, pivot at the cabinet by the west wall
     const zb = 48.5, yb = rampYB(zb);
     stat.add(kit.box(0.4, 1.0, 0.35, yellow, { x: x0 + 0.3, y: yb, z: zb }));
+    solid(x0, x0 + 0.52, zb - 0.2, zb + 0.2, 'boomCabinet', -3, yb + 1.0); // the cabinet stays when the boom is up
     const pivot = new THREE.Group(); pivot.position.set(x0 + 0.3, yb + 0.92, zb); dyn.add(pivot);
     const armMat = kit.memo('town:boomArm', () => new THREE.MeshStandardMaterial({ roughness: 0.5, map: tex('boom', 256, 16, (g, w, h) => { for (let k = 0; k < 16; k++) { g.fillStyle = k % 2 ? '#ffffff' : '#d42a24'; g.fillRect(k * w / 16, 0, w / 16, h); } }) }));
     const arm = kit.box(8.1, 0.09, 0.07, armMat, { x: 4.05, y: -0.045, z: 0 }); pivot.add(arm);
@@ -134,14 +137,19 @@ export function buildShelterSite(kit) {
     const xl = -112, xm = -109.6, xt = -101.8, z0 = 13.75, z1 = 16, yb = -0.5;
     walk.push({ x0: xm, x1: xt, z0, z1, ramp: { axis: 'x', y0: yb, y1: Y } }, { x0: xl, x1: xm, z0, z1, y: yb });
     const floor = kit.surface('concrete', { color: 0xc9c5bc });
-    stat.add(quad([xm, yb, z1], [xt, Y, z1], [xt, Y, z0], [xm, yb, z0], floor, 1));
-    stat.add(quad([xl, yb, z1], [xm, yb, z1], [xm, yb, z0], [xl, yb, z0], floor, 1));
+    const zq = 13.6; // floor runs under the trench wall (no slit along the walk zone's edge)
+    stat.add(quad([xm, yb, z1], [xt, Y, z1], [xt, Y, zq], [xm, yb, zq], floor, 1));
+    stat.add(quad([xl, yb, z1], [xm, yb, z1], [xm, yb, zq], [xl, yb, zq], floor, 1));
     stat.add(kit.slab(xt - xl, Y + 1.2, 0.15, conc, { x: (xl + xt) / 2, y: -1.1, z: 13.6 }), kit.slab(0.3, Y + 1.2, 2.4, conc, { x: xl - 0.15, y: -1.1, z: 14.8 }));
     stat.add(quad([xt, Y + 0.004, z1], [xt + 0.6, Y + 0.004, z1], [xt + 0.6, Y + 0.004, z0], [xt, Y + 0.004, z0], tactile, 0.3));
     stat.add(quad([-111.6, yb + 0.004, 15.92], [-109.8, yb + 0.004, 15.92], [-109.8, yb + 0.004, 15.3], [-111.6, yb + 0.004, 15.3], tactile, 0.3));
     for (const h of [0.65, 0.85]) for (const z of [13.85, 15.9]) {
       rail([xt + 0.3, Y + h, z], [xm, yb + h, z]); rail([xm, yb + h, z], [xl + 0.15, yb + h, z]);
     }
+    // guard rail on the sidewalk edge of the trench and across its west end (what railC blocks)
+    for (const h of [0.5, 1.0]) { rail([xt - 0.2, Y + h, 13.56], [xl - 0.15, Y + h, 13.56]); rail([xl - 0.15, Y + h, 13.56], [xl - 0.15, Y + h, 15.95]); }
+    for (let x = xt - 0.2; x >= xl - 0.2; x -= 1.6) stat.add(kit.cyl(0.03, 0.03, 0.9, kit.mat('metal'), { x: Math.max(x, xl - 0.15), y: Y + 0.1, z: 13.56 }, 6));
+    stat.add(kit.cyl(0.03, 0.03, 1.0, kit.mat('metal'), { x: xl - 0.15, y: Y, z: 15.9 }, 6));
     for (let x = xl + 0.3; x <= xt + 0.3; x += 1.5) { const y = x > xm ? yb + (Y - yb) * (x - xm) / (xt - xm) : yb; stat.add(kit.cyl(0.025, 0.025, 0.85, kit.mat('metal'), { x, y, z: 13.85 }, 6)); }
     shelterSign(-108.4, yb + 1.95, 15.94, Math.PI);
     stat.add(kit.cyl(0.04, 0.04, 2.6, steel, { x: xt + 0.7, y: Y, z: 13.2 }, 8)); shelterSign(xt + 0.7, Y + 2.55, 13.15, Math.PI, 0.4);
@@ -162,7 +170,9 @@ export function buildShelterSite(kit) {
     const inner = kit.box(1.0, 0.06, 0.1, emLamp, { x: -110.7, y: yb + 2.15, z: 15.9, cast: false });
     const cl = new THREE.PointLight(0xf2f6ff, 14, 7, 2); cl.position.set(-110.7, yb + 1.9, 15.1); kit.lit('emergency', cl, 14);
     opening.add(hole, ex, inner); dyn.add(opening, cl); kit.merge(opening); // cl outside `opening`: lights never hide
-    solid(xl, xt, 13.45, z0, 'railC', -3, 2); solid(xl - 0.3, xl, 13.45, z1, 'railC', -3, 2);
+    // trench edge: handrail height (a prompt or a look over it from the sidewalk is not hidden), never vaulted
+    const edge = { noVault: true, noClimb: true };
+    solid(xl, xt, 13.45, z0, 'railC', -3, Y + 1.0, edge); solid(xl - 0.3, xl, 13.45, z1, 'railC', -3, Y + 1.0, edge);
     gates.access = (open) => { shutter.visible = !open; opening.visible = open; kit.gateLit(cl, open); };
   }
 
@@ -187,13 +197,14 @@ export function buildShelterSite(kit) {
     const note = kit.sign(['동쪽 출입구 폐쇄', 'A 계단 · B 진출입로 이용'], { w: 0.9, h: 0.6, bg: '#ffffff', fg: '#c42b25', border: '#c42b25', single: true });
     note.position.set(-66.9, Y + 1.25, 34.5); note.rotation.y = Math.PI / 2; closed.add(note, kit.box(0.05, 0.95, 0.05, dark, { x: -66.92, y: Y, z: 34.5 }), kit.box(0.4, 0.04, 0.4, dark, { x: -66.92, y: Y, z: 34.5 }));
     dyn.add(closed); kit.merge(closed);
-    const barrier = solid(-68.0, -67.55, 28.4, 33.6, 'gateEast');
+    const barrier = solid(-70.0, -67.55, 28.4, 33.6, 'gateEast'); // back to the facade: no way behind it, holds the point
     gates.east = (open) => { closed.visible = !open; barrier.off = open; for (const { g, s } of leaves) g.position.z = zc + s * (open ? 2.25 : 0.78); };
   }
 
   // ================= guide signs (유도표지판) on 2 m posts =================
   const ENT = { A: PLACES.shelterA, B: PLACES.shelterB, C: PLACES.shelterC, east: PLACES.shelterEast };
-  for (const [x, z, nx, nz, to] of [[-58.6, 9.4, 1, 0, 'A'], [-118, 9.4, -1, 0, 'C'], [-57, 26, 0, -1, 'east'], [-57, 58, 0, 1, 'B'], [-61.5, -8.8, 0, -1, 'A'], [-44.6, 26.6, 1, 0, 'east']]) {
+  // posts in the furniture strip by the curb, off the walking lines (sidewalk centres 2 m in, evacuation paths)
+  for (const [x, z, nx, nz, to] of [[-58.6, 6.7, 1, 0, 'A'], [-118, 6.7, -1, 0, 'C'], [-54.7, 26, 0, -1, 'east'], [-54.7, 58, 0, 1, 'B'], [-61.5, -6.7, 0, -1, 'A'], [-45.3, 26.6, 1, 0, 'east']]) {
     const t = ENT[to], dx = t.x - x, dz = t.z - z, d = Math.hypot(dx, dz), fx = -nx, fz = -nz;
     const ahead = (dx * fx + dz * fz) / d, side = (dx * -fz + dz * fx) / d;
     const arrow = ahead > 0.7 ? 'up' : side > 0 ? 'right' : 'left', meters = Math.max(10, Math.round(d / 5) * 5);

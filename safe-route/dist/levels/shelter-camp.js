@@ -80,7 +80,9 @@ export function buildCamp(kit, T) {
     t.add(kit.box(w - 0.2, 0.03, 0.03, M.legs, { y: 0.15 }));
     return add(t);
   }
+  const chairBodies = [];   // folding chairs block the body (not climbable, not a vault target)
   function chair(x, z, ry = 0) {
+    chairBodies.push({ x0: x - 0.23, x1: x + 0.23, z0: z - 0.23, z1: z + 0.23, y0: -1, y1: 0.95, noVault: true, noClimb: true });
     const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry;
     c.add(kit.box(0.42, 0.03, 0.4, M.seat, { y: 0.45 })); c.add(kit.box(0.42, 0.32, 0.03, M.seat, { y: 0.62, z: 0.2 }));
     for (const sx of [-0.19, 0.19]) { c.add(kit.box(0.025, 0.95, 0.025, M.legs, { x: sx, z: 0.21, rx: 0.12 })); c.add(kit.box(0.025, 0.5, 0.025, M.legs, { x: sx, z: -0.17, rx: -0.2 })); }
@@ -204,7 +206,7 @@ export function buildCamp(kit, T) {
     { x0: BOARD.x - 0.95, x1: BOARD.x + 0.95, z0: BOARD.z - 0.32, z1: BOARD.z + 0.32, y0: -1, y1: 2.1 },
     { x0: PALLETS.x - 1.3, x1: PALLETS.x + 1.2, z0: PALLETS.z - 1.6, z1: PALLETS.z + 2.0, y0: -1, y1: 1.5 },
     { x0: 7.1, x1: 7.7, z0: -4.7, z1: -3.3, y0: -1, y1: 0.9 },
-    ...carSolids,
+    ...carSolids, ...chairBodies,
   ];
   void GRID; void STAIR;
   return { group: g, live, mats, seats, solids, dial, banner, cloth, boardMat, lanternLight };

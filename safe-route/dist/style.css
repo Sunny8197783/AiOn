@@ -495,3 +495,5 @@ html.sim-lowvision #world { filter: blur(6px) brightness(.6) contrast(.85) satur
 .cine-skip { position: absolute; right: max(16px, 3vw); bottom: calc(12vh - 34px); color: rgba(255, 255, 255, .55); font-size: .8rem; letter-spacing: .05em; opacity: 0; transition: opacity .6s .8s; }
 .cine.on .cine-skip { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .cine-bar { transition: none; } }
+/* smoke escape (story/escape.js), --smoke 0..1 */ #world.sim-smoke { filter: blur(calc(var(--smoke, 0) * 5px)) brightness(calc(1 - var(--smoke, 0) * .4)) sepia(calc(var(--smoke, 0) * .35)); }
+html.sim-lowvision #world.sim-smoke { filter: blur(calc(6px + var(--smoke, 0) * 4px)) brightness(calc(.6 - var(--smoke, 0) * .2)) contrast(.85) saturate(.6); }

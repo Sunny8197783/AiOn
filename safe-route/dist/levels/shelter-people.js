@@ -1,7 +1,9 @@
 // People in the shelter. Every evacuee owns a seat on a mat (the camp already laid out bags and shoes there);
 // arriving, leaving and toilet trips move that same person between an entrance and the seat, so nobody pops in
 // or swaps outfits. Plus the reception queue, a volunteer and two radio listeners on chairs, the shelter manager
-// (vest, no baton) and 서연 (hidden until the director shows her). Works without engine/crowd.js.
+// (vest, no baton), 서연 (hidden until the director shows her) and 304호 어르신 (setElder('on'): seated on a free mat
+// beside the player's spot). Works without engine/crowd.js. Arrivals by ramp B / ramp C never start (and leavers
+// never vanish) where the camera sees it; stair arrivals come down flight 2 from behind its closing wall.
 import { SPOT, RECEPTION, RADIO, CHAIRS } from './shelter-camp.js';
 
 const yawTo = (dx, dz) => Math.atan2(-dx, -dz);
@@ -9,7 +11,7 @@ const turn = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 const AN = -6.9, AS = 9.0;   // north / south driving aisles (z)
 // Entrance paths [x, z]: they start out of sight (stair flight, ramp slopes, lobby and toilet doors) and end on an aisle.
 const WAYS = {
-  stairs: [[4.3, -19.6], [4.3, -17.3], [5, -16.0], [5, -10.4], [3.5, -9.2], [3.5, AN]],
+  stairs: [[5.7, -18.0], [5.7, -20.6], [4.3, -20.6], [4.3, -17.3], [5, -16.0], [5, -10.4], [3.5, -9.2], [3.5, AN]],
   access: [[-13, -23], [-13, -15.6], [-13, -10.0], [-12.4, AN]],
   east: [[24.6, -3.4], [22.8, -0.5], [20.3, -1.2], [20.3, AN]],
   toilet: [[24.6, 3.4], [22.8, 0.5], [20.3, -1.2], [20.3, AN]],
@@ -36,7 +38,7 @@ export function heightAt(walk, x, z) {
 // Entrance -> aisle -> gap column -> seat row -> seat. Reverse it to leave.
 function seatPath(way, s, desk = false) {
   const pts = WAYS[way].map(([x, z]) => ({ x, z }));
-  if (desk && way === 'stairs') pts.splice(4, 0, { ...DESK });
+  if (desk && way === 'stairs') pts.splice(6, 0, { ...DESK });
   const az = pts[pts.length - 1].z, gx = COLS.reduce((a, c) => (Math.abs(c - s.x) < Math.abs(a - s.x) ? c : a));
   pts.push({ x: gx, z: az }, { x: gx, z: s.z }, { x: s.x, z: s.z });
   return pts;
@@ -73,12 +75,19 @@ export function buildPeople(kit, people, { seats, walk }) {
   const chair = ([dx, dz, ry], b) => ({ x: b.x + dx, z: b.z + dz, ry });
   const vc = chair(CHAIRS.reception[1], RECEPTION);
   const volunteer = at('crowd', 42, vc.x, vc.z, vc.ry, 'sitChair');
-  const listeners = CHAIRS.radio.slice(0, 2).map((c, i) => { const q = chair(c, RADIO); return at(i ? 'elder' : 'crowd', 43 + i, q.x, q.z, q.ry, 'sitChair'); });
-  const queue = [[1.6, -9.5], [1.9, -10.35], [2.05, -11.15]].slice(0, Q.walk > 2 ? 3 : 2)
+  // (the older listener is a crowd grandfather: the 'elder' preset is 304호 어르신, who appears only by setElder)
+  const listeners = CHAIRS.radio.slice(0, 2).map((c, i) => { const q = chair(c, RADIO); return at('crowd', i ? 76 : 43, q.x, q.z, q.ry, 'sitChair'); });
+  const queue = [[1.25, -9.6], [1.45, -10.4], [1.6, -11.2]].slice(0, Q.walk > 2 ? 3 : 2)   // clear of the reception point
     .map(([x, z], i) => at('crowd', 50 + i, x, z, Math.PI + (i ? (r() - 0.5) * 0.4 : 0), 'idle'));
   const seoyeon = at('seoyeon', 7, SPOT.x + 1.5, SPOT.z + 1.9, yawTo(-1.5, -0.5), 'idle');
   seoyeon.group.visible = false;   // the director shows her
-  const still = [manager, volunteer, ...listeners, ...queue, seoyeon];
+  // 304호 어르신: on the nearest mat beside the player's spot that nobody uses, else at the west edge of the spot's mat
+  const taken = (x, z) => seats.some((s) => Math.abs(s.x - x) < 1.0 && Math.abs(s.z - z) < 1.1);
+  const ePos = [[SPOT.x - 2.2, SPOT.z], [SPOT.x + 2.2, SPOT.z], [SPOT.x, SPOT.z - 2.35]].find(([x, z]) => !taken(x, z)) || [SPOT.x - 0.7, SPOT.z + 0.2];
+  const eEdge = ePos[1] < 0 ? (ePos[1] < -2.5 ? -1 : 1) : (ePos[1] > 2.5 ? 1 : -1);   // as the camp seats: face the walkway
+  const elder = at('elder', 304, ePos[0], ePos[1] - eEdge * 0.25, eEdge > 0 ? Math.PI : 0, 'sit', 0.012);
+  elder.group.visible = false;
+  const still = [manager, volunteer, ...listeners, ...queue, seoyeon, elder];
 
   let mode = 'settled', phase = 'calm', fire = null, timer = 1, frame = 0, last = null, ways = ENTRANCES;
   const open = (list) => { const l = list.filter((w) => ways.includes(w)); return l.length ? l : ways; };
@@ -116,15 +125,32 @@ export function buildPeople(kit, people, { seats, walk }) {
     manager.setAnim(alert || mode === 'arriving' ? 'talk' : 'idle');
     queue.forEach((q, i) => q.setAnim(alert && i === 1 ? 'phone' : 'idle'));
   }
+  // Ramp B and ramp C ends are in plain view from the hall: use them only while the camera does not see that end
+  // (more than 18 m away or over 60° off the view); otherwise another open way, or nobody this time.
+  let cam = null;
+  const fwd = new THREE.Vector3();
+  const seen = ([x, z]) => {
+    if (!cam) return false;
+    const dx = x - cam.position.x, dz = z - cam.position.z, d = Math.hypot(dx, dz);
+    if (d > 18) return false;
+    cam.getWorldDirection(fwd); const f = Math.hypot(fwd.x, fwd.z) || 1;
+    return (dx * fwd.x + dz * fwd.z) / (d * f) > 0.5;
+  };
+  const wayFor = (list) => {
+    const l = open(list), w = pick(l);
+    if ((w !== 'ramp' && w !== 'access') || !seen(WAYS[w][0])) return w;
+    const alt = l.filter((k) => k !== 'ramp' && k !== 'access');
+    return alt.length ? pick(alt) : null;
+  };
   function launch() {
     if (busy() >= (mode === 'settled' ? Math.min(2, Q.walk) : Q.walk)) return;
     if (mode === 'arriving') {
-      const e = order.find((x) => x.mode === 'gone' && !out(x.home));
-      if (e) { e.p.setProp('backpack', r() < 0.5); go(e, seatPath(pick(open(IN)), e.home, true), seat); }
+      const e = order.find((x) => x.mode === 'gone' && !out(x.home)), w = e && wayFor(IN);
+      if (w) { e.p.setProp('backpack', r() < 0.5); go(e, seatPath(w, e.home, true), seat); }
     } else if (mode === 'leaving') {
       if (ev.reduce((k, x) => k + (x.mode === 'seat'), 0) <= Math.round(ev.length * 0.25)) return;
-      const e = order.find((x) => x.mode === 'seat' && !nearPlayer(x));
-      if (e) { e.p.setProp('backpack', true); go(e, seatPath(pick(open(OUT)), e.home).reverse(), hide, true); }
+      const e = order.find((x) => x.mode === 'seat' && !nearPlayer(x)), w = e && wayFor(OUT);
+      if (w) { e.p.setProp('backpack', true); go(e, seatPath(w, e.home).reverse(), hide, true); }
     } else if (!fire && r() < 0.6) {   // settled: now and then someone goes to the toilets by the lift hall
       const e = pick(ev.filter((x) => x.mode === 'seat' && !nearPlayer(x)));
       if (e) go(e, seatPath('toilet', e.home).reverse(), (x) => { x.mode = 'away'; x.p.group.visible = false; x.away = 10 + r() * 12; }, true);
@@ -148,12 +174,13 @@ export function buildPeople(kit, people, { seats, walk }) {
     const k = Math.min(d, e.speed * (e.brisk ? 1.3 : 1) * dt) / d;
     g.position.x += dx * k; g.position.z += dz * k; g.position.y = heightAt(walk, g.position.x, g.position.z);
     g.rotation.y += turn(g.rotation.y, yawTo(dx, dz)) * Math.min(1, dt * 7);
-    const stair = g.position.x > 3.6 && g.position.x < 4.95 && g.position.z < -17.45;
-    e.p.setAnim(stair ? (dz < 0 ? 'stairsUp' : 'stairsDown') : e.brisk ? 'brisk' : 'walk');
+    const x = g.position.x, z = g.position.z, flight = z < -17.45 && z > -19.97;   // flight 1 rises north, flight 2 south
+    const f1 = flight && x > 3.6 && x < 4.95, f2 = flight && x > 5.05 && x < 6.4;
+    e.p.setAnim(f1 ? (dz < 0 ? 'stairsUp' : 'stairsDown') : f2 ? (dz > 0 ? 'stairsUp' : 'stairsDown') : e.brisk ? 'brisk' : 'walk');
   }
 
-  function update(dt, t, pl) {
-    frame++; if (pl) last = pl;
+  function update(dt, t, pl, camera) {
+    frame++; if (pl) last = pl; cam = camera || null;
     timer -= dt;
     if (timer <= 0) { timer = mode === 'arriving' ? 2.2 + r() * 1.5 : mode === 'leaving' ? 2.8 + r() * 2 : 7 + r() * 6; launch(); }
     for (const e of ev) {
@@ -171,11 +198,13 @@ export function buildPeople(kit, people, { seats, walk }) {
     const near = (p, d) => pl && Math.hypot(pl.x - p.group.position.x, pl.z - p.group.position.z) < d;
     if (near(manager, 5)) manager.lookAt(pl.x, pl.z); else manager.lookAt(null);
     if (seoyeon.group.visible && near(seoyeon, 6)) seoyeon.lookAt(pl.x, pl.z); else seoyeon.lookAt(null);
+    if (elder.group.visible && near(elder, 4)) elder.lookAt(pl.x, pl.z); else elder.lookAt(null);
   }
 
   reset();
   return {
-    group, npcs: { shelterManager: manager, seoyeon, volunteer },
+    group, npcs: { shelterManager: manager, seoyeon, volunteer, elder },
+    setElder(v) { elder.group.visible = v === 'on'; },   // 'on' | 'off'
     setCrowd(m) { mode = m; reset(); },
     setPhase(p) { phase = p; applyPhase(); },
     setFire(pos) { fire = pos; reset(); },   // {x, z} or null: clears the seats around it and pauses toilet trips

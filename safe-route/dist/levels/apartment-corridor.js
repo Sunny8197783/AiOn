@@ -1,6 +1,7 @@
 // 3rd-floor corridor (복도식): doors 301-304 (numbers only), kitchen windows with security grilles, gas pipe and
 // meters, the elevator, the stair fire door, the 옥내소화전 cabinet with a 분말소화기, everyday clutter, and the spot
 // near 304 where the hallway fire can appear. 303's entry is modelled behind its door so 서연 can stand in it.
+// buildElder: 304호 어르신 at her door, one hand on the wall handrail (design M2), shown by the 'elder304' state.
 import * as THREE from 'three';
 import { F3 } from './apartment-parts.js';
 import { buildElevator } from './apartment-core.js';
@@ -15,6 +16,7 @@ export function buildCorridor(B, g, dyn, H) {
   g.add(kit.slab(38, 0.2, 2.1, M.corridorFloor, { x: 3, y: Y - 0.2, z: -0.95 }));
   B.floor(-16, 22, -2, 0, Y);
   g.add(kit.slab(38, 0.1, 2.1, M.ceiling, { x: 3, y: CY, z: -0.95 }));
+  B.ceiling(-16, 22, -2, 0, CY);
   g.add(kit.slab(38.4, 0.3, 2.5, M.concrete, { x: 3, y: CY + 0.1, z: -1.05 }));
 
   const wins = [];
@@ -35,7 +37,7 @@ export function buildCorridor(B, g, dyn, H) {
   // Unit doors (steel, opening outward), number plates, digital locks, delivery boxes.
   for (const [id, [a, b]] of Object.entries(DOORS)) {
     const live = id === '302' || id === '303';
-    const D = B.door(live ? dyn : g, 'z', 0, a, b, Y, 2.1, M.unitDoor, { hinge: id === '303' ? 'b' : 'a', dir: -1, lock: true, solid: live });
+    const D = B.door(live ? dyn : g, 'z', 0, a, b, Y, 2.1, M.unitDoor, { hinge: id === '303' ? 'b' : 'a', dir: -1, lock: true, solid: live, id: 'door' + id });
     if (id === '302') H.door302 = B.autoDoor(D, 1.4);
     if (id === '303') H.door303 = D;
     B.plate(g, id, { x: (a + b) / 2, y: Y + 2.3, z: -0.106, ry: Math.PI, w: 0.26, h: 0.12, bg: '#efe9dc', fg: '#33302b', border: '#8a8378' });
@@ -94,6 +96,7 @@ export function buildCorridor(B, g, dyn, H) {
   g.add(kit.box(0.8, 0.012, 0.5, M.rubber, { x: 9.475, y: Y, z: -0.4, cast: false }));
   g.add(kit.cyl(0.16, 0.12, 0.34, kit.mat('paint:#d8d2c6'), { x: 10.75, y: Y, z: -0.3 }));
   const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), kit.mat('foliage')); leaf.position.set(10.75, Y + 0.62, -0.3); leaf.scale.set(1, 1.3, 1); leaf.castShadow = true; g.add(leaf);
+  B.solid(10.55, 10.95, -0.5, -0.1, Y, Y + 0.9);
   for (let i = 0; i < 3; i++) g.add(kit.box(1.0, 0.02, 0.3, M.darkMetal, { x: 18.1, y: Y + 0.05 + i * 0.25, z: -0.25 }));
   for (const x of [17.62, 18.58]) g.add(kit.box(0.02, 0.6, 0.3, M.darkMetal, { x, y: Y, z: -0.25 }));
   const shoes = [];
@@ -126,12 +129,38 @@ export function buildCorridor(B, g, dyn, H) {
   B.wallX(e, 8.7, 0, 1.7, Y, CY, M.wallpaper, { side: 1, solid: false });
   B.wallX(e, 10.3, 0, 1.7, Y, CY, M.wallpaper, { side: -1, solid: false });
   B.wallZ(e, 1.7, 8.7, 10.3, Y, CY, M.wallpaper, { side: -1, solid: false });
+  B.ceiling(8.7, 10.3, 0, 1.7, CY - 0.1);
   e.add(kit.slab(1.6, 0.1, 1.7, M.ceiling, { x: 9.5, y: CY - 0.1, z: 0.85 }), kit.box(0.35, 2.0, 1.1, M.white, { x: 10.1, y: Y, z: 0.8 }));
   e.add(kit.box(0.5, 0.4, 0.03, M.lightWood, { x: 9.3, y: Y + 1.3, z: 1.66 }), kit.cyl(0.15, 0.15, 0.02, B.onPower(B.glowMat('#ffdcae', 2.5)), { x: 9.5, y: CY - 0.12, z: 0.8, cast: false }));
   B.solid(9.0, 9.95, 0.05, 0.4, Y, Y + 2.1);
   H.seoyeonSpot = { x: 9.475, y: Y, z: 0.62, yaw: 0 };
-  B.point('seoyeonDoor', '303호', 9.475, Y, -0.65, 'door');
-  B.point('homeDoor', '302호 (집)', -1.275, Y, -0.6, 'door');
+  B.point('seoyeonDoor', '303호', 9.475, Y, -0.65, 'door').host = 'door303';
+  B.point('homeDoor', '302호 (집)', -1.275, Y, -0.6, 'door').host = 'door302';
+
+  // Wall handrail by 304 (wood on two brackets), the one 어르신 holds.
+  const RAIL = { x0: 14.85, x1: 15.95, y: Y + 0.86, z: -0.16 };
+  B.rod(g, [RAIL.x0, RAIL.y, RAIL.z], [RAIL.x1, RAIL.y, RAIL.z], 0.022, M.darkWood);
+  for (const x of [RAIL.x0 + 0.1, RAIL.x1 - 0.1]) { B.rod(g, [x, RAIL.y - 0.03, RAIL.z], [x, RAIL.y - 0.03, -0.1], 0.008, M.metal); g.add(kit.cyl(0.03, 0.03, 0.012, M.metal, { x, y: RAIL.y - 0.03, z: -0.106, rx: Math.PI / 2 })); }
+}
+
+export const ELDER = { x: 15.45, y: F3, z: -0.4, yaw: Math.PI / 2 }; // faces west, toward 302; the rail is at her left
+export const ELDER_STATES = ['off', 'on', 'shelter'];
+
+// 304호 어르신: setElder('on') shows her and her 'elder304' point; 'off' (not out yet) and 'shelter' (already gone
+// down) hide both. update(dt, player) turns her head toward a player who comes close on this floor.
+export function buildElder(B, dyn, people) {
+  const elder = people.createPerson({ preset: 'elder', seed: 304 });
+  elder.group.position.set(ELDER.x, ELDER.y, ELDER.z); elder.group.rotation.y = ELDER.yaw;
+  elder.setAnim('idle', { instant: true }); elder.setLean?.(0.12, 0); elder.group.visible = false; dyn.add(elder.group);
+  const point = B.point('elder304', '304호 어르신', ELDER.x - 0.35, ELDER.y, ELDER.z - 0.15, 'npc');
+  point.enabled = false;
+  function setElder(v) { const on = v === 'on'; elder.group.visible = on; point.enabled = on; }
+  function update(dt, p) {
+    if (!elder.group.visible) return;
+    const near = Math.hypot(p.x - ELDER.x, p.z - ELDER.z) < 5 && Math.abs(p.y - ELDER.y) < 1;
+    elder.lookAt?.(...(near ? [p.x, p.z] : [null, null])); elder.update(dt);
+  }
+  return { elder, point, setElder, update };
 }
 
 // Soft irregular blotch texture (alpha falls off from the centre), for soot and extinguisher powder.

@@ -45,7 +45,9 @@ test('judge records the pick and gives a ladder result', () => {
   r = judge(G, 'camp_food', 'official');
   assert.equal(r.ok, false); assert.equal(r.result, 'misled');
   assert.equal(judge(G, 'camp_food', 'neighbor', { item: 'seoyeon' }).ok, true);
-  assert.equal(judge(G, 'camp_food', 'rumor', { item: 'seoyeon' }).ok, false, 'a true neighbor memo is not a rumor');
+  const dq = judge(G, 'camp_food', 'rumor', { item: 'seoyeon' });
+  assert.equal(dq.ok, false, 'a true neighbor memo is not a rumor');
+  assert.equal(dq.result, 'doubted', 'doubting a true memo is not "following a rumor"');
   const evs = G.events.filter(e => e.type === 'rumor_judged');
   assert.equal(evs.length, 4);
   assert.deepEqual(evs[0].details, { id: 'camp_food', item: 'claim', pick: 'rumor', ok: true });

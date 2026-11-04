@@ -3,10 +3,12 @@
 // buildApartment(kit, people, fx) -> Level (see spec 5.2). Lighting: room lamps, motion-sensor lamps (센서등) and
 // battery emergency lamps share a small pool of PointLights given to the fixtures nearest the player, so the light
 // count never changes (no shader recompiles). Green exit signs are in the kit's 'emergency' group and stay lit.
+// level.ceilings (lobby, stair landings, corridor, 302호, 303 entry) keep the camera and climbs under the ceilings;
+// states 'elder304' (304호 어르신 at her door) and 'curtain' (암막 커튼 in the living room) serve design M2 / M4.
 import * as THREE from 'three';
 import { createBuilder, F3, FL } from './apartment-parts.js';
 import { buildLobby, buildElevator, buildStairs } from './apartment-core.js';
-import { buildCorridor, FIRE_SPOT } from './apartment-corridor.js';
+import { buildCorridor, buildElder, FIRE_SPOT, ELDER_STATES } from './apartment-corridor.js';
 import { buildHome } from './apartment-home.js';
 import { buildProps } from './apartment-props.js';
 import { buildStock } from './apartment-stock.js';
@@ -24,6 +26,8 @@ const STATES = {
   seoyeonDoor: ['closed', 'open'],
   candles: ['none', 'lit'],
   windowView: ['day', 'dusk', 'night', 'blackout'],
+  elder304: ELDER_STATES,           // 304호 어르신 at her door ('on'), not out yet ('off'), gone down to the shelter ('shelter')
+  curtain: ['none', 'hung', 'sealed'], // 암막 커튼 over the living-room glass, edges taped when sealed
 };
 
 export async function buildApartment(kit, people, fx) {
@@ -45,20 +49,20 @@ export async function buildApartment(kit, people, fx) {
   const frames = new THREE.Group(); frames.name = 'apt-door-frames';
   for (const o of [...dyn.children]) if (o.isMesh && !o.isInstancedMesh) frames.add(o);
   dyn.add(frames); kit.merge(frames);
-  buildHome(B, areas[3], H); // after the corridor: it fits the inner lock onto H.door302's leaf
+  buildHome(B, areas[3], H, dyn); // after the corridor: it fits the inner lock onto H.door302's leaf
   for (const D of [...B.doors, H.door303]) kit.merge(D.pivot);
   kit.merge(H.fire.normal); kit.merge(H.fire.scorched);
   const props = buildProps(B, areas[3], dyn), stock = buildStock(B, areas[3], dyn), view = buildView(B);
   group.add(view.group);
-  B.fixtures.push({ x: 4, y: 2.3, z: -3.3, color: 0xfff3e2, intensity: 4.5, distance: 11 }, { x: 10.75, y: 2.25, z: -4, color: 0xfff3e2, intensity: 2.5, distance: 6 });
+  B.fixtures.push({ x: 4, y: 2.3, z: -3.3, color: 0xfff3e2, intensity: 3.2, distance: 11 }, { x: 10.75, y: 2.25, z: -4, color: 0xfff3e2, intensity: 2.5, distance: 6 });
   for (const a of areas) kit.merge(a);
 
   // ---- fixtures + light pool ----
   const fixtures = [
     ...B.fixtures.map((f) => ({ ...f, kind: 'room' })),
     ...B.sensors.map((s) => s.kind === 'backup'
-      ? { x: s.x, y: s.y, z: s.z, color: 0xe6eeff, intensity: 2.4, distance: 7, kind: 'backup' }
-      : { x: s.x, y: s.y - 0.25, z: s.z, color: 0xfff1dc, intensity: 3.0, distance: 6.5, kind: 'sensor', hold: 0, ceil: s.y }),
+      ? { x: s.x, y: s.y, z: s.z, color: 0xe6eeff, intensity: 1.6, distance: 7, kind: 'backup' }
+      : { x: s.x, y: s.y - 0.25, z: s.z, color: 0xfff1dc, intensity: 1.2, distance: 6.5, kind: 'sensor', hold: 0, ceil: s.y }),
   ];
   // Zones keep pooled lights from shining through closed walls: a fixture lights the player's zone, or a
   // neighbouring zone while the door between them is open.
@@ -68,6 +72,7 @@ export async function buildApartment(kit, people, fx) {
   const linked = (a, b) => LINKS.some(([u, v, D]) => ((u === a && v === b) || (u === b && v === a)) && D && D.k > 0.1);
   for (const f of fixtures) { f.w = 0; f.on = false; f.zone = zoneOf(f.x, f.y, f.z); }
   const POOL = kit.quality === 'low' ? 3 : 5;
+  const LIGHT_SCALE = 0.75; // the fixtures' candela, toned down so night rooms do not glare (sensor/backup lamps are set low above)
   const pool = Array.from({ length: POOL }, () => { const l = new THREE.PointLight(0xffffff, 0, 8, 2); l.castShadow = false; dyn.add(l); return l; });
   // sensor lamp diffusers: an "off" plastic dome for every lamp, a glowing dome shown over it while lit
   const sensors = fixtures.filter((f) => f.kind === 'sensor');
@@ -107,7 +112,8 @@ export async function buildApartment(kit, people, fx) {
     pool.forEach((l, i) => {
       const f = lit[i];
       if (!f) { l.intensity = 0; return; }
-      l.position.set(f.x, f.y - 0.4, f.z); l.color.setHex(f.color); // a point light this close to the ceiling would blow it out l.distance = f.distance; l.intensity = f.intensity * f.w;
+      l.position.set(f.x, f.y - 0.4, f.z); l.color.setHex(f.color); // a point light this close to the ceiling would blow it out
+      l.distance = f.distance; l.intensity = f.intensity * f.w * LIGHT_SCALE;
     });
   }
 
@@ -131,6 +137,7 @@ export async function buildApartment(kit, people, fx) {
   const seoyeon = people.createPerson({ preset: 'seoyeon', seed: 7 });
   seoyeon.group.position.set(H.seoyeonSpot.x, H.seoyeonSpot.y, H.seoyeonSpot.z); seoyeon.group.rotation.y = H.seoyeonSpot.yaw;
   seoyeon.setAnim('idle'); seoyeon.group.visible = false; dyn.add(seoyeon.group);
+  const elder = buildElder(B, dyn, people);
   let door303 = 0;
 
   // ---- spawns, anchors ----
@@ -145,11 +152,11 @@ export async function buildApartment(kit, people, fx) {
     stairWell: { x: 5.0, y: F3 + 2.2, z: 4.6, target: { x: 5.0, y: 1.0, z: 1.0 } },
   });
 
-  const S = { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day' };
+  const S = { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day', elder304: 'off', curtain: 'none' };
   const apply = {
     power: setPower, stock: (v) => stock.setStock(v), bag: props.setBag, radio: props.setRadio, hallFire: setFire,
     smoke: (v) => { smoke.setDensity(v); haze.setDensity(v * 0.5); }, seoyeonDoor: (v) => { seoyeon.group.visible = v === 'open'; },
-    candles: props.setCandle, windowView: view.setView, wallet: props.setWallet,
+    candles: props.setCandle, windowView: view.setView, wallet: props.setWallet, elder304: elder.setElder, curtain: H.setCurtain,
   };
   function setState(key, value) {
     if (!apply[key]) { console.warn(`[apartment] unknown state "${key}"; known: ${Object.keys(apply).join(', ')}`); return; }
@@ -164,10 +171,10 @@ export async function buildApartment(kit, people, fx) {
     const p = ctx.player || { x: 0, y: 0, z: 0 }, cam = ctx.camera;
     for (const D of B.doors) { // auto doors: open while the player is close on the same floor
       const want = Math.hypot(p.x - D.x, p.z - D.z) < D.auto && Math.abs(p.y - D.y) < 1.2 ? 1 : 0;
-      if (D.k !== want) D.set(D.k + Math.sign(want - D.k) * Math.min(Math.abs(want - D.k), dt * 1.8));
+      if (D.k !== want) { const k = D.k + Math.sign(want - D.k) * Math.min(Math.abs(want - D.k), dt * 1.8); D.set(k, k === want); }
     }
     const want303 = S.seoyeonDoor === 'open' ? 0.72 : 0;
-    if (door303 !== want303) { door303 += Math.sign(want303 - door303) * Math.min(Math.abs(want303 - door303), dt * 1.2); H.door303.set(door303); }
+    if (door303 !== want303) { door303 += Math.sign(want303 - door303) * Math.min(Math.abs(want303 - door303), dt * 1.2); H.door303.set(door303, door303 === want303); }
     stepLights(dt, p);
     if (power) for (const tick of B.ticks) tick(dt, t, S);
     else if (H.candleWindow) H.candleWindow.emissiveIntensity = 0.1 + 0.03 * Math.sin(t * 7.1) + 0.02 * Math.sin(t * 12.7); // a neighbour's candle in 301
@@ -176,12 +183,13 @@ export async function buildApartment(kit, people, fx) {
     if (p.y < 2 && Math.hypot(p.x - 10.4, p.z + 4.1) < 25) { // 박 소장 looks up when the player comes to the window
       manager.lookAt?.(...(Math.hypot(p.x - 10.4, p.z + 4.1) < 4.5 ? [p.x, p.z] : [null, null])); manager.update(dt);
     }
+    elder.update(dt, p);
     if (seoyeon.group.visible) { seoyeon.lookAt?.(...(Math.hypot(p.x - H.seoyeonSpot.x, p.z - H.seoyeonSpot.z) < 4 && Math.abs(p.y - F3) < 1 ? [p.x, p.z] : [null, null])); seoyeon.update(dt); }
   }
 
   return {
     id: 'apartment', group, env: 'interior',
-    walk: B.walk, solids: B.solids, points: B.points, spawns: B.spawns,
-    npcs: { manager, seoyeon }, states: STATES, setState, update, anchors: B.anchors,
+    walk: B.walk, solids: B.solids, points: B.points, spawns: B.spawns, ceilings: B.ceilings,
+    npcs: { manager, seoyeon, elder: elder.elder }, states: STATES, setState, update, anchors: B.anchors,
   };
 }

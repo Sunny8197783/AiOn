@@ -1,10 +1,10 @@
 // Fences from town-plan FENCES: green welded-mesh panels, brick block walls, box hedges and low park
-// railings, each with a blocking solid, plus invisible walls just outside BOUNDS so nobody walks off
-// into the filler city.
+// railings, each with a blocking solid (noVault/noClimb, sized to its mesh; town.js raises sealTops), plus
+// invisible walls just outside BOUNDS so nobody walks off into the filler city.
 import * as THREE from 'three';
 import { BOUNDS } from '../game/townmap.js';
 import { CURB, FENCES } from './town-plan.js';
-import { lineSolid } from './town-util.js';
+import { fenceSolid } from './town-geo.js';
 
 const Y = CURB;
 
@@ -50,7 +50,7 @@ export function buildFences(kit) {
   for (const line of FENCES) {
     const [x0, z0, x1, z1, kind] = line, L = Math.hypot(x1 - x0, z1 - z0);
     if (L < 0.05) continue;
-    solids.push({ ...lineSolid(line), id: `fence:${kind}` });
+    solids.push(fenceSolid(line, Y)); // sized to the mesh, never vaulted or climbed (town-geo FENCE_SIZE)
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0), ry = alongX ? 0 : Math.PI / 2;
     const steps = (per, list) => { const n = Math.max(1, Math.round(L / per)); for (let i = 0; i <= n; i++) list.push({ x: x0 + (x1 - x0) * i / n, y: Y, z: z0 + (z1 - z0) * i / n }); };
     if (kind === 'mesh') {

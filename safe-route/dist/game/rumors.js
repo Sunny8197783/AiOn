@@ -8,7 +8,7 @@
 // rumor(id) -> the set. posts(G, id) -> items with text evaluated (for talk lines, the phone and notes).
 // judge(G, id, pick, { item = 'claim' } = {}) -> { ok, label, truth, result, facts }
 //   pick: the notebook label the player gave the item. ok = pick matches its real label, or the player chose
-//   'rumor' (unconfirmed) for a false claim. result 'sorted' | 'misled' can go to recordEncounter(G, 'info', result).
+//   'rumor' (unconfirmed) for a false claim. result 'sorted' | 'doubted' (a true item held back as rumor) | 'misled' can go to recordEncounter(G, 'info', result).
 //   Records 'rumor_judged' { id, item, pick, ok }.
 // believe(G, id) -> true when the claim was false (G.know.misled = id). Records 'rumor_believed' { id, truth }.
 // verify(G, id) -> true items to show; clears G.know.misled if it was this id. Records 'rumor_checked' { id }.
@@ -76,7 +76,7 @@ export function judge(G, id, pick, { item = 'claim' } = {}) {
   if (!LABELS.includes(pick)) throw new Error(`unknown info label: ${pick}`);
   const ok = pick === it.label || (!it.truth && pick === 'rumor');
   recordEvent(G, 'rumor_judged', { id, item, pick, ok });
-  return { ok, label: it.label, truth: it.truth, result: ok ? 'sorted' : 'misled', facts: [...r.facts] };
+  return { ok, label: it.label, truth: it.truth, result: ok ? 'sorted' : it.truth ? 'doubted' : 'misled', facts: [...r.facts] };
 }
 
 export function believe(G, id) {

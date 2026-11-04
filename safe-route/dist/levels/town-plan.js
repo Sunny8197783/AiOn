@@ -1,5 +1,5 @@
 // Derived layout for the 3D town: fences that seal block interiors, barricade extents, closure guide
-// posts, pedestrian paths and traffic lanes. Pure data (no three.js); frame as in game/townmap.js.
+// posts, pedestrian and evacuation paths and traffic lanes. Pure data (no three.js); frame as in game/townmap.js.
 // Rule the fences keep: every block interior is closed except the pockets listed below, so a closure
 // barricade (which spans road + both sidewalks) cannot be walked around through a park, lot or yard.
 import { CLOSURES } from '../game/townmap.js';
@@ -66,9 +66,34 @@ export const SIDEWALKS = [
   [[0, -8], [0, 8]], [[-104, -8], [-104, 8]], [[-56, -14], [-44, -14]], [[-56, 14], [-44, 14]],
   [[44, -14], [56, -14]], [[44, 14], [56, 14]], [[-60, -8], [-60, 8]], [[60, -8], [60, 8]],
   [[0, 8], [0, 11], [-15, 22], [-15, 40], [-30, 44], [-38, 30.5], [-44, 30.5]],
-  [[56, 20], [62, 20], [70, 27], [100, 27]], [[-66, -11], [-80, -14], [-96, -18]],
+  [[56, 20], [62, 20], [67.6, 25.6], [100, 25.6]], [[-66, -11], [-80, -14], [-96, -18]], // 103동 walk clear of the canopy posts (z 27.4)
 ];
 
+// Where evacuees head for each shelter gate (just outside the entrance, on the walk surface).
+export const ENTRY = { stairs: { x: -86, z: 11.8 }, ramp: { x: -80, z: 55.4 }, access: { x: -102.4, z: 12.7 }, east: { x: -66.4, z: 31 } };
+// Members keep their place when the mode changes and walk to the nearest point of these paths, so every
+// sidewalk has one close by on its own side of the fences (the east side and the park included).
+const TO_A = [[44, 8], [-44, 8], [-44, 14], [-56, 14], [-56, 10], [-75, 10], [-86, 11.8]];
+export const EVAC = [
+  ['stairs', TO_A],
+  ['stairs', [[128, 8], [56, 8], ...TO_A]],
+  ['stairs', [[128, -8], [60, -8], [60, 8], [56, 8], ...TO_A]], ['stairs', [[56, 104], [56, 8], ...TO_A]],
+  ['stairs', [[56, -104], [56, -14], [44, -14], [44, -8], [-44, -8], [-44, -14], [-56, -14], [-56, -8], [-60, -8], [-60, 9.6], [-86, 11.8]]],
+  ['stairs', [[-38, 30.5], [-30, 44], [-15, 40], [-15, 22], [0, 14], [0, 8], ...TO_A.slice(1)]],
+  ['east', [[-15, 22], [-15, 40], [-30, 44], [-38, 30.5], [-44, 30.5], [-44, 31], [-56, 31], [-66.4, 31]]],
+  ['stairs', [[-56, -100], [-56, -8], [-60, -8], [-60, 9.6], [-86, 11.8]]], ['stairs', [[44, -54], [-44, -54], [-56, -54], [-56, -8], [-60, -8], [-60, 9.6], [-86, 11.8]]],
+  ['stairs', [[-128, -8], [-104, -8], [-104, 9.6], [-86, 11.8]]],
+  ['access', [[-128, -8], [-104, -8], [-104, 9.6], [-102.4, 12.7]]],
+  ['access', [[-118, -14], [-104, -8], [-104, 9.6], [-102.4, 12.7]]],
+  ['ramp', [[44, 54], [-42, 54], [-44, 55.2], [-56, 55.2], [-62, 55.6], [-80, 55.4]]], // crosses 문화로 clear of the light poles at z 54
+  // the z ±66 sidewalks cross 단지길 / 시장길 on the zebra (x 0), not between the parked cars
+  ['ramp', [[44, 66], [1.2, 66], [1.2, 54], [-42, 54], [-44, 55.2], [-56, 55.2], [-62, 55.6], [-80, 55.4]]], ['ramp', [[-44, 66], [-1.2, 66], [-1.2, 54], [-42, 54], [-44, 55.2], [-56, 55.2], [-62, 55.6], [-80, 55.4]]],
+  ['stairs', [[44, -66], [1.2, -66], [1.2, -54], [-44, -54], [-56, -54], [-56, -8], [-60, -8], [-60, 9.6], [-86, 11.8]]], ['stairs', [[-44, -66], [-1.2, -66], [-1.2, -54], [-44, -54], [-56, -54], [-56, -8], [-60, -8], [-60, 9.6], [-86, 11.8]]],
+  ['ramp', [[-56, 104], [-56, 57], [-62, 55.6], [-80, 55.4]]],
+  ['east', [[-56, 104], [-56, 31], [-66.4, 31]]],
+  ['east', [[-44, 54], [-44, 31], [-56, 31], [-66.4, 31]]],
+  ['stairs', [[100, 25.6], [67.6, 25.6], [62, 20], [56, 20], [56, 8], ...TO_A]],
+];
 // Remove the parts of axis-aligned polylines that run through active barricades (1 m margin).
 export function clipPaths(paths, rects) {
   const out = [], flush = (c) => { if (c && c.length > 1) out.push(c); };

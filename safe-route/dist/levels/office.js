@@ -412,7 +412,7 @@ export function buildOffice(kit, people) {
   return {
     id: 'office', group, env: 'interior',
     walk: [{ x0: -9, x1: 9, z0: -12, z1: 0, y: 0 }],
-    solids, points,
+    solids, points, ceilings: [{ x0: -9.25, x1: 9.25, z0: -12.25, z1: 0.25, y: H }], // T-bar ceiling: camera/headroom only
     spawns: { entry: { x: DOOR, y: 0, z: -1.3, yaw: 0 }, desk: { x: ME.x, y: 0, z: ME.z + 1.25, yaw: 0 } },
     npcs: { coworker, staff1, staff2, worker, driver },
     states: { alerts: [0, 1, 2, 3], dashboard: ['(canvas)'], outside: [null, ...MOODS] },

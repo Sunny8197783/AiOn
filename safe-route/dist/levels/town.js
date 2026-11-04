@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { PLACES, SPAWNS, CLOSURES } from '../game/townmap.js';
 import { heightAt, WIND, yawTo } from './town-util.js';
+import { sealTops } from './town-geo.js';
 import { buildGround } from './town-ground.js';
 import { buildBuildings } from './town-buildings.js';
 import { treeSpots, buildPark } from './town-park.js';
@@ -61,11 +62,19 @@ export async function buildTown(kit, people, fx) {
   for (const m of [ground, buildings, park, props, fences, fronts, site, events, traffic, strike]) group.add(m.group);
   const solids = [buildings, site, fronts, park, props, fences, events, traffic].flatMap(m => m.solids);
   const hy = (x, z) => heightAt(walk, x, z);
+  sealTops(solids, walk); // no car roof or planter next to a sealing fence lets anyone hop onto it
 
   // ---- points, spawns ----
   const R = { door: 1.8, shelter: 2.2, notice: 1.9, place: 2.4 };
   const points = Object.entries(PLACES).map(([id, p]) => ({ id, label: p.label, x: p.x, y: hy(p.x, p.z), z: p.z, r: id === 'assembly' ? 4.5 : R[p.kind] ?? 1.8, kind: p.kind, to: p.to }));
   points.push(...events.closurePoints);
+  // Shelter prompts where the entrances really are: B down the ramp to the tunnel mouth (the boom never hides
+  // it), C on the ramp by the shutter (also reachable over the handrail from the sidewalk), the east doors
+  // inside their closure barrier (shown from the barrier, never hidden by it).
+  const at = (id, o) => { const p = points.find(q => q.id === id); if (p) Object.assign(p, o, { y: hy(o.x ?? p.x, o.z ?? p.z) }); };
+  at('shelterB', { z: 48.5, r: 2.8, host: 'boomB' });
+  at('shelterC', { x: -108.5, z: 14.9, r: 3.0 });
+  at('shelterEast', { r: 3.0, host: 'gateEast' });
   // Street furniture the player can use (story/world.js): the vending machines (town-props) and the bus stop.
   points.push(...[[-60.6, 37.6], [43.4, 15.2], [7.2, 11.3]].map(([x, z], i) => ({ id: `vending${i}`, label: '음료 자판기', x, y: hy(x, z), z, r: 1.5, kind: 'vending' })),
     { id: 'busStop', label: '버스 정류장', x: 11.5, y: hy(11.5, -8.4), z: -8.4, r: 2.2, kind: 'busStop' });
@@ -92,7 +101,7 @@ export async function buildTown(kit, people, fx) {
   npcs.clerkOutside = mk('clerk', 63, { x: 39.4, z: 11.1, face: [0, -1] });
   for (const k of Object.keys(npcs)) if (!npcs[k]) delete npcs[k];
 
-  const crowd = createTownCrowd({ people, group, walk, quality });
+  const crowd = createTownCrowd({ people, group, walk, solids, quality });
 
   // ---- states ----
   const state = { traffic: 'normal', crowd: 'none', closures: [], gates: { ...DEFAULT_GATES }, waterPoint: 'off', buses: 'off', notices: 'none', noticeText: {}, season: 'autumn', strike: 'none' };
@@ -157,7 +166,7 @@ export async function buildTown(kit, people, fx) {
   setState('buses', 'off'); setState('notices', 'none'); setState('crowd', 'normal');
 
   // ---- per frame ----
-  let rmT = 0, reduced = false, nt = 0;
+  let rmT = 0, reduced = false, nt = 0; const peds = [];
   const localNpcs = ['guideEast', 'guideC', 'clerkOutside'].map(k => npcs[k]).filter(Boolean);
   function update(dt, t, ctx = {}) {
     if ((rmT -= dt) <= 0) {
@@ -167,7 +176,7 @@ export async function buildTown(kit, people, fx) {
     WIND.uTime.value = t; WIND.uWind.value = reduced ? 0 : 1;
     // No grid power after the blackout: dead signals, and nobody drives through town any more.
     if (ctx.power === false && traffic.mode !== 'none') setState('traffic', 'none');
-    traffic.update(dt, t, ctx);
+    traffic.update(dt, t, { ...ctx, peds: crowd.positions(peds) }); // cars give way to people on the road
     strike.update(dt, t, ctx.camera, ['night', 'blackout', 'dusk'].includes(ctx.env));
     events.update(dt, t, { ...ctx, reduced });
     crowd.update(dt, ctx);

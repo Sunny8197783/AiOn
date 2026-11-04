@@ -41,13 +41,17 @@ export async function seoyeonRelay(ctx) {
     actions: [{ id: 'ok', label: '서연으로', primary: true }] });
   ctx.setLevelState('town', 'gates', { east: 'closed', stairs: 'open', ramp: 'open', access: 'open' });
   ctx.setLevelState('town', 'crowd', 'evacuating');
-  await ctx.goto('town', CAFE);
-  ctx.setPlayer?.('seoyeon');
-  ctx.speedOverride = 0.55;
-  ctx.refresh();
-  if (G.handover) await reread(ctx);
-  else await ctx.card({ kind: 'sms', title: '받은 문자 없음', meta: G.relay.receivedAt, body: ['서연에게 정민의 문자는 오지 않았습니다. 서연은 지금의 현장 안내만으로 판단합니다.'], actions: [{ id: 'ok', label: '계속', primary: true }] });
-  await walk(ctx);
+  // This scene is about reading the notice, not dodging shells: the war layer (story/danger.js) holds still.
+  ctx.calm = true;
+  try {
+    await ctx.goto('town', CAFE);
+    ctx.setPlayer?.('seoyeon');
+    ctx.speedOverride = 0.55;
+    ctx.refresh();
+    if (G.handover) await reread(ctx);
+    else await ctx.card({ kind: 'sms', title: '받은 문자 없음', meta: G.relay.receivedAt, body: ['서연에게 정민의 문자는 오지 않았습니다. 서연은 지금의 현장 안내만으로 판단합니다.'], actions: [{ id: 'ok', label: '계속', primary: true }] });
+    await walk(ctx);
+  } finally { ctx.calm = false; }
   ctx.speedOverride = null;
   ctx.setPlayer?.('jeongmin');
   G.minute = Math.max(G.minute, toMin(G.relay.receivedAt) + 5);

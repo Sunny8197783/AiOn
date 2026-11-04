@@ -41,8 +41,10 @@ const LABELS = {
   gim: ['bag', '#1f3d24', '#fff', '#2f8a3c', '도시락김', '8봉'], soymilk: ['carton', '#c9a66b', '#fff', '#f6efe2', '두유', '190mL'],
   gum: ['blister', '#2fae66', '#fff', '#9ee8b8', '자일리톨 껌', ''],
   pack6: ['pack', '#1f6fb2', '#fff', '#1f6fb2', '맑은샘 2L × 6', '먹는샘물'], pack6b: ['pack', '#2f9e7a', '#fff', '#2a7d5f', '한빛수 2L × 6', '먹는샘물'],
+  curtain: ['box', '#262a33', '#ffffff', '#c9ccd2', '암막 커튼', '빛 차단 · 1장'], // the 64th (last free) atlas cell
 };
 const CELL = Object.fromEntries(Object.keys(LABELS).map((k, i) => [k, i]));
+if (Object.keys(LABELS).length > GRID * GRID) console.error('[commerce] label atlas is full: raise GRID');
 
 // name: [shape, w, h, d, labels, stack]. For fixed-size shapes (bottles, cans, cups) w/h/d are the real sizes.
 export const PRODUCTS = {
@@ -64,6 +66,7 @@ export const PRODUCTS = {
   cereal: ['box', 0.2, 0.28, 0.07, ['cereal']], oil: ['bottle5', 0.068, 0.21, 0.068, ['oil', 'soy']], kimchi: ['pouch', 0.16, 0.2, 0.06, ['kimchi']],
   pack6: ['box', 0.34, 0.33, 0.23, ['pack6', 'pack6b']],
   gim: ['pouch', 0.22, 0.05, 0.15, ['gim'], 3], soymilk: ['box', 0.06, 0.11, 0.04, ['soymilk'], 2], gum: ['box', 0.06, 0.1, 0.02, ['gum']],
+  curtain: ['box', 0.28, 0.3, 0.07, ['curtain']], // blackout curtain (items.js blackout_curtain), folded flat in its pack
 };
 
 function fitText(g, text, size, weight, maxW) {

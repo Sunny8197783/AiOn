@@ -3,6 +3,7 @@
 // pipe and 중간밸브, cabinets, dining table, recycling bins); the living room (sofa, low table, wall TV, stand air
 // conditioner, curtains); a small bedroom (bed, wardrobe, desk with a laptop) and the south 베란다 (washing machine,
 // drying poles, 경량칸막이). Stateful props: apartment-props.js (radio, candle, bag, planner), apartment-stock.js.
+// H.setCurtain('none'|'hung'|'sealed'): the 암막 커튼 over the living-room glass, and tape along its edges (design M4).
 // Unit box x [-7.6, 0.3] (east wall against the lift shaft), z [0, 8.0]; balcony z [8.0, 9.4].
 import * as THREE from 'three';
 import { F3, FL } from './apartment-parts.js';
@@ -10,7 +11,7 @@ import { FONT } from '../engine/kit.js';
 
 export const HOME = { x0: -7.6, x1: 0.3, zb: 8.0, zo: 9.4, ch: FL + 2.3, bf: FL - 0.08, top: FL + 0.42 };
 
-export function buildHome(B, g, H) {
+export function buildHome(B, g, H, dyn) {
   const { kit, M } = B, { x0: X0, x1: X1, zb: ZB, zo: ZO, ch: CH, bf: BF } = HOME;
   const P = (hex, roughness = 0.6, metalness = 0) => kit.mat('paint:' + hex, { roughness, metalness });
   const box = (w, h, d, m, x, y, z, o = {}) => { const b = kit.box(w, h, d, m, { x, y, z, ...o }); g.add(b); return b; };
@@ -33,6 +34,7 @@ export function buildHome(B, g, H) {
   g.add(kit.slab(2.7, 0.35, 6.7, M.wood, { x: -1.05, y: F3 - 0.2, z: 4.65 }));
   g.add(kit.slab(7.9, 0.3, 1.4, M.balconyTile, { x: -3.65, y: BF - 0.3, z: 8.7 }));
   g.add(kit.slab(7.9, 0.35, 9.4, M.ceiling, { x: -3.65, y: CH, z: 4.7 }));
+  B.ceiling(X0, X1, 0, ZO, CH);
   box(1.3, 0.152, 0.06, M.stone, -1.75, F3, 1.3); // 현관 디딤판 edge
   B.floor(-2.4, X1, 0, 1.3, F3); B.floor(X0, -2.4, 0, ZB, FL); B.floor(-2.4, X1, 1.3, ZB, FL); B.floor(X0, X1, ZB, ZO, BF);
 
@@ -115,6 +117,7 @@ export function buildHome(B, g, H) {
     c.add(kit.box(0.42, 0.03, 0.42, M.lightWood, { y: 0.44 }), kit.box(0.4, 0.36, 0.025, M.lightWood, { y: 0.5, z: 0.2 }));
     for (const [dx, dz] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]]) c.add(kit.box(0.03, 0.44, 0.03, M.lightWood, { x: dx, z: dz })); };
   chair(-5.85, 1.55, Math.PI); chair(-5.35, 2.95, 0.35);
+  B.solid(-6.08, -5.62, 1.32, 1.78, FL, FL + 0.95); B.solid(-5.6, -5.1, 2.7, 3.2, FL, FL + 0.95);
   cyl(0.13, 0.08, 0.07, W.plate, -5.75, FL + 0.735, 2.15, {}, 20);
   for (const [dx, dz, c] of [[-0.03, 0, '#c0392b'], [0.04, 0.03, '#d35400'], [0, -0.05, '#c0392b']]) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8), P(c, 0.5)); s.position.set(-5.75 + dx, FL + 0.8, 2.15 + dz); s.castShadow = true; g.add(s); }
   box(0.24, 0.012, 0.18, W.paper, -5.3, FL + 0.735, 2.3, { ry: -0.2 }); box(0.22, 0.012, 0.16, P('#e9e1cf', 0.9), -5.31, FL + 0.747, 2.29, { ry: 0.1 });
@@ -226,7 +229,7 @@ export function buildHome(B, g, H) {
   box(2.6, 0.03, 0.05, M.alu, -5.8, CH - 0.04, ZB - 0.17); curtain(-7.1, -6.55, ZB - 0.17); curtain(-5.05, -4.5, ZB - 0.17);
   cyl(0.2, 0.2, 0.035, glow('lamp'), -5.8, CH - 0.035, 5.8, { cast: false }, 24);
   B.fixtures.push({ x: -5.8, y: CH - 0.3, z: 5.8, color: 0xfff0dc, intensity: 3.5, distance: 7 });
-  B.door(g, 'x', -4.05, 4.0, 4.85, FL, 2.05, W.door, { hinge: 'a', dir: -1, open: 0.85, solid: false, frameMat: M.frame });
+  B.door(g, 'x', -4.05, 4.0, 4.85, FL, 2.05, W.door, { hinge: 'a', dir: -1, open: 1, solid: false, frameMat: M.frame }); // wide open: the leaf lies along the wall
 
   // ---- 베란다: washing machine, laundry, drying poles with clothes, plants, drain, 경량칸막이 panel, bulb ----
   rbox(0.62, 0.86, 0.62, 0.04, M.white, -7.25, BF, 9.03);
@@ -234,30 +237,56 @@ export function buildHome(B, g, H) {
   box(0.004, 0.07, 0.5, M.black, -6.937, BF + 0.75, 9.03); box(0.004, 0.02, 0.05, glow('green'), -6.942, BF + 0.765, 8.86, { cast: false });
   B.rod(g, [-7.3, BF + 1.2, 9.36], [-7.3, BF + 0.9, 9.3], 0.012, M.metal); box(0.06, 0.06, 0.05, M.metal, -7.3, BF + 1.18, 9.34);
   B.solid(X0, -6.92, 8.7, 9.36, BF, BF + 0.9);
-  cyl(0.2, 0.17, 0.34, P('#d8cdb5', 0.9), -6.55, BF, 8.35, {}, 18);
-  for (const z of [8.45, 8.95]) { B.rod(g, [-6.3, CH - 0.38, z], [-1.6, CH - 0.38, z], 0.012, M.alu); for (const x of [-6.0, -1.9]) B.rod(g, [x, CH, z], [x, CH - 0.38, z], 0.008, M.alu); }
-  [[-5.6, 8.45, '#e8e4dc', 0.5, 0.62], [-4.9, 8.45, '#5d7fa3', 0.55, 0.5], [-4.2, 8.95, '#f2efe6', 0.4, 0.7], [-3.5, 8.45, '#8a3a3a', 0.45, 0.55], [-2.7, 8.95, '#3f4a56', 0.6, 0.62]]
-    .forEach(([x, z, c, w, h], i) => { box(w, h, 0.012, P(c, 0.98), x, CH - 0.38 - h, z, { ry: (i % 3 - 1) * 0.08 }); });
+  cyl(0.2, 0.17, 0.34, P('#d8cdb5', 0.9), -6.55, BF, 8.35, {}, 18); B.solid(-6.78, -6.32, 8.12, 8.58, BF, BF + 0.5); // basket (taller than a step)
+  // Drying poles hang high and the washing is short (towels, folded shirts) so it clears the head (BF + 1.8).
+  const PY = CH - 0.12;
+  for (const z of [8.45, 8.95]) { B.rod(g, [-6.3, PY, z], [-1.6, PY, z], 0.012, M.alu); for (const x of [-6.0, -1.9]) B.rod(g, [x, CH, z], [x, PY, z], 0.008, M.alu); }
+  [[-5.6, 8.45, '#e8e4dc', 0.5, 0.42], [-4.9, 8.45, '#5d7fa3', 0.55, 0.38], [-4.2, 8.95, '#f2efe6', 0.4, 0.44], [-3.5, 8.45, '#8a3a3a', 0.45, 0.4], [-2.7, 8.95, '#3f4a56', 0.6, 0.42]]
+    .forEach(([x, z, c, w, h], i) => { box(w, h, 0.012, P(c, 0.98), x, PY - h, z, { ry: (i % 3 - 1) * 0.08 }); });
   for (const [x, s] of [[-2.2, 0.22], [-1.75, 0.16]]) { cyl(s * 0.75, s * 0.6, s * 1.3, W.pot, x, BF, 9.15); const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), W.green); f.position.set(x, BF + s * 1.3 + s * 0.6, 9.15); f.castShadow = true; g.add(f); }
+  B.solid(-2.45, -1.55, 8.9, 9.36, BF, BF + 0.7);
   box(0.12, 0.003, 0.12, M.steel, -5.0, BF, 9.2, { cast: false });
   for (const [w, h, x, y, z] of [[0.012, 2.0, X0 + 0.006, BF + 0.05, 8.12], [0.012, 2.0, X0 + 0.006, BF + 0.05, 8.68], [0.012, 0.02, X0 + 0.006, BF + 2.05, 8.4]]) box(w, h, z === 8.4 ? 0.58 : 0.02, P('#9e988c', 0.6), x, y, z, { cast: false });
   B.plate(g, '경량칸막이', { x: X0 + 0.014, y: BF + 1.55, z: 8.4, ry: Math.PI / 2, w: 0.32, h: 0.09, bg: '#fff4d6', fg: '#8a1c1c', border: '#8a1c1c' });
   cyl(0.06, 0.06, 0.03, glow('lamp'), -4.0, CH - 0.03, 8.7, { cast: false });
 
   // ---- points, spawns, anchors ----
-  B.point('homeExitDoor', '현관문 (복도로)', -1.275, F3, 0.5, 'door', 1.3);
-  B.point('homeBreaker', '분전반 (두꺼비집)', -2.1, F3, 0.45, 'inspect', 1.3);
+  B.point('homeExitDoor', '현관문 (복도로)', -1.275, F3, 0.5, 'door', 1.3).host = 'door302';
+  B.point('homeBreaker', '분전반 (두꺼비집)', -2.1, F3, 0.55, 'inspect', 1.6);
   B.point('homeFridge', '냉장고', -2.92, FL, 1.2, 'inspect', 1.4);
   B.point('homeSink', '싱크대', -5.55, FL, 1.0, 'inspect', 1.4);
   B.point('homeGas', '가스 중간밸브', -3.85, FL, 1.0, 'inspect', 1.4);
-  B.point('homeDesk', '책상 (노트북)', -6.2, FL, 4.75, 'inspect', 1.5);
+  B.point('homeDesk', '책상 (노트북)', -5.75, FL, 4.55, 'inspect', 1.5); // in front of the desk, clear of the chair
   B.point('homeBed', '침대', -6.0, FL, 6.4, 'bed', 1.9);
-  B.point('homeWindow', '거실 창밖 보기', -2.4, FL, 7.45, 'window', 1.6);
+  const winPt = B.point('homeWindow', '거실 창밖 보기', -2.4, FL, 7.45, 'window', 1.6);
+  H.setCurtain = buildCurtain(B, dyn, winPt);
   B.spawns.home = { x: -1.6, y: FL, z: 4.5, yaw: Math.PI };
   B.spawns.homeEntry = { x: -1.275, y: F3, z: 0.75, yaw: Math.PI };
   B.anchors.homeLiving = { x: -0.2, y: FL + 1.9, z: 4.0, target: { x: -2.6, y: FL + 0.6, z: 7.2 } };
   B.anchors.homeKitchen = { x: -2.8, y: FL + 1.8, z: 3.2, target: { x: -5.4, y: FL + 0.8, z: 0.4 } };
   B.anchors.homeBalcony = { x: -0.7, y: FL + 1.6, z: 8.5, target: { x: -4.0, y: FL + 0.9, z: 9.0 } };
+}
+
+// 암막 커튼 on its own track in front of the living-room glass (x -3.92..-0.98, the balcony doorway stays clear):
+// 'hung' draws the heavy dark panels, 'sealed' adds silver tape down both edges and along the top and the sill.
+const CURTAIN = { a: -3.92, b: -0.98, z: HOME.zb - 0.25 };
+function buildCurtain(B, dyn, winPt) {
+  const { kit, M } = B, { a, b, z } = CURTAIN, y0 = FL + 0.02, h = HOME.ch - FL - 0.08;
+  const hung = new THREE.Group(), tape = new THREE.Group(); hung.name = 'apt-curtain'; tape.name = 'apt-curtain-tape'; dyn.add(hung, tape);
+  const cloth = kit.mat('paint:#262a33', { roughness: 0.98 }), hem = kit.mat('paint:#1b1e25', { roughness: 0.95 });
+  hung.add(kit.box(b - a + 0.12, 0.03, 0.05, M.alu, { x: (a + b) / 2, y: HOME.ch - 0.04, z }));
+  const n = Math.round((b - a) / 0.11), w = (b - a) / n;
+  for (let i = 0; i < n; i++) hung.add(kit.box(w * 1.12, h, 0.025, cloth, { x: a + (i + 0.5) * w, y: y0, z: z + (i % 2 ? 0.022 : -0.022), ry: i % 2 ? 0.42 : -0.42 }));
+  hung.add(kit.box(b - a, 0.05, 0.05, hem, { x: (a + b) / 2, y: y0, z }));
+  const silver = kit.mat('paint:#b9bcbf', { roughness: 0.45, metalness: 0.2 }), zt = z - 0.05;
+  for (const x of [a + 0.02, b - 0.02]) tape.add(kit.box(0.06, h, 0.004, silver, { x, y: y0, z: zt, cast: false }));
+  for (const y of [y0 + 0.02, HOME.ch - 0.13]) tape.add(kit.box(b - a, 0.06, 0.004, silver, { x: (a + b) / 2, y, z: zt, cast: false }));
+  kit.merge(hung); kit.merge(tape);
+  const body = B.solid(a, b, z - 0.07, z + 0.07, FL, HOME.ch); body.noVault = body.noClimb = true;
+  return (v) => {
+    hung.visible = v === 'hung' || v === 'sealed'; tape.visible = v === 'sealed'; body.off = !hung.visible;
+    winPt.label = v === 'none' ? '거실 창밖 보기' : v === 'hung' ? '거실 창 (암막 커튼)' : '거실 창 (커튼 · 테이프)';
+  };
 }
 
 // 분전반 face: steel door with a smoked window over the main ELB (yellow test button) and the branch breakers.

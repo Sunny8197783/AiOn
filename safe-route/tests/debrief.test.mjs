@@ -158,7 +158,7 @@ test('no raw result id or prep id reaches the player', () => {
   const results = [...storyResults, 'out', 'incomplete', 'escalated', 'retreat-ok', 'something-new',
     evalExtinguisher(['retreat'], { fire: 'large' }), evalBag(G, 'alert'), { station: null }, null];
   for (const r of results) recordEncounter(G, 'radio', r);
-  for (const r of ['sorted', 'misled', 'checked']) recordEncounter(G, 'info', r);
+  for (const r of ['sorted', 'misled', 'checked', 'doubted']) recordEncounter(G, 'info', r);
   for (const prep of [...storyPreps, ...Object.keys(PREP)]) recordEvent(G, 'payoff', { prep, moment: '순간' });
   for (const who of Object.keys(PEOPLE)) recordEvent(G, 'help', { who, what: '도왔다' });
   trade(G, { ramen: 1 }, { batteries_old: 1 }, 'trader');

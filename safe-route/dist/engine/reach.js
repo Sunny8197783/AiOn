@@ -14,9 +14,14 @@ export const reachOf = (p) => p.reach ?? Math.max(p.r ?? REACH.min, REACH.min);
 
 // The point's own solid never hides it: one that holds or abuts it (within 0.25 m: an ATM point sits just in
 // front of the ATM), or the ones named by point.host (an id or a list of ids, e.g. the gate barrier it is on).
-function own(p, s) {
+// An abutting solid is only exempt when the line from the player meets it in its last 0.3 m (seen from the
+// front or side-on), so a sign or a gate rail does not show its prompt to someone standing behind it.
+function own(p, s, o, d, dist) {
   if (p.host != null && s.id != null && (Array.isArray(p.host) ? p.host.includes(s.id) : p.host === s.id)) return true;
-  return p.x >= s.x0 - 0.25 && p.x <= s.x1 + 0.25 && p.z >= s.z0 - 0.25 && p.z <= s.z1 + 0.25;
+  if (p.x >= s.x0 && p.x <= s.x1 && p.z >= s.z0 && p.z <= s.z1) return true;
+  if (!(p.x >= s.x0 - 0.25 && p.x <= s.x1 + 0.25 && p.z >= s.z0 - 0.25 && p.z <= s.z1 + 0.25)) return false;
+  const t = segBox(o, d, s, 0);
+  return !(t <= 1) || (1 - t) * dist <= 0.3;
 }
 
 // Behind a wall: one solid (not the point's own) blocks the line to it both at 0.3 m and at 1.5 m (low furniture
@@ -29,7 +34,7 @@ export function hidden(p, pos, grid) {
   o.x = o2.x = pos.x; o.z = o2.z = pos.z; o.y = pos.y + 0.3; o2.y = pos.y + 1.5;
   d.x = dx * k; d.z = dz * k; d.y = (py - pos.y) * k;
   // Both heights share the horizontal run, so the low segment's candidates cover the high one too.
-  return segHit(grid, o, d, 0, (s) => own(p, s) || !(segBox(o2, d, s, 0) <= 1)) <= 1;
+  return segHit(grid, o, d, 0, (s) => own(p, s, o, d, dist) || !(segBox(o2, d, s, 0) <= 1)) <= 1;
 }
 
 // Score of a point in reach and in view (distance plus how far off the view it is), or Infinity. Visibility is

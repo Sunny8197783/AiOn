@@ -103,7 +103,10 @@ export function createEcho({ engine, ctx, store }) {
       let text = PRESETS[Number(pick)];
       if (pick === 'own') text = (prompt('바닥에 적을 말 (24자까지)') || '').trim().slice(0, 24);
       if (!text || pick === 'no') return;
-      run.notes.push({ lv: L.id, x: engine.player.x + Math.sin(engine.player.yaw) * -1.2, z: engine.player.z + Math.cos(engine.player.yaw) * -1.2, text, yaw: engine.player.yaw }); // just ahead of you if (run.notes.length > MAX_NOTES) run.notes.shift(); save();
+      // just ahead of you
+      run.notes.push({ lv: L.id, x: engine.player.x + Math.sin(engine.player.yaw) * -1.2, z: engine.player.z + Math.cos(engine.player.yaw) * -1.2, text, yaw: engine.player.yaw });
+      if (run.notes.length > MAX_NOTES) run.notes.shift();
+      save();
       const n = run.notes.at(-1), m = textPlane(text, '#f4f1e8'); m.position.set(n.x, engine.player.y + 0.08, n.z); m.rotation.y = n.yaw; L.group.add(m);
       ctx.toast('바닥에 분필로 적었다. 다음 회차의 내가 이걸 보게 된다.', 'self');
     },

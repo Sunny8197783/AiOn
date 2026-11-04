@@ -16,7 +16,7 @@ const SEC = { water: ['#1f6fb2', 0, 'shelfWater'], food: ['#d9682b', 1, 'shelfFo
 const FACES = [
   [['water', ['pack6', 'water5', 'drink', 'can']], ['food', ['ramen', 'cup', 'ramen', 'soup']]],
   [['food', ['rice', 'tuna', 'ham', 'bar', 'cracker']], ['daily', ['tissue', 'wipes', 'towel', 'bags', 'foil']]],
-  [['daily', ['stove', 'butane', 'tape', 'rain', 'jug', 'whistle']], ['elec', ['aa', 'flash', 'radio', 'power']]],
+  [['daily', ['stove', 'butane', 'tape', 'curtain', 'rain', 'jug', 'whistle']], ['elec', ['aa', 'flash', 'radio', 'power']]],
   [['elec', ['candle', 'aa', 'power', 'flash', 'radio']], ['health', ['mask', 'aid', 'band', 'sanit']]],
   [['health', ['sanit', 'mask', 'band', 'aid']], ['misc', ['deter', 'soap', 'mix', 'cereal', 'oil']]],
   [['misc', ['chips', 'cookie', 'gim', 'chips']], ['misc', ['cereal', 'mix', 'cookie', 'chips', 'gim']]],
@@ -54,7 +54,8 @@ export function buildMart(kit, people, fx) {
   solids.push({ x0: -16, x1: 16, y0: 0, y1: H, z0: 0, z1: 0.5, id: 'southWall' });
   for (const [x, z, w, d] of [[-15.99, -12, 0.02, 24], [15.99, -12, 0.02, 24], [0, -23.99, 32, 0.02], [6, -0.01, 20, 0.02]]) stat.add(kit.box(w, 0.25, d, M.green, { x, y: 2.05, z, cast: false }));
   const ceil = new THREE.MeshStandardMaterial({ map: kit.texture(kit.canvas(256, 256, (g) => { g.fillStyle = '#efeeea'; g.fillRect(0, 0, 256, 256); g.fillStyle = 'rgba(0,0,0,0.04)'; for (let i = 0; i < 900; i++) g.fillRect(r() * 256, r() * 256, 2, 2); g.fillStyle = '#c9c8c3'; for (let i = 0; i < 256; i += 64) { g.fillRect(i, 0, 3, 256); g.fillRect(0, i, 256, 3); } }), { repeat: [1 / 2.4, 1 / 2.4] }), roughness: 0.9 });
-  for (const [x0, x1, z0, z1] of [[-16, 13.2, -24, 0], [13.2, 16, -24, -21], [13.2, 16, -14, 0]]) stat.add(kit.slab(x1 - x0, 0.25, z1 - z0, ceil, { x: (x0 + x1) / 2, y: H, z: (z0 + z1) / 2 }));
+  const ceilings = [{ x0: 13.2, x1: 16, z0: -21, z1: -14, y: H + 1.7 }]; // camera/headroom only; over the travelator opening: the roof
+  for (const [x0, x1, z0, z1] of [[-16, 13.2, -24, 0], [13.2, 16, -24, -21], [13.2, 16, -14, 0]]) { stat.add(kit.slab(x1 - x0, 0.25, z1 - z0, ceil, { x: (x0 + x1) / 2, y: H, z: (z0 + z1) / 2 })); ceilings.push({ x0, x1, z0, z1, y: H }); }
   stat.add(kit.box(2.8, 0.1, 7, M.dark, { x: 14.6, y: H + 1.6, z: -17.5 }));
   stat.add(kit.slab(33, 0.3, 25, kit.surface('concrete'), { x: 0, y: H + 1.7, z: -12 }));
 
@@ -86,8 +87,9 @@ export function buildMart(kit, people, fx) {
   stat.add(kit.box(21.4, 0.14, 0.3, M.white, { x: -4.7, y: 1.98, z: -23.2 }));
   const chillStrip = panels(kit, [{ x: -4.7, y: 1.96, z: -23.08, sx: 21.2 }], { w: 1, d: 0.05, on: 3 }); onMains(chillStrip.material); dyn.add(chillStrip);
 
-  // Pallet of water six-packs at the front with the purchase limit notice.
-  add(kit.slab(1.2, 0.14, 1.0, M.wood, { x: -6.6, z: -4.05 }), true);
+  // Pallet of water six-packs at the front with the purchase limit notice. Its body covers the stacked packs.
+  stat.add(kit.slab(1.2, 0.14, 1.0, M.wood, { x: -6.6, z: -4.05 }));
+  solids.push({ x0: -7.25, x1: -5.95, z0: -4.6, z1: -3.5, y0: 0, y1: 1.15, id: 'waterPallet' });
   goods.stock({ sec: 'water', x: -7.15, z: -3.57, dir: [1, 0], face: [0, 1], len: 1.1, depth: 0.95, y: 0.14, clear: 1.1, items: ['pack6'], rows: 4, stack: 3, fill: 1, edge: false, seed: 5 });
   stat.add(kit.cyl(0.015, 0.015, 1.3, M.steel, { x: -5.85, z: -3.5 }));
   dyn.add(sign(['1인 6병 한정', '생수 2L'], { w: 0.42, h: 0.3, bg: '#ffd23a', fg: '#1d1d1f' }, { x: -5.85, y: 1.45, z: -3.5, ry: -Math.PI / 3 }));
@@ -132,7 +134,8 @@ export function buildMart(kit, people, fx) {
   for (const [x, n] of [[-3.75, 7], [-3.25, 5]]) for (let k = 0; k < n; k++) baskets.push({ x, y: 0.12 + k * 0.06, z: -1.3 });
   add(cartsAndBaskets(kit, carts, baskets));
   solids.push({ x0: -15.7, x1: -14.2, y0: 0, y1: 1.1, z0: -4.4, z1: -0.8 });
-  add(kit.box(1.1, 0.12, 0.45, M.steel, { x: -3.5, z: -1.3 }), true);
+  stat.add(kit.box(1.1, 0.12, 0.45, M.steel, { x: -3.5, z: -1.3 }));
+  solids.push({ x0: -4.05, x1: -2.95, z0: -1.55, z1: -1.05, y0: 0, y1: 0.75, id: 'baskets' }); // the stacked baskets, not just the base
 
   // ---- produce tables (east) ----
   const produce = [], col = [];
@@ -287,7 +290,7 @@ export function buildMart(kit, people, fx) {
   return {
     id: 'mart', group, env: 'interior',
     walk: [{ x0: -16, x1: 16, z0: -24, z1: 0, y: 0 }],
-    solids, points,
+    solids, points, ceilings,
     spawns: { entry: { x: -9, y: 0, z: -2.4, yaw: 0 } },
     npcs: { cashier: cashiers[0], cashier2: cashiers[1] },
     states: { crowd: ['normal', 'busy'], soldOut: [[], ['water'], ['water', 'elec'], ['water', 'food', 'daily', 'elec', 'health']], power: ['on', 'off'], outside: [null, ...MOODS] },

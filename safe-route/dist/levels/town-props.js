@@ -142,7 +142,8 @@ export function buildProps(kit, { avoid = [] } = {}) {
   group.add(kit.instanced(new THREE.CylinderGeometry(0.1, 0.11, 0.85, 14).translate(0, 0.425, 0), kit.mat('metal', { roughness: 0.25 }), bol));
   group.add(kit.instanced(new THREE.CylinderGeometry(0.112, 0.112, 0.07, 14).translate(0, 0.7, 0), kit.mat('paint:#f4f4f0', { roughness: 0.2, emissive: new THREE.Color(0x222222) }), bol, { cast: false }));
   for (const p of bol) box(p.x - 0.13, p.x + 0.13, p.z - 0.13, p.z + 0.13, 1, 'bollard');
-  const hyd = [[-70, -8.8], [-20, 8.8], [26, -8.8], [62, 8.8], [-44.4, 40], [44.4, -40], [-56.8, -84], [56.8, 84], [-120, 8.8], [100, -8.8]].filter(([x, z]) => clear(x, z, 1.2)).map(([x, z]) => ({ x, y: Y, z, ry: rand() * 6.28 }));
+  // hydrants stand in the curb-side furniture strip (0.7 m from the curb), off the walking line
+  const hyd = [[-66.8, -6.7], [-20, 6.7], [26, -6.7], [62, 6.7], [-45.3, 40], [45.3, -40], [-54.7, -87.2], [54.7, 84], [-120, 6.7], [104.4, -6.7]].filter(([x, z]) => clear(x, z, 1.2)).map(([x, z]) => ({ x, y: Y, z, ry: rand() * 6.28 }));
   const red = kit.mat('paint:#c42b25', { roughness: 0.45 });
   group.add(kit.instanced(mergeAll([new THREE.CylinderGeometry(0.16, 0.2, 0.62, 14).translate(0, 0.31, 0), new THREE.SphereGeometry(0.17, 14, 8, 0, 6.29, 0, 1.6).translate(0, 0.62, 0), new THREE.CylinderGeometry(0.07, 0.07, 0.5, 10).rotateZ(Math.PI / 2).translate(0, 0.42, 0), new THREE.CylinderGeometry(0.06, 0.06, 0.12, 6).translate(0, 0.8, 0)]), red, hyd));
   for (const p of hyd) box(p.x - 0.25, p.x + 0.25, p.z - 0.25, p.z + 0.25, 1, 'hydrant');
@@ -155,15 +156,16 @@ export function buildProps(kit, { avoid = [] } = {}) {
     box(x - ax, x + ax, z - az, z + az, 0.9, 'planter');
   }
 
-  // ---- 종량제 봉투 at collection points ----
+  // ---- 종량제 봉투 at collection points: piled against the wall/fence round a 전봇대, off the walking line ----
   const bags = [], bagCol = [];
-  for (const [cx, cz, n] of [[-20, -53.4, 9], [20, 53.4, 8], [40, -53.4, 6], [-57.1, 88, 7], [57.0, -88, 6], [43.2, 23, 5]]) {
+  for (const [cx, cz, n, alongX] of [[-20, -52.75, 9, 1], [20, 52.75, 8, 1], [40, -52.75, 6, 1], [-57.45, 88, 7, 0], [57.45, -88, 6, 0], [42.55, 23, 5, 0]]) {
+    const [ex, ez] = alongX ? [0.8, 0.3] : [0.3, 0.8]; // pile half-size along / across the wall
     for (let i = 0; i < n; i++) {
-      const a = rand() * 6.28, d = rand() * 0.8, s = 0.75 + rand() * 0.5;
-      bags.push({ x: cx + Math.cos(a) * d, y: Y + 0.24 * s + (i > n - 3 ? 0.35 : 0), z: cz + Math.sin(a) * d * 0.6, ry: rand() * 6.28, sx: s, sy: s * (0.75 + rand() * 0.35), sz: s });
+      const a = rand() * 6.28, d = rand(), s = 0.75 + rand() * 0.5;
+      bags.push({ x: cx + Math.cos(a) * d * (ex - 0.1), y: Y + 0.24 * s + (i > n - 3 ? 0.35 : 0), z: cz + Math.sin(a) * d * (ez - 0.1), ry: rand() * 6.28, sx: s, sy: s * (0.75 + rand() * 0.35), sz: s });
       bagCol.push(['#ecead8', '#f1e6a2', '#e9e3cc', '#cfdff0', '#f6f2e4'][(rand() * 5) | 0]);
     }
-    box(cx - 0.9, cx + 0.9, cz - 0.6, cz + 0.6, 1, 'trash');
+    box(cx - ex - 0.1, cx + ex + 0.1, cz - ez - 0.1, cz + ez + 0.1, 1, 'trash');
   }
   const bagMesh = kit.instanced(new THREE.IcosahedronGeometry(0.3, 1), kit.mat('paint:#ffffff', { roughness: 0.32, metalness: 0 }), bags);
   const bc = new THREE.Color(); bagCol.forEach((h, i) => bagMesh.setColorAt(i, bc.set(h))); bagMesh.instanceColor.needsUpdate = true; group.add(bagMesh);
@@ -220,7 +222,10 @@ export function buildProps(kit, { avoid = [] } = {}) {
         const y = Y + f * fh + (f ? 0.15 : 0), along = side === 's' || side === 'n' ? b.x0 + a : b.z0 + a;
         const t = { s: [along, b.z1 + 0.18, 0], n: [along, b.z0 - 0.18, Math.PI], e: [b.x1 + 0.18, along, -Math.PI / 2], w: [b.x0 - 0.18, along, Math.PI / 2] }[side];
         acs.push({ x: t[0], y, z: t[1], ry: t[2] });
-        if (!f) box(t[0] - 0.45, t[0] + 0.45, t[1] - 0.45, t[1] + 0.45, 1, 'ac');
+        if (!f) { // the street-level unit: 0.9 wide along the wall, 0.36 out from it (the unit is 0.3 deep, 0.03 off the wall)
+          const ns = side === 's' || side === 'n', w = side === 's' ? b.z1 : side === 'n' ? b.z0 : side === 'e' ? b.x1 : b.x0, o = side === 's' || side === 'e' ? 0.36 : -0.36;
+          if (ns) box(along - 0.45, along + 0.45, Math.min(w, w + o), Math.max(w, w + o), 1, 'ac'); else box(Math.min(w, w + o), Math.max(w, w + o), along - 0.45, along + 0.45, 1, 'ac');
+        }
       }
     }
   }
@@ -271,7 +276,7 @@ export function buildProps(kit, { avoid = [] } = {}) {
     stat.add(kit.box(0.95, 1.83, 0.72, kit.mat('paint:#b82028', { roughness: 0.4 }), { x, y: Y, z, ry }));
     const face = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.78), vend); face.position.set(x - Math.sin(ry) * 0.365, Y + 0.93, z - Math.cos(ry) * 0.365); face.rotation.y = ry + Math.PI; stat.add(face);
     const hx = Math.abs(Math.sin(ry)) * 0.36 + Math.abs(Math.cos(ry)) * 0.48, hz = Math.abs(Math.cos(ry)) * 0.36 + Math.abs(Math.sin(ry)) * 0.48;
-    box(x - hx, x + hx, z - hz, z + hz, 2, 'vending');
+    box(x - hx, x + hx, z - hz, z + hz, 2, 'vending'); solids.at(-1).noClimb = true; // nobody climbs onto a vending machine
   }
 
   // ---- 분리수거장 (recycling shed) by 103동 ----

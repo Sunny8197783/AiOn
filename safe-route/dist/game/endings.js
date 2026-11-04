@@ -26,6 +26,7 @@ export function pickEnding(G) {
   // Different people helped, not presses: the same help recorded twice counts once.
   const helps = new Set(G.events.filter((e) => e.type === 'help').map((e) => e.details?.who)).size;
   const led = ledgerSummary(G);
+  const ranOut = (path === 'stay' || path === 'missed') && !(water >= 4 && food >= 4);
   if (path === 'stay' || path === 'missed') {
     lines.push(water >= 4 && food >= 4 ? '미리 쌓아 둔 물과 식량 덕분에, 급수가 끊긴 열흘을 버틸 수 있었다.'
       : '물과 먹을 것이 금세 바닥났다. 급수차가 오는 날만 손꼽아 기다렸다.');
@@ -43,6 +44,7 @@ export function pickEnding(G) {
   if (helped('stranger')) lines.push('그날 밤 문 너머로 물을 청하던 사람을, 며칠 뒤 조끼를 입은 자원봉사자로 다시 만났다.');
   if (led.days) lines.push(led.skipped ? '끼니를 거른 날도 있었지만, 하루치를 나눠 쓴 덕분에 마지막까지 버틸 수 있었다.'
     : led.trips ? `급수소에 다녀온 날이 ${led.trips}일이었다. 하루치를 정해 두니 물이 언제 떨어질지 미리 알 수 있었다.`
-      : '물과 먹을 것을 하루치씩 나눠 둔 덕분에, 바닥이 보이기 전에 다음 일을 정할 수 있었다.');
+      : ranOut ? '하루치를 정해 두니 언제 떨어질지 미리 알 수 있었다.'
+        : '물과 먹을 것을 하루치씩 나눠 둔 덕분에, 바닥이 보이기 전에 다음 일을 정할 수 있었다.');
   return { id: path, title, lines: [opening, ...lines.slice(0, MAX_EXTRA)] };
 }

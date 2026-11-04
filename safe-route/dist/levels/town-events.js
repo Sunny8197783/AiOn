@@ -11,6 +11,8 @@ import { heightAt, yawTo } from './town-util.js';
 
 const Y = CURB;
 const NG = (g) => (g.index ? g.toNonIndexed() : g);
+// Closure barricades and their light towers truly block: never vaulted, climbed or hopped onto (town.js sealTops).
+const SEAL = { noVault: true, noClimb: true, seal: true };
 export const WATER = { tapZ: -19.6, queue: { x: -78.6, z: -18.4 } };
 export const BUS = [{ x: -69.5, z: -40.5 }, { x: -65, z: -40.5 }];
 export const ASSEMBLY = { queue: { x: -62.6, z: -44.6 }, area: { x0: -61.8, x1: -58.6, z0: -49, z1: -40 } };
@@ -52,7 +54,7 @@ export function buildEvents(kit, people, walk) {
       const edge = (alongZ ? r.x1 - r.x0 : r.z1 - r.z0) / 2 + 0.45, sx = alongZ ? cx + side * edge : cx, sz = alongZ ? cz : cz + side * edge;
       sg.position.set(sx, hy(sx, sz) + 1.0, sz); sg.rotation.y = alongZ ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : (side > 0 ? 0 : Math.PI); g.add(sg, kit.box(0.06, 0.7, 0.06, dark, { x: sx, y: hy(sx, sz), z: sz }));
       const lamp = kit.box(0.16, 0.12, 0.16, flashMat, { x: alongZ ? cx : cx + L / 2 - 0.75, y: hy(cx, cz) + 0.9, z: alongZ ? cz + L / 2 - 0.75 : cz, cast: false }); g.add(lamp);
-      sol.push({ x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1, y0: -1, y1: 3, id: `closure:${id}`, off: true });
+      sol.push({ x0: r.x0, x1: r.x1, z0: r.z0, z1: r.z1, y0: -1, y1: 3, id: `closure:${id}`, off: true, ...SEAL });
     }
     if (gp) { // portable light tower beside the guide
       const tx = gp.x + gp.face[1] * 1.6, tz = gp.z - gp.face[0] * 1.6;
@@ -60,7 +62,7 @@ export function buildEvents(kit, people, walk) {
       const head = kit.box(0.7, 0.35, 0.12, towerHead, { x: tx, y: hy(tx, tz) + 3.1, z: tz, ry: yawTo(-gp.face[0], -gp.face[1]), cast: false }); g.add(head);
       const L = new THREE.SpotLight(0xf4f8ff, 0, 26, 0.7, 0.6, 1.6); L.position.set(tx, hy(tx, tz) + 3.2, tz); L.target.position.set(tx - gp.face[0] * 6, 0, tz - gp.face[1] * 6);
       kit.lit('emergency', L, 120); kit.gateLit(L, false); group.add(L, L.target); light = L; // outside g: lights never hide
-      sol.push({ x0: tx - 0.5, x1: tx + 0.5, z0: tz - 0.3, z1: tz + 0.3, y0: -1, y1: 3, id: `closure:${id}`, off: true });
+      sol.push({ x0: tx - 0.5, x1: tx + 0.5, z0: tz - 0.3, z1: tz + 0.3, y0: -1, y1: 3, id: `closure:${id}`, off: true, ...SEAL });
     }
     const um = kit.instanced(barrierGeo, kit.mat('paint:#ffffff', { roughness: 0.55 }), units); const c = new THREE.Color();
     col.forEach((h, i) => um.setColorAt(i, c.set(h))); um.instanceColor.needsUpdate = true;

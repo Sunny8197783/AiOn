@@ -24,8 +24,9 @@ export function buildGround(kit, { holes = [] } = {}) {
   const walk = [];
 
   // ---- far ground and road extensions (outside the playable bounds) ----
-  const outer = flat({ x0: -900, x1: 900, z0: -900, z1: 900 }, -0.06, S('concrete', { color: 0x8c8a84 }));
-  group.add(outer);
+  // (carved round the shelter pits too: it lies above the A stair, B ramp and C trench floors)
+  const outerMat = S('concrete', { color: 0x8c8a84 });
+  for (const r of carve({ x0: -900, x1: 900, z0: -900, z1: 900 }, holes)) group.add(flat(r, -0.06, outerMat));
   const ext = 360;
   const roadRects = [
     { x0: -ext, x1: ext, z0: -6, z1: 6 },
@@ -113,7 +114,7 @@ export function buildGround(kit, { holes = [] } = {}) {
   };
   bays(-35, 3, -22, 5); bays(6, 40, -51.5, 5); bays(6, 40, -10.5, -5); bays(6, 40, -31, 5); bays(6, 40, -31, -5);
   bays(74.5, 82, -10.5, -5.5); bays(92, 126, -10.5, -5.5); bays(104.4, 123.6, -60, 6, 3.2); bays(-124, -90, 59.5, -5); bays(60, 126, 13.5, 5);
-  bays(62, 116, 57, -5); bays(62, 116, 85, -5); bays(14, 40, 51.5, -5); bays(14, 40, 22.5, 5);
+  bays(62, 84, 57, -5); bays(92, 116, 57, -5); bays(62, 84, 85, -5); bays(92, 116, 85, -5); bays(14, 40, 51.5, -5); bays(14, 40, 22.5, 5); // 102/101 entrances kept clear
   const plane = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   const paint = (hex) => new THREE.MeshStandardMaterial({ color: hex, roughness: 0.62, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   group.add(kit.instanced(plane, paint(0xe9e8e1), white, { cast: false }));

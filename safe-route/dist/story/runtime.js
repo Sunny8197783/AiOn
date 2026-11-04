@@ -3,6 +3,7 @@ import { PLACES, SPAWNS } from '../game/townmap.js';
 import { recordEvent, note, advance, adjust, fmtClock, speedMul, bagLoad, load } from '../game/state.js';
 import { BAG_LIMIT } from '../game/items.js';
 import { cite } from '../game/facts.js';
+import { causeOf } from '../game/ripples.js';
 import { isCommon, common } from './world.js';
 
 export class Fail extends Error {
@@ -19,6 +20,33 @@ const DOORS = {
 };
 // Which env a level uses for the current story time unless a chapter overrides it.
 const OUTDOOR = new Set(['town']);
+// What each level looks like when it is first built. Levels are built once per page and cached, so a key a
+// chapter set and a retry or a new run no longer lists goes back to this value on the next enter.
+// A level may publish its own `defaults`, which win. (stock and noticeText are re-set by their chapters.)
+export const LEVEL_DEFAULTS = {
+  apartment: { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day', elder304: 'off', curtain: 'none' },
+  town: { traffic: 'normal', crowd: 'normal', closures: [], gates: { east: 'open', stairs: 'open', ramp: 'open', access: 'closed' }, waterPoint: 'off', buses: 'off', notices: 'none', strike: 'none' },
+  shelter: { crowd: 'settled', phase: 'calm', power: 'grid', fire: 'none', ways: ['stairs', 'ramp', 'access', 'east'], elder: 'off', seoyeon: 'hidden' },
+  store: { soldOut: [], power: 'on', clerk: 'in' },
+  mart: { crowd: 'normal', soldOut: [], power: 'on' },
+  office: { alerts: 0 },
+};
+// States the runtime keeps for a level that has no setState key for them: [levelId][key](level, value).
+const VIRTUAL = {
+  shelter: { seoyeon: (L, v) => { const n = L.npcs?.seoyeon; if (n) n.group.visible = v === 'shown'; } },
+};
+function applyState(level, key, value) {
+  const v = VIRTUAL[level.id]?.[key];
+  if (v && !level.states?.[key]) v(level, value); else level.setState(key, value);
+}
+// Pure: the keys to put back to their default before a level's remembered states are applied.
+export function staleKeys(applied, want, defaults) {
+  return [...applied].filter(k => !(k in want) && k in defaults);
+}
+// A prompt with no handler in this chapter still answers, so E never silently does nothing.
+export function idleLine(point) {
+  return point.kind === 'door' ? '지금은 이 문으로 나갈 때가 아니다.' : point.kind === 'shelter' ? '지금은 대피소에 들어갈 일이 없다.' : `${point.label}: 지금은 할 일이 없다.`;
+}
 
 export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, settings }) {
   const ctx = {
@@ -34,6 +62,9 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   };
   let power = true;
   let acc = 0;
+  const applied = {}; // levelId -> keys this page has set on the live (cached) level object
+  // An on['*'] handler returns this when it handled the point but the roam goes on.
+  ctx.handled = Symbol('handled');
 
   engine.onNearest((p) => hud.prompt(p ? p.label : null));
   engine.onFrame((dt) => {
@@ -58,7 +89,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
 
   ctx.setLevelState = (levelId, key, value) => {
     (ctx.levelStates[levelId] ||= {})[key] = value;
-    if (engine.level?.id === levelId) engine.level.setState(key, value);
+    if (engine.level?.id === levelId) { applyState(engine.level, key, value); (applied[levelId] ||= new Set()).add(key); }
   };
 
   // Enter a level and re-apply remembered states and the right lighting. prepare runs before the engine
@@ -68,7 +99,11 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     const prepare = (level) => {
       prepared = true;
       engine.setPower(ctx.power || levelId === 'shelter');
-      for (const [k, v] of Object.entries(ctx.levelStates[levelId] || {})) level.setState(k, v);
+      const want = ctx.levelStates[levelId] || {}, seen = (applied[levelId] ||= new Set());
+      const defaults = { ...(LEVEL_DEFAULTS[levelId] || {}), ...(level.defaults || {}) };
+      for (const k of staleKeys(seen, want, defaults)) applyState(level, k, defaults[k]);
+      seen.clear();
+      for (const [k, v] of Object.entries(want)) { applyState(level, k, v); seen.add(k); }
       engine.setEnv(env || (OUTDOOR.has(levelId) ? ctx.outdoorEnv : levelId === 'shelter' ? 'underground' : ctx.power ? ctx.indoorEnv : 'interiorDark'), { seconds: 0 });
     };
     const level = await engine.enter(levelId, spawn, { prepare });
@@ -87,7 +122,11 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   ctx.caption = (text, speaker, ms) => (settings.captions === false && settings.profile !== 'deaf' ? new Promise(r => setTimeout(r, ms ?? Math.min(7000, 1500 + text.length * 60))) : hud.caption(text, { speaker, ms }));
   ctx.event = (type, details = {}) => recordEvent(ctx.G, type, details);
   ctx.note = (text, label = 'self', place = engine.level?.id) => { note(ctx.G, text, label, place); ctx.toast(`메모: ${text}`, label); };
-  ctx.payoff = (prep, moment) => { recordEvent(ctx.G, 'payoff', { prep, moment }); ctx.toast(`준비가 도움이 됐습니다 · ${moment}`, 'self', 4600); };
+  // The toast names the earlier moment that set it up (game/ripples.js), e.g. "(D-1 오전 · 비상가방을 꾸려 현관에 두었다)".
+  ctx.payoff = (prep, moment) => {
+    const ev = recordEvent(ctx.G, 'payoff', { prep, moment }), c = causeOf(ctx.G, prep, ev?.seq ?? Infinity);
+    ctx.toast(`준비가 도움이 됐습니다 · ${moment}${c ? ` (${c.when} · ${c.text})` : ''}`, 'self', c ? 6000 : 4600);
+  };
   ctx.stat = (stat, delta) => { adjust(ctx.G, stat, delta); refresh(); };
   ctx.pass = (minutes) => { advance(ctx.G, minutes); refresh(); };
   ctx.factLine = (id) => { const c = cite(id); return c ? `${c.text}\n— ${c.source}` : ''; };
@@ -107,7 +146,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
 
   // Free roam until a handler returns something other than undefined.
   // on: { pointId: async (point) => value }   doors: follow DOORS unless overridden
-  // deadline: { minute, day, type } -> Fail(type) when the clock passes it
+  // deadline: { minute, day, type } -> Fail(type) when the clock passes it (type may be a function of the moment)
   ctx.roam = ({ on = {}, doors = true, deadline = null, rate = ctx.rate, tick = null, shelter = null } = {}) => new Promise((resolve, reject) => {
     const prevRate = ctx.rate; ctx.rate = rate; ctx.roaming = true;
     let busy = false, done = false, armed = new Set();
@@ -133,8 +172,11 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
         else if (on[key]) value = await modal(() => on[key](point));
         else if (shelter && point.kind === 'shelter' && engine.level.id === 'town') value = await modal(() => shelter(point));
         else if (doors && DOORS[key]) { const [lv, sp] = DOORS[key]; await ctx.goto(lv, sp); }
+        // The chapter's '*' sees every other point first; undefined means "not mine" and the common text runs.
+        else if (on['*'] && (value = await modal(() => on['*'](point))) !== undefined) { /* handled */ }
         else if (isCommon(ctx, point)) await modal(() => common(ctx, point));
-        else if (on['*']) value = await modal(() => on['*'](point));
+        else ctx.toast(idleLine(point), 'self', 2200);
+        if (value === ctx.handled) value = undefined;
         if (value !== undefined) finish(resolve, value);
       } catch (err) { finish(reject, err); } finally { busy = false; }
     };
@@ -146,7 +188,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
         if (tick) { const v = tick(dt); if (v !== undefined) finish(resolve, v); }
         const G = ctx.G;
         if (G.stats.health <= 0) return void finish(reject, new Fail('dead', { why: ctx.deathCause ?? 'hurt' }));
-        if (deadline && (G.day > deadline.day || (G.day === deadline.day && G.minute >= deadline.minute))) finish(reject, new Fail(deadline.type));
+        if (deadline && (G.day > deadline.day || (G.day === deadline.day && G.minute >= deadline.minute))) finish(reject, new Fail(typeof deadline.type === 'function' ? deadline.type() : deadline.type));
       } catch (err) { finish(reject, err); }
     });
   });

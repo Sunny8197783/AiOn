@@ -2,7 +2,8 @@
 // whistle first, then the blast, debris, a crater and a fire), damaged buildings shed rubble onto the
 // sidewalk, and desperate people demand food. Crouching (C) and cover between you and a blast cut the damage.
 // How much of each depends on the chapter (INTENSITY). Rubble piles are solids you can climb over.
-// createDanger({ ctx, actions, hurt }) -> { onHit(person, ko) }
+// ctx.calm (the 서연 interlude) holds the whole layer: nothing new falls and nothing pending lands.
+// createDanger({ ctx, actions, hurt }) -> { isHostile, trigger, reset }; reset() also clears rubble, craters and fires.
 import * as THREE from 'three';
 import { BUILDINGS } from '../game/townmap.js';
 import { groundAt } from '../engine/geom.js';
@@ -51,12 +52,13 @@ export function createDanger({ ctx, actions, hurt }) {
     }
   }
   const burning = []; // { fire, smoke, x, z, t }
+  const marks = [];   // craters and rubble piles: { obj, L, solid? }, removed by reset()
   const pending = []; // { t, run }
   let shellT = 20, collapseT = 60, looterT = 45, looter = null, flashK = 0;
 
   const level = () => engine.level;
-  const intensity = () => { const G = ctx.G; return G && INTENSITY[G.chapter]?.(G) || null; };
-  const active = () => ctx.roaming && engine.controlsEnabled && level()?.id === 'town';
+  const intensity = () => { const G = ctx.G; return (!ctx.calm && G && INTENSITY[G.chapter]?.(G)) || null; };
+  const active = () => ctx.roaming && engine.controlsEnabled && level()?.id === 'town' && !ctx.calm;
   const later = (t, run) => pending.push({ t, run });
   const dist = (x, z) => Math.hypot(engine.player.x - x, engine.player.z - z);
 
@@ -105,7 +107,7 @@ export function createDanger({ ctx, actions, hurt }) {
     audio.boom(Math.min(1, Math.max(0.3, d / 40)));
     engine.shake(Math.max(0.04, 0.6 - d * 0.02), 1.2);
     flash.position.set(x, y + 2 * size, z); flashK = 1; ballSize = size; ball.position.set(x, y + 1.2 * size, z); ring.position.set(x, y + 0.15, z);
-    const c = new THREE.Mesh(craterGeo, craterMat); c.scale.setScalar(rnd(1.4, 2.2)); c.position.set(x, y + 0.03, z); L.group.add(c);
+    const c = new THREE.Mesh(craterGeo, craterMat); c.scale.setScalar(rnd(1.4, 2.2)); c.position.set(x, y + 0.03, z); L.group.add(c); marks.push({ obj: c, L });
     for (let i = 0; i < 8; i++) { const a = Math.random() * 6.28, v = rnd(3, 8); actions.spawn(Math.random() < 0.5 ? 'brick' : 'rock', x, y + 0.4, z, Math.cos(a) * v, rnd(4, 9), Math.sin(a) * v); }
     billow(x, y, z, Math.round(14 * Math.min(2, size)), { size: 8 * size });
     if (Math.random() < 0.6) ignite(x, y, z, rnd(25, 50)); // often a fire that keeps burning
@@ -153,7 +155,8 @@ export function createDanger({ ctx, actions, hurt }) {
       pile.castShadow = pile.receiveShadow = true;
       L.group.add(pile);
       // ponytail: runtime-only rubble (not in the save); put it in levelStates if it should outlive a reload
-      L.solids.push({ x0: cx - W / 2, x1: cx + W / 2, z0: cz - D / 2, z1: cz + D / 2, y0: -0.5, y1: h, id: 'rubble' });
+      const solid = { x0: cx - W / 2, x1: cx + W / 2, z0: cz - D / 2, z1: cz + D / 2, y0: -0.5, y1: h, id: 'rubble' };
+      L.solids.push(solid); marks.push({ obj: pile, L, solid });
       audio.boom(0.5); engine.shake(0.25, 1);
       billow(cx, 0, cz, 12, { color: 0xb3a998, up: 1.2, size: 9, life: 12 }); // the dust cloud
       const P2 = engine.player;
@@ -241,6 +244,7 @@ export function createDanger({ ctx, actions, hurt }) {
       if (b.t <= -12) { b.fire.dispose?.(); b.smoke.dispose?.(); burning.splice(i, 1); continue; }
       if (b.t > 3 && b.L === level() && active() && dist(b.x, b.z) < 1.3) { b.burnT = (b.burnT ?? 0) - dt; if (b.burnT <= 0) { b.burnT = 0.5; hurt(4, 'fire'); ctx.toast('뜨겁다! 불길에서 떨어져!', 'self', 1500); } }
     }
+    if (ctx.calm) { pending.length = 0; if (looter) dropLooter(); }
     if (!active()) return;
     for (let i = pending.length - 1; i >= 0; i--) if ((pending[i].t -= dt) <= 0) pending.splice(i, 1)[0].run();
     if (looter) looterTick(dt);
@@ -255,6 +259,15 @@ export function createDanger({ ctx, actions, hurt }) {
     isHostile: (p) => !!p?.hostile,
     // force an event now (dev panel / tests)
     trigger(kind, at) { const I = intensity() ?? { shell: 1 }; if (kind === 'blast') blast(at.x, at.z); else if (kind === 'boom') blast(at.x, at.z, false, at.size ?? 1); else if (kind === 'shell') shell(I); else if (kind === 'collapse') collapse(); else if (kind === 'looter' && !looter) spawnLooter(); },
-    reset() { dropLooter(); pending.length = 0; shellT = 20; collapseT = 60; looterT = 45; },
+    // A retry or a new run: no looter, nothing pending, and the street as built (levels are cached per page).
+    reset() {
+      dropLooter(); pending.length = 0; shellT = 20; collapseT = 60; looterT = 45;
+      for (const m of marks.splice(0)) {
+        m.obj.removeFromParent(); if (m.obj.isInstancedMesh) m.obj.dispose();
+        if (m.solid) { const i = m.L.solids.indexOf(m.solid); if (i >= 0) m.L.solids.splice(i, 1); }
+      }
+      for (const b of burning.splice(0)) { try { b.fire.group?.removeFromParent(); b.smoke.group?.removeFromParent(); b.fire.dispose?.(); b.smoke.dispose?.(); } catch { /* fx stand-in */ } }
+      for (const p of puffs) { p.age = p.life = 0; p.sp.material.opacity = 0; p.sp.position.y = -500; }
+    },
   };
 }

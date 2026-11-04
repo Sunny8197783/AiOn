@@ -221,13 +221,17 @@ export function buildPark(kit, { spots } = {}) {
   stat.add(kit.slab(P.s, 0.4, P.s, wood, { x: P.x, y: Y, z: P.z }));
   for (const [dx, dz] of [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]]) {
     stat.add(kit.cyl(0.13, 0.14, 2.6, col, { x: P.x + dx * (half - 0.2), y: Y + 0.4, z: P.z + dz * (half - 0.2) }, 12));
-    if (dx && dz) solids.push({ x0: P.x + dx * (half - 0.2) - 0.18, x1: P.x + dx * (half - 0.2) + 0.18, z0: P.z + dz * (half - 0.2) - 0.18, z1: P.z + dz * (half - 0.2) + 0.18, y0: -0.5, y1: 3.5, id: 'pavilion' });
+    solids.push({ x0: P.x + dx * (half - 0.2) - 0.18, x1: P.x + dx * (half - 0.2) + 0.18, z0: P.z + dz * (half - 0.2) - 0.18, z1: P.z + dz * (half - 0.2) + 0.18, y0: -0.5, y1: 3.5, id: 'pavilion' });
   }
   for (const s of [-1, 1]) stat.add(kit.box(P.s, 0.22, 0.2, col, { x: P.x, y: Y + 2.9, z: P.z + s * (half - 0.2) }), kit.box(0.2, 0.22, P.s, col, { x: P.x + s * (half - 0.2), y: Y + 2.9, z: P.z }));
   const roof = new THREE.Mesh(new THREE.ConeGeometry(P.s * 0.98, 1.6, 4, 1, true), tile); roof.rotation.y = Math.PI / 4; roof.position.set(P.x, Y + 3.9, P.z); roof.castShadow = roof.receiveShadow = true;
   const under = new THREE.Mesh(new THREE.ConeGeometry(P.s * 0.97, 1.55, 4, 1, true), kit.mat('paint:#8a5a3c', { roughness: 0.8, side: THREE.BackSide })); under.rotation.y = Math.PI / 4; under.position.copy(roof.position); under.position.y -= 0.05;
   stat.add(roof, under);
   walk.push({ x0: P.x - half, x1: P.x + half, z0: P.z - half, z1: P.z + half, y: Y + 0.4 });
+  // stone step (디딤돌) where the branch path meets the floor, between the west columns: two 0.2 m rises
+  const st = { x0: P.x - half - 0.6, x1: P.x - half, z0: P.z - 1.7, z1: P.z - 0.5 };
+  stat.add(kit.slab(0.6, 0.2, st.z1 - st.z0, kit.surface('concrete', { color: 0x9c968b }), { x: (st.x0 + st.x1) / 2, y: Y, z: (st.z0 + st.z1) / 2 }));
+  walk.push({ ...st, y: Y + 0.2 });
 
   // ---- benches (instanced wood + cast legs), facing the path ----
   const benchWood = mergeGeometries([0, 1, 2].map(i => new THREE.BoxGeometry(1.7, 0.035, 0.11).translate(0, 0.43, -0.16 + i * 0.13).toNonIndexed())
