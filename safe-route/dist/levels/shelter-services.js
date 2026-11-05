@@ -53,7 +53,8 @@ export function buildServices(kit, T, shell) {
     const l = new THREE.PointLight(color, 0, dist, 2); l.position.set(...pos); l.castShadow = false; add(l, live);
     lights.push({ light: l, base, circuit });
   };
-  const area = low ? [[-12, -8, 'A'], [6, -8, 'B'], [-12, 8, 'B'], [6, 8, 'A']] : [[-14, -8, 'A'], [-2, -8, 'B'], [10, -8, 'A'], [-14, 8, 'B'], [-2, 8, 'A'], [10, 8, 'B']];
+  // the lower tiers' four sit at z ±7.4: 1.4 m clear of the cable trays (z ±8.9, y 2.82), which a lamp under them blew out
+  const area = low ? [[-12, -7.4, 'A'], [6, -7.4, 'B'], [-12, 7.4, 'B'], [6, 7.4, 'A']] : [[-14, -8, 'A'], [-2, -8, 'B'], [10, -8, 'A'], [-14, 8, 'B'], [-2, 8, 'A'], [10, 8, 'B']];
   for (const [x, z, c] of area) point([x, 2.5, z], 0xe6f0ff, low ? 22 : 16, 18, c);
   for (const l of shell.lights) point(l.pos, l.color, l.base, l.dist, l.circuit);
   const spot = new THREE.SpotLight(0xedf3ff, 0, 15, 1.15, 0.75, 2);

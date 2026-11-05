@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FONT } from '../engine/kit.js';
 import { panels, lamps, windowView, moodFor, npc, solidOf, MOODS } from './commerce-goods.js';
+import { yardTrees, floorPlant, deskPlant } from './office-detail.js';
 
 const H = 2.75, GY = -4.2, DOOR = 6.8;
 const ISL = [-4.6, -9.2], DX = [-5.8, -4.4, -3.0, -1.6], ME = { x: -1.6, z: ISL[0] };
@@ -198,7 +199,7 @@ export function buildOffice(kit, people) {
     stat.add(kit.cyl(0.04, 0.04, 0.1, kit.mat('paint:' + mugs[(r() * mugs.length) | 0], { roughness: 0.3 }), at(0.5, 0.25, { y: 0.72 }), 12));
     for (let k = 0; k < 1 + r() * 3; k++) stat.add(kit.box(0.21, 0.004, 0.297, M.paper, at(-0.15 + r() * 0.3, 0.42 + r() * 0.1, { y: 0.72 + k * 0.004, ry: (r() - 0.5) * 0.6 })));
     if (r() < 0.5) for (let k = 0; k < 3; k++) stat.add(kit.box(0.06, 0.3, 0.24, kit.mat('paint:' + ['#1f4f8c', '#c4161c', '#2f8a57', '#3b3f46'][(r() * 4) | 0]), at(-0.62 + k * 0.065, 0.2, { y: 0.72 })));
-    else if (r() < 0.5) { stat.add(kit.cyl(0.06, 0.05, 0.1, M.white, at(0.55, 0.15, { y: 0.72 }), 10)); stat.add(kit.cyl(0.002, 0.11, 0.18, kit.mat('foliage'), at(0.55, 0.15, { y: 0.82 }), 8)); }
+    else if (r() < 0.5) { const p = at(0.55, 0.15); stat.add(kit.cyl(0.06, 0.05, 0.1, M.white, { ...p, y: 0.72 }, 10), deskPlant(kit, p.x, 0.81, p.z, chairs.length)); }
     chairs.push(mine ? { x: cx + 0.35, z: zc + s * 1.45, ry: ry + 0.5 } : { x: cx + (r() - 0.5) * 0.2, z: zc + s * (1.05 + r() * 0.25), ry: ry + (r() - 0.5) * 0.7 });
   }
   for (const zc of ISL) {
@@ -254,10 +255,7 @@ export function buildOffice(kit, people) {
     add(kit.box(1.78, 1.05, 0.45, cab, { x, z: -0.35 }), true);
     for (let k = 0; k < 6; k++) stat.add(kit.box(0.06, 0.3, 0.26, kit.mat('paint:' + ['#1f4f8c', '#c4161c', '#2f8a57', '#3b3f46', '#f2c230'][(r() * 5) | 0]), { x: x - 0.6 + k * 0.07, y: 1.05, z: -0.35 }));
   }
-  for (const [x, z] of [[-8.6, -11.4], [8.5, -11.4], [-2.7, -0.4]]) {
-    add(kit.cyl(0.2, 0.16, 0.42, M.white, { x, z }, 14), true);
-    stat.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.36, 1), kit.mat('foliage')).translateX(x).translateY(0.85).translateZ(z));
-  }
+  [[-8.6, -11.4], [8.5, -11.4], [-2.7, -0.4]].forEach(([x, z], i) => { add(kit.cyl(0.2, 0.16, 0.42, M.white, { x, z }, 14), true); stat.add(...floorPlant(kit, x, 0.42, z, i, M.chair)); });
   // door: glass leaf, card reader, exit sign, a corridor behind it
   keep(kit.box(0.96, 2.08, 0.02, M.glass, { x: DOOR, z: 0.1, cast: false }));
   for (const [w, h, x, y] of [[1.0, 0.05, DOOR, 0], [1.0, 0.05, DOOR, 2.05], [0.05, 2.1, DOOR - 0.48, 0], [0.05, 2.1, DOOR + 0.48, 0]]) stat.add(kit.box(w, h, 0.05, M.frame, { x, y, z: 0.1 }));
@@ -353,9 +351,9 @@ export function buildOffice(kit, people) {
     yard.add(kit.cyl(0.1, 0.14, 9, M.dark, { x, y: GY, z })); yard.add(kit.box(0.2, 0.15, 1.4, M.dark, { x, y: GY + 8.9, z: z + 0.6 }));
     yard.add(kit.box(0.5, 0.08, 0.8, glowY, { x, y: GY + 8.84, z: z + 1.1, cast: false }));
   }
-  const trees = [], crowns = [];
-  for (let z = -18; z > -60; z -= 6) for (const x of [-57, 57]) { trees.push({ x: x + r() * 2, y: GY, z, sx: 0.25, sy: 2.4, sz: 0.25 }); crowns.push({ x: x + r() * 2, y: GY + 4 + r(), z, s: 2.2 + r() * 0.8 }); }
-  dyn.add(kit.instanced(box, kit.mat('bark'), trees)); dyn.add(kit.instanced(new THREE.IcosahedronGeometry(1, 1), kit.mat('foliage'), crowns));
+  const trees = []; // street trees along the yard (office-detail.js); four draws from r per tree, as before
+  for (let z = -18; z > -60; z -= 6) for (const x of [-57, 57]) { const tx = x + r() * 2, ry = r() * 6.28, s = 0.85 + r() * 0.2; r(); trees.push({ x: tx, y: GY, z, ry, s }); }
+  dyn.add(...yardTrees(kit, trees));
   const view = windowView(kit, { w: 420, h: 130, kind: 'sky', seed: 5 }); view.mesh.position.set(0, 32, -165); dyn.add(view.mesh);
   // hazard lights blinking on the idle truck at x 33 (front faces the office)
   const hazard = new THREE.MeshStandardMaterial({ color: 0x3a2a10, emissive: 0xffa31a, emissiveIntensity: 0, roughness: 0.4 });

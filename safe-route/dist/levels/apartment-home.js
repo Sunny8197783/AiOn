@@ -4,10 +4,12 @@
 // conditioner, curtains); a small bedroom (bed, wardrobe, desk with a laptop) and the south 베란다 (washing machine,
 // drying poles, 경량칸막이). Stateful props: apartment-props.js (radio, candle, bag, planner), apartment-stock.js.
 // H.setCurtain('none'|'hung'|'sealed'): the 암막 커튼 over the living-room glass, and tape along its edges (design M4).
+// The lived-in detail (plants, soft furnishings, shoes, dish rack, clutter, the 빨래건조대) is apartment-home-detail.js.
 // Unit box x [-7.6, 0.3] (east wall against the lift shaft), z [0, 8.0]; balcony z [8.0, 9.4].
 import * as THREE from 'three';
 import { F3, FL } from './apartment-parts.js';
 import { FONT } from '../engine/kit.js';
+import { homeDetail } from './apartment-home-detail.js';
 
 export const HOME = { x0: -7.6, x1: 0.3, zb: 8.0, zo: 9.4, ch: FL + 2.3, bf: FL - 0.08, top: FL + 0.42 };
 
@@ -24,7 +26,7 @@ export function buildHome(B, g, H, dyn) {
     cabinet: P('#f2f0eb', 0.45), counter: P('#d9d4ca', 0.22), gap: P('#9a968f', 0.8), door: P('#efece6', 0.5),
     fridge: P('#c8cbce', 0.32, 0.55), hob: P('#0d0e10', 0.08, 0.3), sofa: P('#8e8a82', 0.97), cushion: P('#9b978e', 0.97),
     pillow: P('#c9b79a', 0.95), rug: P('#b5aa98', 1), duvet: P('#a9b4bf', 0.95), linen: P('#d9d0bf', 1), skirt: P('#e6e2da', 0.5),
-    screen: P('#07090b', 0.12, 0.2), paper: P('#f4f1e8', 0.9), plate: P('#f6f4ef', 0.25), green: kit.mat('foliage'),
+    screen: P('#07090b', 0.12, 0.2), paper: P('#f4f1e8', 0.9), plate: P('#f6f4ef', 0.25),
     pot: P('#b9a48a', 0.8), tile: kit.surface('tile', { color: 0xf1efe9, roughness: 0.18, repeat: [1 / 0.6, 1 / 0.6] }),
   };
 
@@ -71,6 +73,7 @@ export function buildHome(B, g, H, dyn) {
 
   // ---- kitchen: base run with sink + hob, upper cabinets, fridge, gas pipe and 중간밸브, dining table, bins ----
   const KX0 = -7.5, KX1 = -3.5, CT = FL + 0.85;
+  const D = homeDetail(B, g, { W, P, glow, F3, FL, BF, CT });
   box(KX1 - KX0, 0.1, 0.5, P('#3b3936', 0.7), (KX0 + KX1) / 2, FL, 0.28);
   for (const [a, b, top] of [[KX0, -5.95, 0.82], [-5.95, -5.15, 0.6], [-5.15, KX1, 0.82]]) box(b - a, top - 0.1, 0.6, W.cabinet, (a + b) / 2, FL + 0.1, 0.32);
   box(-5.92 - KX0 + 0.01, 0.03, 0.64, W.counter, (KX0 - 0.01 - 5.92) / 2, CT - 0.03, 0.33);
@@ -82,9 +85,7 @@ export function buildHome(B, g, H, dyn) {
   cyl(0.024, 0.03, 0.04, M.metal, -5.55, CT, 0.1);
   B.rod(g, [-5.55, CT + 0.03, 0.1], [-5.55, CT + 0.33, 0.1], 0.012, M.metal); B.rod(g, [-5.55, CT + 0.33, 0.1], [-5.55, CT + 0.33, 0.29], 0.012, M.metal);
   B.rod(g, [-5.55, CT + 0.33, 0.29], [-5.55, CT + 0.25, 0.31], 0.011, M.metal); box(0.02, 0.012, 0.1, M.metal, -5.47, CT + 0.07, 0.15);
-  box(0.42, 0.015, 0.3, M.metal, -4.82, CT, 0.3); // dish rack + plates
-  for (let i = 0; i < 4; i++) cyl(0.1, 0.1, 0.01, W.plate, -4.95 + i * 0.05, CT + 0.11, 0.3, { rz: Math.PI / 2 }, 20);
-  cyl(0.035, 0.03, 0.09, P('#4f7fa8', 0.3), -4.67, CT + 0.015, 0.22);
+  D.dishRack(-4.82, 0.3); // 식기건조대 with plates and cups
   box(0.62, 0.008, 0.48, W.hob, -4.07, CT, 0.32, { cast: false }); // built-in hob
   for (const [dx, dz, r] of [[-0.16, 0.1, 0.085], [0.16, 0.1, 0.07], [0, -0.12, 0.06]]) {
     cyl(r, r, 0.012, M.darkMetal, -4.07 + dx, CT + 0.008, 0.32 + dz, {}, 20); cyl(r * 0.4, r * 0.4, 0.022, M.metal, -4.07 + dx, CT + 0.008, 0.32 + dz);
@@ -137,8 +138,7 @@ export function buildHome(B, g, H, dyn) {
   box(0.2, 0.015, 0.12, M.darkWood, 0.1, F3 + 1.05, 0.4); cyl(0.018, 0.018, 0.16, M.black, 0.05, F3 + 1.07, 0.95, { rz: Math.PI / 2 }); // key tray, flashlight
   B.solid(-0.1, X1, 0.04, 1.28, F3, F3 + 1.1);
   const shoes = [[-1.05, 0.95, 0.2], [-0.93, 0.95, -0.1], [-0.6, 0.35, 1.4], [-0.48, 0.38, 1.6], [-1.9, 1.62, 0], [-1.75, 1.62, 0.1]];
-  const sh = kit.instanced(new THREE.BoxGeometry(0.1, 0.07, 0.26), P('#ffffff', 0.7), shoes.map(([x, z, ry], i) => ({ x, y: (i >= 4 ? FL : F3) + 0.035, z, ry })), { cast: false });
-  shoes.forEach((_, i) => sh.setColorAt(i, new THREE.Color(['#e9e6df', '#e9e6df', '#2a2a2a', '#2a2a2a', '#8a6d55', '#8a6d55'][i]))); g.add(sh);
+  D.shoes(shoes, ['#e9e6df', '#e9e6df', '#2a2a2a', '#2a2a2a', '#8a6d55', '#8a6d55']); // sneakers, dress shoes; 실내화 at the step
   cyl(0.1, 0.09, 0.42, M.steel, -2.22, F3, 0.3, {}, 18);
   for (const [dx, c] of [[-0.03, '#1f2d45'], [0.035, '#7a1f2b']]) { B.rod(g, [-2.22 + dx, F3 + 0.1, 0.3], [-2.2 + dx, F3 + 0.92, 0.32], 0.012, M.black); cyl(0.035, 0.012, 0.5, P(c, 0.8), -2.22 + dx, F3 + 0.2, 0.3); }
   const brk = B.tex('breaker', 256, 320, drawBreaker);
@@ -163,8 +163,7 @@ export function buildHome(B, g, H, dyn) {
   rbox(0.92, 0.36, 2.2, 0.05, W.sofa, -3.5, FL + 0.06, 6.0); rbox(0.24, 0.5, 2.2, 0.07, W.sofa, -3.84, FL + 0.42, 6.0);
   for (const z of [4.98, 7.02]) rbox(0.92, 0.22, 0.16, 0.06, W.sofa, -3.5, FL + 0.42, z);
   for (const z of [5.47, 6.53]) rbox(0.66, 0.12, 1.02, 0.05, W.cushion, -3.38, FL + 0.42, z);
-  rbox(0.13, 0.36, 0.38, 0.06, W.pillow, -3.62, FL + 0.52, 5.3, { rz: -0.28, ry: 0.15 }); rbox(0.13, 0.34, 0.36, 0.06, P('#7c8a86', 0.95), -3.62, FL + 0.52, 6.72, { rz: -0.3, ry: -0.2 });
-  rbox(0.5, 0.06, 0.4, 0.03, P('#c7b9a4', 1), -3.35, FL + 0.54, 6.25, { ry: 0.2 });
+  D.sofa([[-3.62, FL + 0.52, 5.3, 0.15, -0.28, W.pillow, 0.13, 0.36, 0.38], [-3.62, FL + 0.52, 6.72, -0.2, -0.3, P('#7c8a86', 0.95), 0.13, 0.34, 0.36]]); // cushions, throw
   B.solid(-4.0, -3.02, 4.88, 7.12, FL, FL + 0.9);
   box(2.2, 0.01, 1.7, W.rug, -1.9, FL, 6.0, { cast: false });
   box(1.0, 0.04, 0.55, M.lightWood, -1.95, FL + 0.38, 6.0);
@@ -181,8 +180,7 @@ export function buildHome(B, g, H, dyn) {
   B.solid(-0.12, 0.28, 7.38, 7.72, FL, FL + 1.75);
   cyl(0.14, 0.16, 0.03, M.black, -3.62, FL, 7.5); B.rod(g, [-3.62, FL + 0.03, 7.5], [-3.62, FL + 1.45, 7.5], 0.012, M.black);
   cyl(0.15, 0.2, 0.26, glow('shade'), -3.62, FL + 1.42, 7.5, { cast: false }, 20); B.solid(-3.78, -3.46, 7.34, 7.66, FL, FL + 1.7);
-  cyl(0.17, 0.13, 0.34, W.pot, 0.02, FL, 4.62);
-  for (const [dx, dy, dz, s] of [[0, 0.6, 0, 0.3], [-0.12, 0.85, 0.05, 0.22], [0.08, 0.8, -0.08, 0.24]]) { const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), W.green); f.position.set(0.02 + dx, FL + dy, 4.62 + dz); f.castShadow = true; g.add(f); }
+  D.plant('rubber', 0.02, FL, 4.62, 0.165, 0.34, W.pot); // 인도고무나무 in the corner by the TV
   B.solid(-0.2, 0.25, 4.4, 4.86, FL, FL + 1.0);
   box(0.03, 0.58, 0.84, M.darkWood, -3.985, FL + 1.25, 6.0);
   const art = new THREE.Mesh(new THREE.PlaneGeometry(0.76, 0.5), new THREE.MeshStandardMaterial({ map: B.tex('art302', 256, 168, drawArt), roughness: 0.8 }));
@@ -202,8 +200,7 @@ export function buildHome(B, g, H, dyn) {
   for (const z of [4.52, 4.68]) box(0.02, 0.3, 0.015, M.metal, -6.96, FL + 1.0, z);
   B.solid(X0, -6.95, 3.7, 5.47, FL, FL + 2.2);
   box(2.05, 0.28, 1.6, M.lightWood, -6.53, FL, 6.4); rbox(1.98, 0.22, 1.52, 0.06, M.white, -6.53, FL + 0.28, 6.4);
-  rbox(1.45, 0.1, 1.58, 0.05, W.duvet, -6.25, FL + 0.47, 6.4, { rz: 0.02 }); rbox(0.5, 0.06, 1.6, 0.03, P('#8c99a6', 0.95), -5.85, FL + 0.55, 6.4);
-  for (const z of [6.02, 6.78]) rbox(0.38, 0.12, 0.62, 0.05, M.white, -7.25, FL + 0.5, z, { ry: z > 6.4 ? 0.08 : -0.05 });
+  rbox(0.5, 0.06, 1.6, 0.03, P('#8c99a6', 0.95), -5.85, D.bed(), 6.4); // duvet and pillows, the folded runner on top
   box(0.06, 0.95, 1.62, M.lightWood, -7.54, FL, 6.4);
   B.solid(X0, -5.48, 5.58, 7.22, FL, FL + 0.62);
   box(0.42, 0.48, 0.38, M.lightWood, -7.34, FL, 7.5); cyl(0.06, 0.07, 0.05, M.white, -7.34, FL + 0.48, 7.5);
@@ -243,12 +240,14 @@ export function buildHome(B, g, H, dyn) {
   for (const z of [8.45, 8.95]) { B.rod(g, [-6.3, PY, z], [-1.6, PY, z], 0.012, M.alu); for (const x of [-6.0, -1.9]) B.rod(g, [x, CH, z], [x, PY, z], 0.008, M.alu); }
   [[-5.6, 8.45, '#e8e4dc', 0.5, 0.42], [-4.9, 8.45, '#5d7fa3', 0.55, 0.38], [-4.2, 8.95, '#f2efe6', 0.4, 0.44], [-3.5, 8.45, '#8a3a3a', 0.45, 0.4], [-2.7, 8.95, '#3f4a56', 0.6, 0.42]]
     .forEach(([x, z, c, w, h], i) => { box(w, h, 0.012, P(c, 0.98), x, PY - h, z, { ry: (i % 3 - 1) * 0.08 }); });
-  for (const [x, s] of [[-2.2, 0.22], [-1.75, 0.16]]) { cyl(s * 0.75, s * 0.6, s * 1.3, W.pot, x, BF, 9.15); const f = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 1), W.green); f.position.set(x, BF + s * 1.3 + s * 0.6, 9.15); f.castShadow = true; g.add(f); }
+  D.plant('snake', -2.2, BF, 9.15, 0.165, 0.29, P('#a5654a', 0.85)); D.plant('pothos', -1.75, BF, 9.15, 0.12, 0.21, M.white, 0.9); // 산세베리아, 스킨답서스
   B.solid(-2.45, -1.55, 8.9, 9.36, BF, BF + 0.7);
   box(0.12, 0.003, 0.12, M.steel, -5.0, BF, 9.2, { cast: false });
   for (const [w, h, x, y, z] of [[0.012, 2.0, X0 + 0.006, BF + 0.05, 8.12], [0.012, 2.0, X0 + 0.006, BF + 0.05, 8.68], [0.012, 0.02, X0 + 0.006, BF + 2.05, 8.4]]) box(w, h, z === 8.4 ? 0.58 : 0.02, P('#9e988c', 0.6), x, y, z, { cast: false });
   B.plate(g, '경량칸막이', { x: X0 + 0.014, y: BF + 1.55, z: 8.4, ry: Math.PI / 2, w: 0.32, h: 0.09, bg: '#fff4d6', fg: '#8a1c1c', border: '#8a1c1c' });
   cyl(0.06, 0.06, 0.03, glow('lamp'), -4.0, CH - 0.03, 8.7, { cast: false });
+
+  D.furnish();
 
   // ---- points, spawns, anchors ----
   B.point('homeExitDoor', '현관문 (복도로)', -1.275, F3, 0.5, 'door', 1.3).host = 'door302';

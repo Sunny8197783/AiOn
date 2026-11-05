@@ -52,6 +52,7 @@ export function buildProps(kit, { avoid = [] } = {}) {
     }
   }
   for (let x = -38; x <= 40; x += 26) { addLight(x, -64.55, Math.PI); addLight(x + 13, 64.55, 0); }
+  for (const x of [76.5, 94.5]) addLight(x, 12.4, Math.PI); // 103동 lot: in the tree strip, heads over the first bays
   const poleGeo = mergeAll([
     new THREE.CylinderGeometry(0.075, 0.115, 8.6, 10).translate(0, 4.3, 0),
     new THREE.BoxGeometry(0.32, 0.55, 0.26).translate(0, 0.28, 0),
@@ -59,25 +60,46 @@ export function buildProps(kit, { avoid = [] } = {}) {
     new THREE.CylinderGeometry(0.045, 0.045, 1.5, 8).rotateX(Math.PI / 2).translate(0, 9.05, -1.5),
     new THREE.BoxGeometry(0.34, 0.14, 0.72).translate(0, 9.0, -2.45),
   ]);
-  const lensMat = kit.memo('town:streetLens', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0xfff6e8, emissive: 0xfff0d8, emissiveIntensity: 6, roughness: 0.3 }), 6));
+  // Lens: white and glowing, a small halo at night (luminance ~2.6, above the night bloom threshold of 1).
+  const lensMat = kit.memo('town:streetLens', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0xfff6e8, emissive: 0xfff0d8, emissiveIntensity: 3, roughness: 0.3 }), 3));
   group.add(kit.instanced(poleGeo, kit.mat('paint:#7d848a', { roughness: 0.45, metalness: 0.6 }), lights));
   group.add(kit.instanced(new THREE.BoxGeometry(0.26, 0.03, 0.6).translate(0, 8.92, -2.45), lensMat, lights, { cast: false }));
   for (const p of lights) box(p.x - 0.18, p.x + 0.18, p.z - 0.18, p.z + 0.18, 4, 'streetlight');
-  // Light pools on the ground under each head (additive, follows the street group).
-  const glowTex = kit.memo('town:glowTex', () => kit.texture(kit.canvas(128, 128, (g, w) => {
-    const r = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
-    r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.45, 'rgba(255,255,255,0.45)'); r.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = r; g.fillRect(0, 0, w, w);
-  }), { repeat: [1, 1] }));
-  const poolMat = kit.memo('town:pool', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdcae, emissiveMap: glowTex, emissiveIntensity: 0.55, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }), 0.55));
-  const pools = lights.map(p => ({ x: p.x - Math.sin(p.ry) * 2.45, y: 0.02, z: p.z - Math.cos(p.ry) * 2.45, s: 1 }));
-  group.add(kit.instanced(new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2), poolMat, pools, { cast: false, receive: false }));
-  // A few real lights at the places the story stops (others glow only).
-  const keyLights = [[78, 25.5], [-95, 10.5], [36, 8.4], [-80, -15], [-63, 31], [-61, -34], [0, 9]];
-  for (const [x, z] of keyLights.slice(0, kit.Q?.keyLights ?? keyLights.length)) { // how many: the graphics tier (engine/quality.js)
-    const L = new THREE.PointLight(0xffd9a8, 260, 30, 2); L.position.set(x, 7.6, z);
-    kit.lit('street', L, 260); group.add(L);
+  const headOf = (p) => ({ x: p.x - Math.sin(p.ry) * 2.45, z: p.z - Math.cos(p.ry) * 2.45 });
+  // A few real lights at the places the story stops (the graphics tier keeps the first n, engine/quality.js): the
+  // 103동 entrance canopy downlight (the player starts there), then downward cones from the lamp heads nearest the
+  // other stops (the second is the 103동 lot lamp). A cone keeps the light off the head itself and the upper facades.
+  const stops = [[-95, 10.5], [77, 15], [36, 8.4], [-80, -15], [-63, 31], [-61, -34]];
+  const nKey = kit.Q?.keyLights ?? stops.length + 1, keyHeads = new Set();
+  if (nKey > 0) { // 103동 canopy (town-fronts: slab underside at Y + 2.75, posts at x 76 / 80, z 27.6)
+    stat.add(kit.box(0.6, 0.04, 0.6, lensMat, { x: 78, y: Y + 2.71, z: 28.7, cast: false }));
+    const L = new THREE.SpotLight(0xffe2bc, 14, 11, 1.4, 0.4, 2); L.castShadow = false; // wide: reaches the posts' inner faces
+    L.position.set(78, Y + 2.68, 28.7); L.target.position.set(78, 0, 27.8);
+    kit.lit('street', L, 14); group.add(L, L.target);
   }
+  for (const [x, z] of stops.slice(0, Math.max(0, nKey - 1))) {
+    const h = lights.map(headOf).reduce((b, q) => { const d = Math.hypot(q.x - x, q.z - z); return d < b.d ? { d, q } : b; }, { d: Infinity }).q;
+    if (!h || keyHeads.has(`${h.x},${h.z}`)) continue;
+    keyHeads.add(`${h.x},${h.z}`);
+    const L = new THREE.SpotLight(0xffd9a8, 240, 30, 1.15, 0.7, 2); L.castShadow = false; // ~3 lux under the head
+    L.position.set(h.x, Y + 8.7, h.z); L.target.position.set(h.x, 0, h.z);
+    kit.lit('street', L, 240); group.add(L, L.target);
+  }
+  // Soft light pools under the heads that have no real light: an ellipse along the road, centred a metre past the
+  // head so the curb cuts only its faint tail (additive, follows the street group). The falloff is a gaussian in linear
+  // light (written as sRGB bytes), so the pool has no visible rim; its centre matches the ~3 lux of a real head.
+  const glowTex = kit.memo('town:glowTex', () => kit.texture(kit.canvas(128, 128, (g, w) => {
+    const img = g.createImageData(w, w);
+    for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
+      const r2 = ((x + 0.5) / w * 2 - 1) ** 2 + ((y + 0.5) / w * 2 - 1) ** 2, lin = r2 < 1 ? Math.exp(-r2 / 0.18) * (1 - r2) : 0;
+      const i = (y * w + x) * 4, v = Math.round(255 * lin ** (1 / 2.2));
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+  }), { repeat: [1, 1] }));
+  const poolMat = kit.memo('town:pool', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdcae, emissiveMap: glowTex, emissiveIntensity: 0.12, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }), 0.12));
+  const pools = lights.filter(p => !keyHeads.has(`${headOf(p).x},${headOf(p).z}`)).map(p => ({ x: p.x - Math.sin(p.ry) * 3.4, y: 0.02, z: p.z - Math.cos(p.ry) * 3.4, ry: p.ry }));
+  group.add(kit.instanced(new THREE.PlaneGeometry(11, 6).rotateX(-Math.PI / 2), poolMat, pools, { cast: false, receive: false }));
 
   // ---- 전봇대 (concrete utility poles), sagging power and telecom lines, service drops ----
   const lines = [

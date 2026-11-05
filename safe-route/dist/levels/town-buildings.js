@@ -1,14 +1,19 @@
 // Town buildings from BUILDINGS: facade planes (kit.facade, night windows), parapets, rooftop plant,
 // balcony slabs, apartment gable numbers, the logistics warehouse and a ring of filler blocks outside
 // the bounds. Big background blocks are split into several villas with alleys so they read as streets.
+// The 아파트 faces and relief, roofs, office fins and villa sills come from town-buildings-detail/-roof.js.
 import * as THREE from 'three';
 import { BUILDINGS, BOUNDS } from '../game/townmap.js';
 import { FONT } from '../engine/kit.js';
 import { CURB } from './town-plan.js';
+import { detailOf, apartmentFaces } from './town-buildings-detail.js';
+import { apartmentRoof, roofKit as roofParts, officeDetail, villaFace } from './town-buildings-roof.js';
 
 const FH = { apartment: 2.8, villa: 2.9, shop: 3.5, mart: 4.6, office: 3.7, civic: 3.6 };
 export const heightOf = (b) => b.h ?? (b.floors * (FH[b.kind] ?? 3) + (b.kind === 'apartment' ? 0.8 : 0));
 const BACKGROUND = new Set(['n1', 'n2', 'nw1', 's1', 's2', 'sw1']);
+const ENTRY = { apt103: 78, apt102: 88, apt101: 88 }; // x of each 동's entrance canopy (town-fronts.js): the stair core
+const ROAD_SIDE = { s1: 'n', s2: 'n', n2: 's', nw1: 'e', sw1: 'e' }; // villa block faces along a street
 
 // Vertical plane for one building face, front side outward. side: 'n'|'s'|'e'|'w'. a0..a1 along the
 // face (world x for n/s, world z for e/w), y0..y1 height; u/v ranges into the texture. Texture u runs
@@ -34,7 +39,7 @@ export function buildBuildings(kit, { holes = {} } = {}) {
   const roofMat = kit.memo('town:roof', () => kit.surface('concrete', { color: 0xb5b2aa }));
   const greenRoof = kit.mat('paint:#5d8a6b', { roughness: 0.75 });
   const parapetMat = kit.mat('whiteWall');
-  const metal = kit.mat('metal'), steel = kit.mat('steel');
+  const steel = kit.mat('steel'), detail = detailOf(kit);
 
   // Facade material with optional colour tint (clones share textures; registered for night windows).
   const fac = (kind, floors, cols, seed, tint) => kit.memo(`town:fac:${kind}:${floors}:${cols}:${seed}:${tint || ''}`, () => {
@@ -50,6 +55,7 @@ export function buildBuildings(kit, { holes = {} } = {}) {
     const y0 = o.y0 ?? CURB;
     const hole = o.hole; // { side, a0, a1, y1 } opening at ground level
     for (const [side, c, a0, a1, mat, u1] of [['s', z1, x0, x1, mats.long, uL], ['n', z0, x0, x1, mats.long, uL], ['e', x1, z0, z1, mats.short, uS], ['w', x0, z0, z1, mats.short, uS]]) {
+      if (o.skip?.includes(side)) continue; // built by the caller (the 아파트 faces)
       const target = o.far ? far : stat;
       if (hole && hole.side === side) {
         const L = a1 - a0, U = (a) => (a - a0) / L * u1, V = (y) => (y - y0) / (h - y0);
@@ -67,13 +73,8 @@ export function buildBuildings(kit, { holes = {} } = {}) {
         kit.box(t, p, D - 2 * t, pm, { x: x0 + t / 2, y: h, z: (z0 + z1) / 2 }), kit.box(t, p, D - 2 * t, pm, { x: x1 - t / 2, y: h, z: (z0 + z1) / 2 }));
     }
   }
-  // Rooftop clutter for low buildings: stair house, stainless tanks, AC units.
-  function roofKit(x0, x1, z0, z1, h, rr, green) {
-    const cx = x0 + (x1 - x0) * (0.25 + rr() * 0.5), cz = z0 + (z1 - z0) * (0.25 + rr() * 0.5);
-    stat.add(kit.box(3, 2.6, 3.2, parapetMat, { x: cx, y: h, z: cz }), kit.box(3.3, 0.15, 3.5, roofMat, { x: cx, y: h + 2.6, z: cz }));
-    for (let i = 0; i < 1 + (rr() * 2 | 0); i++) stat.add(kit.cyl(0.55, 0.55, 1.3, metal, { x: cx + 2.4 + i * 1.3, y: h + 0.3, z: cz + 1 }), kit.box(1.2, 0.3, 1.2, steel, { x: cx + 2.4 + i * 1.3, y: h, z: cz + 1 }));
-    if (green) stat.add(new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 - 0.4, z1 - z0 - 0.4).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, h + 0.02, (z0 + z1) / 2), greenRoof));
-  }
+  // Rooftop clutter for low buildings: stair house, stainless tanks (town-buildings-roof.js).
+  const roofKit = (x0, x1, z0, z1, h, rr, green) => roofParts(kit, stat, { x0, x1, z0, z1, h, rr, green, detail, roofMat, parapetMat, greenRoof });
 
   // Apartment gable: plain wall, brand mark and the big 동 number.
   const gable = (label) => kit.memo(`town:gable:${label}`, () => {
@@ -86,23 +87,26 @@ export function buildBuildings(kit, { holes = {} } = {}) {
       g.fillStyle = '#3f7d5c'; g.font = `800 ${w * 0.14}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('한빛', w * 0.5, h * 0.155);
       g.fillStyle = '#4b5560'; g.font = `800 ${w * 0.36}px ${FONT}`; g.fillText(label, w * 0.5, h * 0.27);
       g.fillStyle = '#5a6672'; for (let f = 0; f < 15; f++) { const y = h * 0.36 + f * h * 0.042; g.fillRect(w * 0.44, y, w * 0.12, h * 0.02); }
+      const streak = (x, y, len, a) => { const s = g.createLinearGradient(0, y, 0, y + len); s.addColorStop(0, `rgba(88,82,70,${a})`); s.addColorStop(1, 'rgba(88,82,70,0)'); g.fillStyle = s; g.fillRect(x, y, 4 + gr() * 8, len); };
+      for (let i = 0; i < 16; i++) streak(gr() * w, 0, h * (0.05 + gr() * 0.3), 0.05 + gr() * 0.04); // rain off the roof edge
+      for (let f = 0; f < 15; f++) for (const x of [w * 0.44, w * 0.555]) streak(x, h * 0.38 + f * h * 0.042, h * 0.03, 0.08); // under each sill
     }));
     return new THREE.MeshStandardMaterial({ map, roughness: 0.85 });
   });
 
+  let aptN = 0;
   for (const b of BUILDINGS) {
     const h = heightOf(b), seed = [...b.id].reduce((s, ch) => (s * 31 + ch.charCodeAt(0)) % 997, 7);
     solids.push({ x0: b.x0, x1: b.x1, z0: b.z0, z1: b.z1, y0: -3, y1: h + 1, id: b.id });
     if (BACKGROUND.has(b.id)) { background(b); continue; }
     if (b.kind === 'apartment') {
-      const long = fac('apartment', 15, 16, seed);
-      shell(b.x0, b.x1, b.z0, b.z1, h, { long, short: gable(b.label) });
-      // balcony slabs + fins on the south face, machine rooms and tank on the roof
-      for (let f = 1; f < 15; f++) stat.add(kit.box(b.x1 - b.x0, 0.14, 0.35, parapetMat, { x: (b.x0 + b.x1) / 2, y: CURB + f * 2.8 - 0.05, z: b.z1 + 0.17 }));
+      const core = ENTRY[b.id] ?? (b.x0 + b.x1) / 2, gm = gable(b.label);
+      shell(b.x0, b.x1, b.z0, b.z1, h, { short: gm, roof: greenRoof }, { skip: 'sn' }); // urethane-coated roof
+      const fh = apartmentFaces(kit, { b, h, core, k: aptN++, target: stat, facePlane, parapetMat, detail });
+      // balcony slabs in register with the facade's floors, fins between every other pair of units
+      for (let f = 1; f < 15; f++) stat.add(kit.box(b.x1 - b.x0, 0.14, 0.35, parapetMat, { x: (b.x0 + b.x1) / 2, y: CURB + f * fh - 0.05, z: b.z1 + 0.17 }));
       for (let x = b.x0 + 6; x < b.x1; x += 12) stat.add(kit.box(0.3, h - 0.4, 0.45, parapetMat, { x, y: CURB, z: b.z1 + 0.22 }));
-      for (const x of [b.x0 + 14, b.x1 - 14]) stat.add(kit.box(5, 3.2, 4.5, parapetMat, { x, y: h, z: (b.z0 + b.z1) / 2 }), kit.box(5.4, 0.2, 4.9, roofMat, { x, y: h + 3.2, z: (b.z0 + b.z1) / 2 }));
-      stat.add(kit.box(4, 2.2, 2.6, kit.mat('paint:#5f87b0', { roughness: 0.45 }), { x: (b.x0 + b.x1) / 2, y: h + 0.4, z: (b.z0 + b.z1) / 2 }));
-      stat.add(kit.cyl(0.04, 0.04, 6, metal, { x: b.x1 - 6, y: h, z: b.z0 + 2 }, 6));
+      apartmentRoof(kit, { b, h, core, target: stat, roofMat, parapetMat, gableMat: gm, facePlane, detail });
       continue;
     }
     if (b.kind === 'warehouse') { warehouse(b, h); continue; }
@@ -113,6 +117,7 @@ export function buildBuildings(kit, { holes = {} } = {}) {
     if (b.id === 'culture') mats.parapet = kit.mat('paint:#8a8f94', { roughness: 0.6 });
     shell(b.x0, b.x1, b.z0, b.z1, h, mats, { hole: holes[b.id], y0: b.id === 'culture' ? -0.9 : CURB });
     if (b.kind !== 'shop' || b.floors > 1) roofKit(b.x0, b.x1, b.z0, b.z1, h, kit.rng(seed), false);
+    if (b.kind === 'office') officeDetail(kit, stat, { b, h, colsL, colsS, fh: FH.office, detail });
   }
 
   function background(b) {
@@ -126,6 +131,11 @@ export function buildBuildings(kit, { holes = {} } = {}) {
       const keep = stat; if (hit) { stat = strike.group; strike.box = { x0, x1: x0 + cw, z0, z1: z0 + cd, h }; }
       shell(x0, x0 + cw, z0, z0 + cd, h, { long: fac(kind, floors, 4, v + 1, tint), short: fac(kind, floors, 4, v + 1, tint) }, { perL: 14, perS: 14 });
       roofKit(x0, x0 + cw, z0, z0 + cd, h, rr, kind === 'villa' && rr() < 0.7);
+      const sd = ROAD_SIDE[b.id], edge = sd === 'n' ? j === 0 : sd === 's' ? j === nz - 1 : i === nx - 1;
+      if (detail && kind === 'villa' && edge) { // sills and 방범창 on the face along the street
+        const ns = sd !== 'e', len = ns ? cw : cd;
+        villaFace(kit, stat, { side: sd, c: { n: z0, s: z0 + cd, e: x0 + cw }[sd], a0: ns ? x0 : z0, a1: (ns ? x0 : z0) + len, y0: CURB, floors, fhv: fh, reps: Math.max(1, Math.round(len / 14)), seed: x0 * 13 + z0 });
+      }
       stat = keep;
     }
   }

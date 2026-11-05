@@ -1,7 +1,9 @@
 // Environment presets: sun/moon, sky, fog, exposure, bloom, clouds, grade and light groups per time of day.
 // Angles are degrees: azimuth from north (-z) clockwise toward east (+x), elevation above the horizon.
 // lit: light group -> scale (0 = off). Groups not listed are left as they are.
-// bloom: [strength, radius, threshold] (threshold in linear HDR before tone mapping; lower at night so lamps glow).
+// bloom: [strength, radius, threshold] (threshold in linear HDR before tone mapping). Night thresholds sit above the lit
+// windows, signs and lamp-lit paving (all below 1.0) and below the real emitters (lamp lenses, car lamps, signals), so only
+// those glow, with a halo no wider than at dusk (the high-pass keeps the whole texel above the threshold).
 
 export const MOON = [140, 34];
 
@@ -46,21 +48,21 @@ export const PRESETS = {
   },
   night: { // city lit: sodium/LED glow on the horizon, few stars
     outdoor: true, env: 'sky', shadowBox: 70,
-    sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.25,
+    sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.28,
     hemi: ['#1c2640', '#1a1612', 0.35], envI: 0.35,
-    fog: ['#232634', 0.0028], exposure: 1.25, bloom: [0.9, 0.6, 0.7],
+    fog: ['#232634', 0.0028], exposure: 1.25, bloom: [0.5, 0.4, 1.0],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#04070f', horizon: '#1a1c28', glow: 0.55, glowColor: '#ff9a55', stars: 0.15, moon: 1 },
     clouds: { cover: 0.35, opacity: 0.9, lit: '#6b5a52', shade: '#1a1c26', gain: 0.12 },
     hills: '#0b0d14',
-    grade: { saturation: 0.88, contrast: 1.14, exposure: 0.1, vignette: 0.34, grain: 0.045, tint: [0.92, 0.95, 1.08], tintAmount: 0.15, split: 0.7 },
-    lit: { street: 1, windows: 1, shops: 1, signs: 1, indoor: 1, emergency: 1 },
+    grade: { saturation: 0.88, contrast: 1.1, exposure: 0.05, vignette: 0.34, grain: 0.045, tint: [0.92, 0.95, 1.08], tintAmount: 0.15, split: 0.7 },
+    lit: { street: 1, windows: 1, shops: 0.65, signs: 1, indoor: 1, emergency: 1 }, // shops: signboards and shop interiors stay below the bloom threshold
   },
   blackout: { // grid down: no city glow, moonlight and a full star field, cold grade
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [270, -25], key: MOON, keyColor: '#a9c2ff', keyI: 0.45,
-    hemi: ['#141c30', '#07080a', 0.22], envI: 0.25,
-    fog: ['#0b0f18', 0.0032], exposure: 1.35, bloom: [1.1, 0.65, 0.7],
+    hemi: ['#1a2440', '#0a0b0e', 0.32], envI: 0.25, // a faint sky fill: moon shadows stay readable shapes
+    fog: ['#0b0f18', 0.0032], exposure: 1.35, bloom: [0.6, 0.45, 1.0],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#02040a', horizon: '#0b1020', glow: 0, glowColor: '#ff9a55', stars: 1, moon: 1 },
     clouds: { cover: 0.28, opacity: 0.9, lit: '#3a4258', shade: '#07090f', gain: 0.05 },
@@ -84,7 +86,7 @@ export const PRESETS = {
     outdoor: false, env: 'room', shadowBox: 24,
     sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.15,
     hemi: ['#3a342e', '#16130f', 0.22], envI: 0.38,
-    fog: ['#141821', 0.006], exposure: 1.1, bloom: [0.5, 0.5, 0.8],
+    fog: ['#141821', 0.006], exposure: 1.1, bloom: [0.4, 0.45, 1.0],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#04070f', horizon: '#1a1c28', glow: 0.55, glowColor: '#ff9a55', stars: 0.15, moon: 1 },
     clouds: { cover: 0.35, opacity: 0.9, lit: '#6b5a52', shade: '#1a1c26', gain: 0.12 },
@@ -96,7 +98,7 @@ export const PRESETS = {
     outdoor: false, env: 'room', shadowBox: 24,
     sun: [270, -25], key: MOON, keyColor: '#9fb6ea', keyI: 0.5,
     hemi: ['#1a2238', '#0a0a0c', 0.12], envI: 0.06,
-    fog: ['#0a0d14', 0.01], exposure: 1.4, bloom: [0.9, 0.6, 0.75],
+    fog: ['#0a0d14', 0.01], exposure: 1.4, bloom: [0.5, 0.45, 1.0],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#02040a', horizon: '#0b1020', glow: 0.1, glowColor: '#ff9a55', stars: 0.6, moon: 1 },
     clouds: { cover: 0.28, opacity: 0.9, lit: '#3a4258', shade: '#07090f', gain: 0.05 },

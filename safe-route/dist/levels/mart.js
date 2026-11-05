@@ -200,7 +200,8 @@ export function buildMart(kit, people, fx) {
   for (let x = -14; x <= 13; x += 2.4) for (const z of [-2.2, -5.4, -22.2]) fixtures.push({ x, y: H - 0.03, z });
   for (const x of [8.3, 11.5]) for (const z of [-10, -13, -16, -19]) fixtures.push({ x, y: H - 0.03, z });
   const ceilPanels = panels(kit, fixtures); onMains(ceilPanels.material); dyn.add(ceilPanels); dyn.add(powered);
-  powered.add(lamps(kit, [-12, -4, 4, 11].flatMap((x) => [-5.5, -16].map((z) => ({ x, y: H - 0.35, z }))), { intensity: 13 }));
+  // 0.8 m under the ceiling (not 0.35): a point light that close blew the ceiling and the panels around it out (radiance ~40)
+  powered.add(lamps(kit, [-12, -4, 4, 11].flatMap((x) => [-5.5, -16].map((z) => ({ x, y: H - 0.8, z }))), { intensity: 9 }));
   const emerg = [[-9, 3.1, -0.6], [-4.7, 3.1, -23.3], [12, 3.1, -1]].map(([x, y, z]) => {
     const l = new THREE.PointLight(0xf4f7ff, 0, 12, 2); l.position.set(x, y, z); dyn.add(l);
     const m = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0 });

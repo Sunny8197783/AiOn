@@ -250,7 +250,7 @@ export function buildStore(kit, people) {
   const fixtures = [];
   for (const z of [-1.3, -3.0, -4.7, -6.4, -7.9]) for (const x of [-3.4, -0.6, 2.2]) fixtures.push({ x, y: H - 0.03, z });
   const pm = panels(kit, fixtures, { w: 2.4, d: 0.1, color: '#f4f8ff', on: 2.6 }); glow.push([pm.material, pm.material.emissive.clone()]); dyn.add(pm);
-  powered.add(lamps(kit, [[-2.6, -2.4], [1.6, -2.6], [-2.6, -6.2], [1.6, -6.4]].map(([x, z]) => ({ x, y: H - 0.3, z })), { intensity: 9, distance: 9, color: 0xf6f8ff }));
+  powered.add(lamps(kit, [[-2.6, -2.4], [1.6, -2.6], [-2.6, -6.2], [1.6, -6.4]].map(([x, z]) => ({ x, y: H - 0.55, z })), { intensity: 8, distance: 9, color: 0xf6f8ff })); // clear of the ceiling: no hot rings
   const emerg = [[DOOR, 2.62, -0.32, Math.PI], [-2.0, 2.55, -8.92, 0], [4.92, 2.55, -3.4, -Math.PI / 2]].map(([x, y, z, ry]) => {
     const u = new THREE.Group(); u.position.set(x, y, z); u.rotation.y = ry; dyn.add(u);
     u.add(kit.box(0.34, 0.12, 0.08, M.white, { y: 0 }));

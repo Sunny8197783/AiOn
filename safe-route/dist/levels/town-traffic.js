@@ -112,29 +112,43 @@ export function buildTraffic(kit) {
   const paint = lo ? kit.memo('town:carPaintLo', () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.45 }))
     : kit.memo('town:carPaint', () => new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.32, metalness: 0.45, clearcoat: 1, clearcoatRoughness: 0.08 }));
   const lampTex = kit.memo('town:carLampTex', () => { const t = kit.texture(kit.canvas(2, 1, (g) => { g.fillStyle = '#fff4dc'; g.fillRect(0, 0, 1, 1); g.fillStyle = '#ff2a1c'; g.fillRect(1, 0, 1, 1); }), { repeat: [1, 1] }); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; });
+  // Lamps: moving cars light up at dusk and at night; parked cars are switched off (their own material), except a
+  // couple with the engine running (a truck at the dock, a car leaving the mart lot), which share the moving meshes.
   const lampMat = new THREE.MeshStandardMaterial({ map: lampTex, emissiveMap: lampTex, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.25 });
+  const parkedLampMat = lampMat.clone();
   const mats = { body: paint, glass: kit.mat('darkGlass', { roughness: 0.04 }), dark: kit.mat('paint:#141517', { roughness: 0.7 }), lamp: lampMat };
-  const meshes = {}, slots = new Map(), movingIMs = [];
+  const meshes = {}, slots = new Map(), movingIMs = [], poolTypes = new Set(pool.map(c => c.type));
+  const running = [];
+  for (const [x, z] of [[114, -56.5], [-16, -24.5]]) {
+    const p = parked.filter(q => poolTypes.has(q.type) && !running.includes(q)).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+    if (p && Math.hypot(p.x - x, p.z - z) < 12) running.push(p);
+  }
   const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(1, 1, 1), _z = new THREE.Vector3(0, 0, 0), _c = new THREE.Color(), UP = new THREE.Vector3(0, 1, 0);
   for (const [type, T] of Object.entries(TYPES)) {
-    const moving = pool.filter(c => c.type === type), still = parked.filter(p => p.type === type);
+    const moving = pool.filter(c => c.type === type), still = parked.filter(p => p.type === type && !running.includes(p));
+    const idling = running.filter(p => p.type === type);
     if (!moving.length && !still.length) continue;
     const geo = vehicleGeo(T, lo);
-    const make = (count, tag) => PARTS.map(part => { // tyres and bumpers sit in the body's shadow: only the body casts
-      const im = new THREE.InstancedMesh(geo[part], mats[part], count);
+    const make = (count, tag, lamp = lampMat) => PARTS.map(part => { // tyres and bumpers sit in the body's shadow: only the body casts
+      const im = new THREE.InstancedMesh(geo[part], part === 'lamp' ? lamp : mats[part], count);
       im.castShadow = part === 'body'; im.receiveShadow = part !== 'lamp';
       im.name = `car:${type}:${part}${tag}`; group.add(im); return im;
     });
     if (moving.length) { // the moving pool spans the lanes far into the city ring: drawn whatever the view
-      meshes[type] = make(moving.length, '');
+      meshes[type] = make(moving.length + idling.length, '');
       for (const im of meshes[type]) { im.frustumCulled = false; movingIMs.push(im); }
       moving.forEach((c, i) => { slots.set(c, i); meshes[type][0].setColorAt(i, _c.set(c.color)); });
+      idling.forEach((p, i) => { // fixed slots after the pool's: update() never moves them
+        _m.compose(_p.set(p.x, 0, p.z), _q.setFromAxisAngle(UP, p.yaw), _s.set(1, 1, 1));
+        for (const im of meshes[type]) im.setMatrixAt(moving.length + i, _m);
+        meshes[type][0].setColorAt(moving.length + i, _c.set(p.color));
+      });
       meshes[type][0].instanceColor.needsUpdate = true;
     }
     const cells = new Map();
     for (const p of still) { const k = `${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`; if (!cells.has(k)) cells.set(k, []); cells.get(k).push(p); }
     for (const [k, list] of cells) {
-      const ims = make(list.length, `:parked:${k}`);
+      const ims = make(list.length, `:parked:${k}`, parkedLampMat);
       list.forEach((p, i) => {
         _m.compose(_p.set(p.x, 0, p.z), _q.setFromAxisAngle(UP, p.yaw), _s.set(1, 1, 1));
         for (const im of ims) im.setMatrixAt(i, _m);
@@ -207,7 +221,7 @@ export function buildTraffic(kit) {
   kit.merge(sig);
 
   // ---- per-frame ----
-  let mode = 'normal', power = true, night = false;
+  let mode = 'normal', power = true, night = false, lampEnv = '';
   const cfg = { normal: { x: 4, z: 2 }, light: { x: 2, z: 1 }, none: { x: 0, z: 0 } };
   function setMode(m) {
     if (!cfg[m]) { console.error(`[town] traffic "${m}" unknown; use normal | light | none`); return; }
@@ -238,8 +252,10 @@ export function buildTraffic(kit) {
   function update(dt, t, ctx = {}) {
     const env = ctx.env;
     power = ctx.power !== false && env !== 'blackout';
-    const isNight = env === 'night' || env === 'blackout' || env === 'dusk';
-    if (isNight !== night) { night = isNight; lampMat.emissiveIntensity = night ? 3 : 0.25; }
+    night = env === 'night' || env === 'blackout' || env === 'dusk';
+    if (env !== lampEnv) { // parked lamps: a glint of the street lights at night, nothing in a blackout
+      lampEnv = env; lampMat.emissiveIntensity = night ? 2 : 0.25; parkedLampMat.emissiveIntensity = env === 'blackout' ? 0 : night ? 0.04 : 0.25;
+    }
     beams.visible = night && mode !== 'none';
     const s = setLamps(t), pl = ctx.player, peds = ctx.peds || [];
     onFoot.length = 0; if (pl && pl.y < 0.6) onFoot.push(pl); for (const p of peds) onFoot.push(p);

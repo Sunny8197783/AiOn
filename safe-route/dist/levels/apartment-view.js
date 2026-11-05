@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const hash = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
+// fac scales the facade picture: at night 1.3 keeps the kitchen windows just under the bloom threshold, only the
+// corridor lamp strips (some of them out) glow.
 const VIEWS = {
   day: { tint: 0.95, far: 1, fac: 1, lamps: 0, cap: '#4f86cf', sky: ['#4f86cf', '#9cc2e6', '#dde8ee'], hill: ['#9aabb9', '#b2bec7'], bFar: '#c3c9cd', bNear: '#adb3b6', ground: '#8d9188',
     win: 0, dayWin: '#7f8f9a', stars: 0, moon: 0, glow: 0, beacon: 0,
@@ -14,9 +16,9 @@ const VIEWS = {
   dusk: { tint: 0.5, far: 1.1, fac: 1.15, lamps: 1, cap: '#1f2550', sky: ['#1f2550', '#7a5878', '#f0955a'], hill: ['#3b3150', '#4e3d58'], bFar: '#55485e', bNear: '#3f3648', ground: '#2c2630',
     win: 0.35, lit: '#ffc98a', lit2: '#dbe6ff', stars: 0.04, moon: 0, glow: 0.12, beacon: 1,
     wall: '#5a5258', recess: '#2e2a30', parapet: '#605860', rail: '#2a272b', core: '#544d54', door: '#241f22', winC: '#2a2e38', litWin: '#ffcf96', kitchen: 0.4, corridor: 0.9, lamp: '#fff3d6', stair: 0.3, exit: 0, dots: 0 },
-  night: { tint: 0.15, far: 1.45, fac: 1.6, lamps: 1, cap: '#03050c', sky: ['#03050c', '#0b1020', '#2a2430'], hill: ['#07090f', '#0b0d14'], bFar: '#10131c', bNear: '#0b0d14', ground: '#07080b',
+  night: { tint: 0.15, far: 1.45, fac: 1.3, lamps: 1, cap: '#03050c', sky: ['#03050c', '#0b1020', '#2a2430'], hill: ['#07090f', '#0b0d14'], bFar: '#10131c', bNear: '#0b0d14', ground: '#07080b',
     win: 0.6, lit: '#ffd9a0', lit2: '#dbe8ff', stars: 0.15, moon: 1, glow: 0.22, beacon: 1,
-    wall: '#15161b', recess: '#0b0b0e', parapet: '#1c1c20', rail: '#0a0a0c', core: '#131418', door: '#0a090a', winC: '#0c0e12', litWin: '#ffd39a', kitchen: 0.55, corridor: 1, lamp: '#fff6e2', stair: 0.25, exit: 0, dots: 0 },
+    wall: '#15161b', recess: '#0b0b0e', parapet: '#1c1c20', rail: '#0a0a0c', core: '#131418', door: '#0a090a', winC: '#0c0e12', litWin: '#ffd39a', kitchen: 0.55, corridor: 0.85, lamp: '#fff6e2', stair: 0.25, exit: 0, dots: 0 },
   blackout: { tint: 0.07, far: 1.3, fac: 1.4, lamps: 0, cap: '#010208', sky: ['#010208', '#050a18', '#0b1324'], hill: ['#04060c', '#060912'], bFar: '#080b14', bNear: '#05070d', ground: '#030406',
     win: 0.012, lit: '#ff9a4a', lit2: '#e8eeff', stars: 1, moon: 1, glow: 0, beacon: 0,
     wall: '#0c0f16', recess: '#06070a', parapet: '#10131b', rail: '#050609', core: '#0b0d13', door: '#050506', winC: '#07080b', litWin: '#ff9a4a', kitchen: 0.02, corridor: 0, stair: 0, exit: 1, dots: 0.05 },
@@ -97,7 +99,7 @@ export function buildView(B) {
   add(kit.instanced(shade(new THREE.CylinderGeometry(0.07, 0.09, 6.2, 8).translate(0, 3.1, 0)), basic({ vertexColors: true }, 0x5d6368), posts, { cast: false, receive: false }));
   const headMat = new THREE.MeshBasicMaterial({ fog: false });
   add(kit.instanced(new THREE.BoxGeometry(0.55, 0.12, 0.28), headMat, posts.map(p => ({ x: p.x, y: 6.15, z: p.z })), { cast: false, receive: false }));
-  const poolTex = kit.texture(kit.canvas(128, 128, (c, w, h) => { const gr = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,214,150,0.55)'); gr.addColorStop(1, 'rgba(255,190,120,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); }), { repeat: [1, 1] });
+  const poolTex = kit.texture(kit.canvas(128, 128, (c, w, h) => { const gr = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(255,214,150,0.35)'); gr.addColorStop(0.45, 'rgba(255,205,140,0.14)'); gr.addColorStop(1, 'rgba(255,190,120,0)'); c.fillStyle = gr; c.fillRect(0, 0, w, h); }), { repeat: [1, 1] });
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
   const pools = add(kit.instanced(new THREE.PlaneGeometry(12, 12).rotateX(-Math.PI / 2), poolMat, posts.map(p => ({ x: p.x, y: 0.02, z: p.z })), { cast: false, receive: false }));
 
@@ -106,7 +108,7 @@ export function buildView(B) {
   const mBody = kit.instanced(shade(new THREE.BoxGeometry(4.5, 0.78, 1.84).translate(0, 0.67, 0)), basic({ vertexColors: true }), movers, { cast: false, receive: false });
   movers.forEach((_, i) => mBody.setColorAt(i, new THREE.Color(['#ecebe7', '#1c1d20', '#b8bcc0', '#26324a'][i])));
   const mCab = kit.instanced(shade(new THREE.BoxGeometry(2.4, 0.56, 1.6).translate(-0.15, 1.34, 0)), basic({ vertexColors: true }, 0x2a3038), movers, { cast: false, receive: false });
-  const lampGeo = mergeGeometries([[2.26, 0.7, 4, 4, 3.4], [-2.26, 0.75, 3, 0.15, 0.08]].flatMap(([x, y, cr, cg, cb]) => [-0.62, 0.62].map((z) => {
+  const lampGeo = mergeGeometries([[2.26, 0.7, 2.5, 2.5, 2.1], [-2.26, 0.75, 2, 0.1, 0.05]].flatMap(([x, y, cr, cg, cb]) => [-0.62, 0.62].map((z) => {
     const b = new THREE.BoxGeometry(0.04, 0.12, 0.3).translate(x, y, z); b.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b.attributes.position.count * 3).map((_, i) => [cr, cg, cb][i % 3]), 3)); return b; })));
   const mLamp = kit.instanced(lampGeo, new THREE.MeshBasicMaterial({ fog: false, vertexColors: true }), movers, { cast: false, receive: false });
   const traffic = [mBody, mCab, mLamp];
@@ -131,7 +133,7 @@ export function buildView(B) {
     drawFacade(fac.getContext('2d'), fac.width, fac.height, V); facTex.needsUpdate = true;
     for (const t of tinted) t.mat.color.copy(t.base).multiplyScalar(V.tint);
     farMat.color.setScalar(V.far); facMat.color.setScalar(V.fac); capMat.color.set(V.cap);
-    headMat.color.set(V.lamps ? new THREE.Color(5, 4.2, 3) : new THREE.Color(0xb9bcc0).multiplyScalar(V.tint));
+    headMat.color.set(V.lamps ? new THREE.Color(2.2, 1.85, 1.3) : new THREE.Color(0xb9bcc0).multiplyScalar(V.tint)); // lit head: a small glow, no star
     pools.visible = !!V.lamps; mLamp.visible = name !== 'day';
   }
   setView('day'); update(0);

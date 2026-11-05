@@ -1,7 +1,9 @@
 // The car park as a civil-defence shelter: rows of mats (돗자리·은박매트) with bags, blankets, bottles and shoes
 // left at the edge, a reception table with the roster clipboard and a battery lantern, a wheeled notice board,
 // the shared radio table, supply pallets, recycling bins, a cloth banner, and the cars still parked in the east.
+// The soft shapes, the clutter between the mats, the charging corner and the cars come from shelter-camp-detail.js.
 import { ROOM, GRID, STAIR } from './shelter-shell.js';
+import { goodsGeo, dressMats, carPark } from './shelter-camp-detail.js';
 
 export const MAT_COLS = Array.from({ length: 13 }, (_, i) => -20.4 + 2.2 * i);
 export const MAT_ROWS = [-3.9, -1.55, 1.55, 3.9];
@@ -33,7 +35,7 @@ export function buildCamp(kit, T) {
     bottle: new THREE.MeshStandardMaterial({ color: 0xcfe3f0, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.75 }),
     tableTop: kit.mat('paint:#ecebe6', { roughness: 0.5 }), legs: kit.mat('steel'), seat: kit.mat('paint:#3a3f46', { roughness: 0.6 }),
     wood: kit.mat('paint:#a07a4c', { roughness: 0.85 }), tyre: kit.mat('rubber'), rim: kit.mat('metal', { roughness: 0.3 }),
-    glass: kit.mat('darkGlass'), lens: kit.mat('paint:#dfe6ea', { roughness: 0.1, metalness: 0.4 }), tail: kit.mat('paint:#7c1616', { roughness: 0.25 }),
+    glass: kit.mat('darkGlass'),
   };
 
   // ---- mats and what people brought ----
@@ -66,11 +68,15 @@ export function buildCamp(kit, T) {
   }
   inst(new THREE.BoxGeometry(1.8, 0.012, 2.0), M.woven, woven, false);
   inst(new THREE.BoxGeometry(1.8, 0.008, 2.0), M.foil, foil, false);
-  inst(new THREE.BoxGeometry(0.32, 0.42, 0.2).translate(0, 0.21, 0), M.fabric, bags);
-  inst(new THREE.BoxGeometry(0.62, 0.1, 0.42).translate(0, 0.05, 0), M.fabric, blankets);
+  const G = goodsGeo(kit), r2 = kit.rng(4711);   // r2: detail choices, so the seats above never move
+  const duffels = G.duffel ? bags.filter(() => r2() < 0.3) : [];
+  inst(G.bag, M.fabric, bags.filter((b) => !duffels.includes(b))); if (duffels.length) inst(G.duffel, M.fabric, duffels);
+  inst(G.blanket, M.fabric, blankets);
   inst(new THREE.CylinderGeometry(0.034, 0.036, 0.22, 10).translate(0, 0.11, 0), M.bottle, bottles, false);
-  inst(new THREE.BoxGeometry(0.42, 0.1, 0.28).translate(0, 0.05, 0), M.fabric, pillows);
-  inst(new THREE.BoxGeometry(0.1, 0.08, 0.27).translate(0, 0.04, 0), M.plastic, shoes, false);
+  inst(G.pillow, M.fabric, pillows);
+  inst(G.shoe, M.plastic, shoes, false);
+  const soleCols = ['#f1efe9', '#f1efe9', '#2a2a2c', '#c9b28a'].map(C);
+  if (G.sole) { const pair = []; inst(G.sole, M.plastic, shoes.map((s, i) => ({ m: s.m, c: soleCols[pair[i >> 1] ??= (r2() * 4) | 0] })), false); }   // shoes come in pairs
 
   // ---- folding tables and chairs ----
   function table(x, z, ry = 0, w = 1.8, d = 0.6) {
@@ -166,35 +172,13 @@ export function buildCamp(kit, T) {
   const cloth = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 0.82, 16, 2), new THREE.MeshStandardMaterial({ map: T.bannerTex('연무 생활문화센터 민방위 대피소'), roughness: 0.9, side: THREE.DoubleSide }));
   cloth.position.y = -0.45; cloth.rotation.y = Math.PI; cloth.castShadow = false; banner.add(cloth);
 
-  // ---- parked cars in the east bays ----
-  const paint = (hex) => kit.memo(`sh:carpaint:${hex}`, () => new THREE.MeshPhysicalMaterial({ color: hex, metalness: 0.55, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 }));
+  // ---- parked cars in the east bays (the town's sedan; the covered one under a cloth cover) ----
   const plate = kit.sign(['12가 3456'], { w: 0.52, h: 0.11, bg: '#f5f5f2', fg: '#111', single: true });
-  const cover = kit.mat('paint:#8c9095', { roughness: 0.95 });
-  function car(x, z, ry, color, covered = false) {
-    const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry;
-    const p = paint(color);
-    if (covered) { c.add(kit.rbox(1.95, 1.38, 4.7, 0.35, cover, { y: 0.06 })); }
-    else {
-      c.add(kit.rbox(1.82, 0.66, 4.62, 0.16, p, { y: 0.26 }));
-      c.add(kit.rbox(1.6, 0.56, 2.45, 0.2, M.glass, { y: 0.86, z: 0.25 }));
-      c.add(kit.rbox(1.5, 0.07, 1.9, 0.03, p, { y: 1.39, z: 0.3 }));
-      for (const sx of [-1, 1]) {
-        c.add(kit.box(0.4, 0.09, 0.05, M.lens, { x: sx * 0.6, y: 0.68, z: -2.29 }));
-        c.add(kit.box(0.35, 0.09, 0.05, M.tail, { x: sx * 0.62, y: 0.74, z: 2.29 }));
-        c.add(kit.box(0.08, 0.1, 0.16, p, { x: sx * 0.95, y: 0.96, z: -0.75 }));
-      }
-      for (const pz of [-2.32, 2.32]) { const pl = plate.clone(); pl.position.set(0, 0.45, pz); pl.rotation.y = pz < 0 ? Math.PI : 0; c.add(pl); }
-    }
-    for (const sx of [-0.82, 0.82]) for (const sz of [-1.45, 1.4]) {
-      c.add(kit.cyl(0.33, 0.33, 0.22, M.tyre, { x: sx, y: 0.22, z: sz, rz: Math.PI / 2 }, 18));
-      c.add(kit.cyl(0.2, 0.2, 0.225, M.rim, { x: sx * 1.002, y: 0.2125, z: sz, rz: Math.PI / 2 }, 12));
-    }
-    return add(c);
-  }
   const cars = [[9.7, -13.4, 0, 0xe9e9e6], [12.15, -13.4, 0, 0x1b1c1f], [17.9, -13.4, 0, 0xa7abb0, true], [20.6, -13.4, 0, 0x4a4e54],
     [9.7, -2.6, Math.PI, 0x22304a], [14.6, 2.6, 0, 0xe9e9e6], [17.9, -2.6, Math.PI, 0xa7abb0], [20.6, 2.6, 0, 0x1b1c1f], [17.9, 13.4, Math.PI, 0xe9e9e6]];
   const carSolids = [];
-  for (const [x, z, ry, col, cov] of cars) { car(x, z, ry, col, cov); carSolids.push({ x0: x - 0.95, x1: x + 0.95, z0: z - 2.35, z1: z + 2.35, y0: -1, y1: 1.5 }); }
+  carPark(kit, add, M, cars, kit.mat('paint:#8c9095', { roughness: 0.95 }), plate);
+  for (const [x, z] of cars) carSolids.push({ x0: x - 0.95, x1: x + 0.95, z0: z - 2.35, z1: z + 2.35, y0: -1, y1: 1.5 });
   // wheel stoppers in the car bays
   const stops = [];
   for (const [x, z, ry] of cars) for (const d of [-0.6, 0.6]) stops.push({ m: M4(x + d, 0, z + (Math.abs(z) > 10 ? Math.sign(z) * 2.2 : (ry ? -1 : 1) * 2.35 * Math.sign(z || 1)), 0) });
@@ -207,6 +191,7 @@ export function buildCamp(kit, T) {
     { x0: PALLETS.x - 1.3, x1: PALLETS.x + 1.2, z0: PALLETS.z - 1.6, z1: PALLETS.z + 2.0, y0: -1, y1: 1.5 },
     { x0: 7.1, x1: 7.7, z0: -4.7, z1: -3.3, y0: -1, y1: 0.9 },
     ...carSolids, ...chairBodies,
+    ...dressMats(kit, { inst, add, M, mats, seats, spot: SPOT, rowPairs: [[MAT_ROWS[0], MAT_ROWS[1]], [MAT_ROWS[2], MAT_ROWS[3]]], blanketCols, cartonMat: cartonMats[0] }),
   ];
   void GRID; void STAIR;
   return { group: g, live, mats, seats, solids, dial, banner, cloth, boardMat, lanternLight };

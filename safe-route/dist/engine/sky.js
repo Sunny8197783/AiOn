@@ -130,10 +130,12 @@ function makeSkyline(kit) {
     if (h > 90) tops.push(x, h - 1, z);
   }
   const mat = new THREE.MeshStandardMaterial({ map, emissiveMap, emissive: 0xffffff, emissiveIntensity: 1, roughness: 0.9, metalness: 0 });
-  kit.lit('windows', mat, 1.3);
+  kit.lit('windows', mat, 0.9); // a far glow below the night bloom threshold (fog thins it further)
   const city = new THREE.Mesh(mergeGeometries(geoms), mat);
   city.castShadow = city.receiveShadow = false;
-  const beacons = new THREE.InstancedMesh(new THREE.SphereGeometry(1.2, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(9, 0.5, 0.3), fog: false }), tops.length / 3);
+  // Aviation obstruction lights: small red points in the same haze as their towers (fogged), bright enough to read
+  // as lamps at 330-630 m but not to bloom into smudges.
+  const beacons = new THREE.InstancedMesh(new THREE.SphereGeometry(1.2, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 0.26, 0.15) }), tops.length / 3);
   for (let i = 0; i < tops.length / 3; i++) beacons.setMatrixAt(i, new THREE.Matrix4().makeTranslation(tops[i * 3], tops[i * 3 + 1], tops[i * 3 + 2]));
   beacons.castShadow = false;
   return { city, beacons };
@@ -186,12 +188,17 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
   group.userData.noAO = world.userData.noAO = true; // a tag only now: GTAO reads the scene depth (no G-buffer pass), where the far shells sit behind everything
   scene.add(group, world);
 
-  let shadowBox = 70, cur = null, dim = false, every = 1, everyDim = 1, sf = 0, shadowOn = false;
+  let shadowBox = 70, cur = null, dim = false, every = 1, everyDim = 1, sf = 0, shadowOn = false, unshadowed = false;
+  // Without a sun shadow map (the tier's sun: 0) the moon would light every face turned to it, under canopies and
+  // eaves too, as flat blue planes: at night it drops to 40% and part of the rest goes into the sky fill (eased in with
+  // the night amount, so dusk keeps its full key and an env blend does not pop).
+  const MOON_UNSHADOWED = 0.4, MOON_TO_FILL = 0.6;
   function apply(S) {
     cur = S;
     dirFrom(S.keyAz, S.keyEl, keyDir); dirFrom(S.sunAz, S.sunEl, sunDir);
-    sun.color.fromArray(S.keyColor); sun.intensity = S.keyI > 0.01 ? S.keyI : 0; dim = S.keyI < 0.3;
-    hemi.color.fromArray(S.hemiSky); hemi.groundColor.fromArray(S.hemiGround); hemi.intensity = S.hemiI;
+    const k = unshadowed ? 1 - (1 - MOON_UNSHADOWED) * Math.min(1, Math.max(0, (S.night - 0.35) / 0.65)) : 1;
+    sun.color.fromArray(S.keyColor); sun.intensity = S.keyI > 0.01 ? S.keyI * k : 0; dim = S.keyI < 0.3;
+    hemi.color.fromArray(S.hemiSky); hemi.groundColor.fromArray(S.hemiGround); hemi.intensity = S.hemiI + S.keyI * (1 - k) * MOON_TO_FILL;
     scene.fog.color.fromArray(S.fogColor); scene.fog.density = S.fogDensity; scene.background.copy(scene.fog.color);
     scene.environmentIntensity = S.envI; renderer.toneMappingExposure = S.exposure;
     const su = skyMesh.material.uniforms;
@@ -271,6 +278,7 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
   function setQuality(q) {
     const P = profileOf(q), n = P.sun || 512;
     sun.castShadow = P.sun > 0; every = P.shadowEvery; everyDim = P.darkEvery;
+    if (unshadowed !== !sun.castShadow) { unshadowed = !sun.castShadow; if (cur) apply(cur); }
     if (sun.shadow.mapSize.x !== n) { sun.shadow.mapSize.set(n, n); sun.shadow.map?.dispose(); sun.shadow.map = null; }
     const oct = P.clouds;
     if (clouds.material.defines.OCT !== oct) { clouds.material.defines.OCT = oct; clouds.material.needsUpdate = true; }

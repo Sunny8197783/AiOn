@@ -46,7 +46,7 @@ export function buildShelterSite(kit) {
     const map = tex('exit', 256, 128, (g, w, h) => { g.fillStyle = '#12a150'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffffff'; g.fillRect(w * 0.08, h * 0.15, w * 0.22, h * 0.7); g.fillStyle = '#12a150'; g.fillRect(w * 0.12, h * 0.22, w * 0.14, h * 0.63); g.fillStyle = '#ffffff'; g.beginPath(); g.arc(w * 0.45, h * 0.28, 11, 0, 7); g.fill(); g.lineWidth = 9; g.strokeStyle = '#fff'; g.lineCap = 'round'; g.beginPath(); g.moveTo(w * 0.44, h * 0.4); g.lineTo(w * 0.4, h * 0.62); g.lineTo(w * 0.33, h * 0.8); g.moveTo(w * 0.4, h * 0.62); g.lineTo(w * 0.5, h * 0.82); g.moveTo(w * 0.36, h * 0.48); g.lineTo(w * 0.52, h * 0.5); g.stroke(); g.font = `800 40px sans-serif`; g.fillText('비상구', w * 0.58, h * 0.65); }, { repeat: [1, 1] });
     return kit.lit('emergency', new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 1.6, roughness: 0.4 }), 1.6);
   });
-  const emLamp = kit.memo('town:emLamp', () => kit.lit('emergency', new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 4, roughness: 0.3 }), 4));
+  const emLamp = kit.memo('town:emLamp', () => kit.lit('emergency', new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f8ff, emissiveIntensity: 2.5, roughness: 0.3 }), 2.5));
   const tube = kit.memo('town:tubeLamp', () => kit.lit('indoor', new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xeef6ff, emissiveIntensity: 3, roughness: 0.3 }), 3));
   const rail = (a, b, r = 0.024) => { const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 8), kit.mat('metal')); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2); m.castShadow = true; stat.add(m); };
   const signProto = {};
@@ -71,7 +71,7 @@ export function buildShelterSite(kit) {
       rail([rx, Y + 0.85, zt], [rx, bottom + rise + 0.85, zl]); rail([rx, bottom + rise + 0.85, zl], [rx, bottom + rise + 0.85, 15.8]);
     }
     for (const x of [x0 + 0.1, x1 - 0.1]) stat.add(kit.box(0.2, 2.3, 0.08, conc, { x, y: bottom, z: 15.95 })); // door jambs fill the pit width (no gap under the facade)
-    stat.add(kit.box(3.5, 0.12, 3.6, kit.mat('paint:#5a6670', { roughness: 0.4, metalness: 0.6 }), { x: cx, y: Y + 2.5, z: 14.3, rx: 0.04 }));
+    stat.add(kit.box(3.5, 0.12, 3.6, kit.mat('paint:#5a6670', { roughness: 0.7, metalness: 0.2 }), { x: cx, y: Y + 2.5, z: 14.3, rx: 0.04 })); // matte: the lamp under it must not mirror
     const roofGlass = kit.box(3.3, 0.03, 3.4, glass, { x: cx, y: Y + 2.64, z: 14.3, rx: 0.04, cast: false }); roofGlass.userData.keep = true; stat.add(roofGlass);
     const lintel = kit.sign(['민방위 대피시설 · 출입구 A'], { w: 2.9, h: 0.32, bg: '#1f4e8c', single: true, emissive: 0.3 });
     kit.lit('signs', lintel.material, 0.5); lintel.position.set(cx, Y + 2.3, 12.8); lintel.rotation.y = Math.PI; stat.add(lintel);
@@ -81,7 +81,7 @@ export function buildShelterSite(kit) {
     stat.add(kit.box(0.02, 2.0, 0.08, dark, { x: cx, y: bottom + 0.05, z: 15.9 }), kit.box(0.25, 0.4, 0.02, glass, { x: cx - 0.5, y: bottom + 1.3, z: 15.91 }));
     const ex = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.3), exitMat); ex.position.set(cx, bottom + 2.4, 15.9); ex.rotation.y = Math.PI; stat.add(ex);
     stat.add(kit.box(0.4, 0.1, 0.12, emLamp, { x: cx, y: Y + 2.35, z: 15.4, cast: false }));
-    const L = new THREE.PointLight(0xeef4ff, 22, 9, 2); L.position.set(cx, Y + 2.1, 14.6); kit.lit('emergency', L, 22); group.add(L);
+    const L = new THREE.PointLight(0xeef4ff, 6, 6, 2); L.position.set(cx, Y + 1.9, 14.6); kit.lit('emergency', L, 6); group.add(L); // a lit stairwell, not a flare
     solid(x0 - 0.35, x0, 12.75, 16, 'kioskA'); solid(x1, x1 + 0.35, 12.75, 16, 'kioskA');
     solid(x0, x1, zt + 0.1, 16, 'stairsTop');
     // closed: folding steel gate across the top
@@ -168,7 +168,7 @@ export function buildShelterSite(kit) {
     const hole = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.4), kit.mat('paint:#141618', { roughness: 1 })); hole.position.set(-110.7, yb + 1.2, 15.94); hole.rotation.y = Math.PI;
     const ex = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), exitMat); ex.position.set(-110.7, yb + 2.0, 15.92); ex.rotation.y = Math.PI;
     const inner = kit.box(1.0, 0.06, 0.1, emLamp, { x: -110.7, y: yb + 2.15, z: 15.9, cast: false });
-    const cl = new THREE.PointLight(0xf2f6ff, 14, 7, 2); cl.position.set(-110.7, yb + 1.9, 15.1); kit.lit('emergency', cl, 14);
+    const cl = new THREE.PointLight(0xf2f6ff, 6, 6, 2); cl.position.set(-110.7, yb + 1.9, 15.1); kit.lit('emergency', cl, 6);
     opening.add(hole, ex, inner); dyn.add(opening, cl); kit.merge(opening); // cl outside `opening`: lights never hide
     // trench edge: handrail height (a prompt or a look over it from the sidewalk is not hidden), never vaulted
     const edge = { noVault: true, noClimb: true };

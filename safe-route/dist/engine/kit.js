@@ -237,10 +237,23 @@ export function createKit(renderer, { quality = 'high' } = {}) {
         }
         if (label) { g.fillStyle = '#5b6770'; g.font = `700 ${Math.round(h * 0.09)}px ${FONT}`; g.textAlign = 'center'; g.fillText(label, w * 0.5, h * 0.12); }
       });
+      // Night glow per lit window: most are warm rooms well below the bloom threshold (a lamp deeper inside, so the
+      // pane is brighter toward the ceiling; some show a curtain, blinds or furniture), a few cooler TV/LED rooms,
+      // and about one in fourteen a bright room near the threshold. Shop fronts (wide cells) glow evenly.
       const emissive = canvas(w, h, (g) => {
         g.fillStyle = '#000'; g.fillRect(0, 0, w, h);
-        for (const [x, y, ww, hh, on] of glowCells) if (on) { const warm = r() < 0.75; g.fillStyle = warm ? '#ffcf8a' : '#d8ecff'; g.globalAlpha = 0.55 + r() * 0.45; g.fillRect(x, y, ww, hh); }
-        g.globalAlpha = 1;
+        for (const [x, y, ww, hh, on] of glowCells) if (on) {
+          const k = r(), hot = k < 0.07, cool = !hot && k > 0.86, a = hot ? 0.9 + r() * 0.1 : 0.42 + r() * 0.32;
+          const c = hot ? '255,224,176' : cool ? '190,208,232' : r() < 0.5 ? '255,198,128' : '255,180,104';
+          if (ww > hh * 3) { g.fillStyle = `rgba(${c},${a * 0.8})`; g.fillRect(x, y, ww, hh); continue; }
+          const gr = g.createLinearGradient(0, y, 0, y + hh);
+          gr.addColorStop(0, `rgba(${c},${a})`); gr.addColorStop(1, `rgba(${c},${a * 0.6})`);
+          g.fillStyle = gr; g.fillRect(x, y, ww, hh);
+          const cv = r();
+          if (cv < 0.22) { g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(cv < 0.11 ? x : x + ww * 0.55, y, ww * 0.45, hh); } // curtain drawn on one side
+          else if (cv < 0.32) { g.fillStyle = 'rgba(0,0,0,0.4)'; for (let yy = y; yy < y + hh; yy += 6) g.fillRect(x, yy, ww, 3); } // blinds
+          else if (cv < 0.55) { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x + ww * r() * 0.5, y + hh * 0.7, ww * (0.3 + r() * 0.3), hh * 0.3); } // furniture against the light
+        }
       });
       const m = new THREE.MeshStandardMaterial({ map: texture(color), emissiveMap: texture(emissive), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.75, metalness: 0.05 });
       lit('windows', m, 1.1);
