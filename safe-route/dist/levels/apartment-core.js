@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { FH } from './apartment-parts.js';
 import { FONT } from '../engine/kit.js';
 import { STAIR, tread, flightRamps } from './apartment-geo.js';
+import { detailOf, potGeo, plantGeo } from './soft-goods.js';
 
 export { STAIR };
 const yOf = (n) => FH * (n - 1);
@@ -80,7 +81,7 @@ export function buildLobby(B, g) {
   g.add(kit.box(0.32, 0.5, 0.1, M.red, { x: 6.2, y: 1.0, z: -0.15 }));
   g.add(kit.cyl(0.07, 0.07, 0.04, M.metal, { x: 6.2, y: 1.35, z: -0.2, rx: Math.PI / 2 }));
   g.add(kit.cyl(0.035, 0.035, 0.03, B.redLamp ||= kit.lit('emergency', B.glowMat('#ff2a1a', 3), 3), { x: 6.2, y: 1.52, z: -0.2 }));
-  for (const x of [0, 8]) { g.add(kit.cyl(0.24, 0.19, 0.5, M.stone, { x, z: -5.9 })); const f = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), kit.mat('foliage')); f.position.set(x, 0.95, -5.9); f.scale.set(1, 1.25, 1); f.castShadow = true; g.add(f); B.solid(x - 0.3, x + 0.3, -6.2, -5.6, 0, 1.3); }
+  for (const x of [0, 8]) { potted(B, g, 'rubber', x, 0, -5.9, 0.24, 0.5, M.stone, { rb: 0.19, s: 1.1, seed: 80 + x, saucer: false, old: [0.42, 0.95, 1.25], stemMat: M.wood }); B.solid(x - 0.3, x + 0.3, -6.2, -5.6, 0, 1.3); } // 인도고무나무 in stone planters
   const dome = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.darkMetal); dome.rotation.x = Math.PI; dome.position.set(8.5, 2.6, -6.0); g.add(dome);
   for (const [x, z] of [[1.5, -2], [4, -2], [6.5, -2], [1.5, -4.6], [4, -4.6], [6.5, -4.6]]) g.add(kit.cyl(0.11, 0.11, 0.015, B.lobbyLamp ||= B.onPower(B.glowMat('#fff3e2', 3.2)), { x, y: 2.585, z, cast: false }));
   B.exitSign(g, 5.0, 2.42, -0.12, Math.PI, 'exit'); // above the stair door, lobby side (faces north)
@@ -259,4 +260,19 @@ function emergencyLamp(B, g, x, y, z) {
   g.add(kit.box(0.08, 0.12, 0.32, M.white, { x: x + 0.04, y, z }));
   for (const dz of [-0.1, 0.1]) g.add(kit.cyl(0.035, 0.03, 0.05, B.emLampMat, { x: x + 0.1, y: y - 0.02, z: z + dz, cast: false }));
   B.sensors.push({ x: x + 0.3, y: y - 0.05, z, kind: 'backup' });
+}
+
+// A potted plant on the shared soft-goods models (pot with a rolled rim, real leaves), one mesh per material so the
+// area merge keeps its draw calls: leaves on the 302호 leaf paint (in place of 'foliage'), soil on the rubber black.
+// '완전 낮음' keeps the old pot and foliage blob (old: [blob radius, height, y stretch]). Also by 303's door (apartment-corridor.js).
+export function potted(B, g, kind, x, y, z, rt, h, potMat, { rb = rt * 0.74, s = 1, seed = 1, saucer = true, old, stemMat } = {}) {
+  const { kit, M } = B, lv = detailOf(kit.Q), add = (geo, mat, yy, cast = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, yy, z); m.castShadow = cast; m.receiveShadow = true; g.add(m); return m; };
+  if (!lv) {
+    g.add(kit.cyl(rt, rb, h, potMat, { x, y, z }));
+    const f = add(new THREE.IcosahedronGeometry(old[0], 1), kit.mat('foliage'), y + old[1]); f.scale.set(1, old[2], 1); f.receiveShadow = false; return;
+  }
+  const r = kit.rng(seed), { pot, soil } = potGeo(rt, h, lv, { rb, saucer }), p = plantGeo(kind, r, lv, s), ry = r() * 6.28;
+  add(pot, potMat, y); add(soil, M.rubber, y, false);
+  add(p.leaves, kit.mat('paint:#3f5f2e', { roughness: 0.55, side: THREE.DoubleSide }), y + h - 0.045).rotation.y = ry;
+  if (p.stems) add(p.stems, stemMat ?? M.darkWood, y + h - 0.045).rotation.y = ry;
 }

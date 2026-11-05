@@ -60,14 +60,14 @@ export const PRESETS = {
   },
   blackout: { // grid down: no city glow, moonlight and a full star field, cold grade
     outdoor: true, env: 'sky', shadowBox: 70,
-    sun: [270, -25], key: MOON, keyColor: '#a9c2ff', keyI: 0.45,
-    hemi: ['#1a2440', '#0a0b0e', 0.32], envI: 0.25, // a faint sky fill: moon shadows stay readable shapes
+    sun: [270, -25], key: MOON, keyColor: '#a9c2ff', keyI: 0.6,
+    hemi: ['#1e2a48', '#181c26', 0.5], envI: 0.3, // a faint sky fill and ground bounce: kerbs, cars and doors stay readable shapes
     fog: ['#0b0f18', 0.0032], exposure: 1.35, bloom: [0.6, 0.45, 1.0],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#02040a', horizon: '#0b1020', glow: 0, glowColor: '#ff9a55', stars: 1, moon: 1 },
     clouds: { cover: 0.28, opacity: 0.9, lit: '#3a4258', shade: '#07090f', gain: 0.05 },
     hills: '#05070b',
-    grade: { saturation: 0.65, contrast: 1.12, exposure: 0.1, vignette: 0.42, grain: 0.06, tint: [0.82, 0.92, 1.12], tintAmount: 0.35 },
+    grade: { saturation: 0.65, contrast: 1.04, exposure: 0.1, vignette: 0.42, grain: 0.06, tint: [0.82, 0.92, 1.12], tintAmount: 0.35 },
     lit: { street: 0, windows: 0, shops: 0, signs: 0.8, indoor: 0, emergency: 1 },
   },
   interior: { // warm room light, daylight through windows

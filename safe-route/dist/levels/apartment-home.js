@@ -120,7 +120,7 @@ export function buildHome(B, g, H, dyn) {
   chair(-5.85, 1.55, Math.PI); chair(-5.35, 2.95, 0.35);
   B.solid(-6.08, -5.62, 1.32, 1.78, FL, FL + 0.95); B.solid(-5.6, -5.1, 2.7, 3.2, FL, FL + 0.95);
   cyl(0.13, 0.08, 0.07, W.plate, -5.75, FL + 0.735, 2.15, {}, 20);
-  for (const [dx, dz, c] of [[-0.03, 0, '#c0392b'], [0.04, 0.03, '#d35400'], [0, -0.05, '#c0392b']]) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8), P(c, 0.5)); s.position.set(-5.75 + dx, FL + 0.8, 2.15 + dz); s.castShadow = true; g.add(s); }
+  for (const [dx, dz, c] of [[-0.03, 0, '#c0392b'], [0.04, 0.03, '#d35400'], [0, -0.05, '#c0392b']]) D.fruit(c === '#d35400' ? 'persimmon' : 'apple', -5.75 + dx, FL + 0.765, 2.15 + dz, P(c, 0.5)); // 사과 x2, 단감
   box(0.24, 0.012, 0.18, W.paper, -5.3, FL + 0.735, 2.3, { ry: -0.2 }); box(0.22, 0.012, 0.16, P('#e9e1cf', 0.9), -5.31, FL + 0.747, 2.29, { ry: 0.1 });
   B.solid(-6.16, -5.04, 1.83, 2.57, FL, FL + 0.75);
   [['#3d78c2', '플라스틱'], ['#8d939a', '캔·병'], ['#c49a52', '종이']].forEach(([c, label], i) => {
@@ -192,7 +192,7 @@ export function buildHome(B, g, H, dyn) {
   };
   box(4.2, 0.03, 0.05, M.alu, -1.85, CH - 0.04, ZB - 0.17); curtain(-4.0, -3.45, ZB - 0.17); curtain(-0.12, 0.28, ZB - 0.17);
   box(0.62, 0.05, 0.62, M.white, -1.85, CH - 0.05, 5.9); box(0.58, 0.004, 0.58, glow('lamp'), -1.85, CH - 0.054, 5.9, { cast: false });
-  B.fixtures.push({ x: -1.85, y: CH - 0.35, z: 5.9, color: 0xfff2e0, intensity: 5, distance: 9 });
+  B.fixtures.push({ x: -1.85, y: CH - 0.35, z: 5.9, color: 0xfff2e0, intensity: 3.5, distance: 9 }); // 3.5: softer bloom on the ceiling
 
   // ---- bedroom: wardrobe, bed, nightstand + lamp, desk with laptop and lamp, office chair, curtain, ceiling light ----
   box(0.6, 2.2, 1.7, W.cabinet, -7.27, FL, 4.6);

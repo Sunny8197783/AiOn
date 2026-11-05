@@ -243,6 +243,11 @@ function facadeMat(kit, key, Wm, Hm, paint, detail) {
 // k: block index (texture shifts), target: the static group, facePlane: town-buildings' face builder.
 const SHIFT_S = [[0, 7], [4, 11], [9, 2]], SHIFT_N = [[0, 5], [8, 13], [3, 10]];
 const WT = 2 * TILE + CORE, US = TILE / WT, UN = 2 * TILE / WT; // texture u: south tile | north tile | core strip
+// 우수관 x positions on the north face (town-buildings.js gives each a solid). 103동's west pipe would stand in
+// the bike rack by its entrance (town-props.js), so that one is left off.
+export function pipeXs(b, core) {
+  return [b.x0 + 0.45, b.x1 - 0.45, core + 2.6].filter((x) => !(b.id === 'apt103' && x === b.x0 + 0.45));
+}
 export function apartmentFaces(kit, { b, h, core, k, target, facePlane, parapetMat, detail }) {
   const fh = (h - CURB) / 15, plan = southPlan(kit);
   const fac = facadeMat(kit, 'SN', WT, 15 * fh, (c, e, ro) => {
@@ -280,7 +285,7 @@ export function apartmentFaces(kit, { b, h, core, k, target, facePlane, parapetM
       }
     }
     for (const s of [-1, 1]) P.add(parapetMat, box(0.3, h - CURB - fh, 0.34, core + s * 2.15, CURB + fh, b.z0 - 0.17, { drop: 'pz' })); // core edges
-    for (const x of [b.x0 + 0.45, b.x1 - 0.45, core + 2.6]) P.add(parapetMat, cylG(0.06, 0.06, h - CURB, x, CURB, b.z0 - 0.4)); // 우수관
+    for (const x of pipeXs(b, core)) P.add(parapetMat, cylG(0.06, 0.06, h - CURB, x, CURB, b.z0 - 0.4)); // 우수관
   }
   // the stair core face over the entrance (rows 1..14 of the strip)
   target.add(facePlane('n', b.z0 - 0.05, core - 2, core + 2, CURB + fh, h, fac, { u0: UN, u1: 1, v0: 1 / 15, v1: 1 }));

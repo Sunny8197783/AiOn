@@ -3,12 +3,13 @@
 // blankets, puffed pillows, sneakers on soles), phones, cup noodles, opened water cartons and a crumpled blanket on
 // the mats, cardboard partitions between back-to-back rows (one solid each, the walk gaps left open), the phone
 // charging corner at the pillar by the south bays (cable reel, power strips, cables, a hand-written note) and the
-// parked cars as the town's extruded sedans (town-traffic.js profile: instanced parts tinted per car) with a pleated
+// parked cars as the town's extruded sedans (vehicle-geo.js, shared with town-traffic.js: instanced parts tinted per car) with a pleated
 // cloth cover over the covered one. Every random choice here uses its own rng: the camp's seats and mats stay put.
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { FONT } from '../engine/kit.js';
+import { TYPES, vehicleGeo, bodyShape } from './vehicle-geo.js';
 import { detailOf, join, pillowGeo, foldedGeo, drapeGeo, backpackGeo, duffelGeo, shoeGeo, soleGeo } from './soft-goods.js';
 
 // Geometry for the instanced belongings (base on y = 0). lv 0: the original boxes, no extras.
@@ -90,6 +91,7 @@ export function dressMats(kit, at) {
   inst(join(carton), at.cartonMat, cartons);
   inst(drapeGeo({ w: 0.62, d: 0.5, top: 0.03, hang: [0.04, 0.04, 0.04, 0.04], puff: 0.025, amp: 0.012, seed: 5, nx: 10, nz: 8, out: 0.004 }), M.fabric, loose, false);
   chargeCorner(kit, add, M);
+  solids.push({ x0: -8.86, x1: -8.58, z0: 9.7, z1: 10.06, y0: -1, y1: 0.4, noVault: true, id: 'reel' }); // the 전선릴 (chargeCorner)
   return solids;
 }
 
@@ -123,33 +125,8 @@ function chargeCorner(kit, add, M) {
   note.position.set(px - 0.004, 0.78, pz + 0.05); note.rotation.set(0, -Math.PI / 2, (r() - 0.5) * 0.06);
 }
 
-// ---- parked cars: the town's sedan (town-traffic.js TYPES.sedan / vehicleGeo), as instanced parts ----
-const SEDAN = { L: 4.7, W: 1.82, r: 0.32, axles: [0.95, 3.85],
-  top: [[0.05, 0.32], [0, 0.55], [0.08, 0.72], [0.9, 0.86], [1.65, 0.95], [2.25, 1.4], [3.45, 1.42], [4.15, 1.0], [4.62, 0.95], [4.7, 0.62], [4.66, 0.32]],
-  glass: [[1.62, 0.955], [2.24, 1.415], [2.32, 1.36], [3.4, 1.37], [3.46, 1.428], [4.17, 1.005], [4.1, 0.96], [1.7, 0.94]], pillar: 2.85, lights: [0.68, 0.86, -0.01, 4.69] };
-function bodyShape(T) {
-  const out = [...T.top], [af, ar] = T.axles, R = T.r + 0.06, by = T.top[0][1];
-  const arch = (c) => { const p = []; for (let k = 0; k <= 10; k++) { const a = k / 10 * Math.PI; p.push([c + R * Math.cos(a), Math.max(by, T.r + R * Math.sin(a) * 0.95)]); } return p; };
-  out.push(...arch(ar), ...arch(af));
-  return new THREE.Shape(out.map(([s, y]) => new THREE.Vector2(s, y)));
-}
-function sedanGeo(lo) {
-  const T = SEDAN, { L, W, r } = T, bev = 0.05, ws = lo ? 8 : 16, hs = lo ? 6 : 12, z = (s) => s - L / 2, hx = W / 2 - 0.13;
-  const toCar = (g, depth) => g.translate(-L / 2, 0, -depth / 2).rotateY(-Math.PI / 2);
-  const body = toCar(new THREE.ExtrudeGeometry(bodyShape(T), { depth: W - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: lo ? 1 : 2, curveSegments: lo ? 2 : 4 }), W - 2 * bev);
-  const pillar = new THREE.BoxGeometry(W + 0.02, 0.42, 0.09).translate(0, (T.glass[2][1] + T.glass[0][1]) / 2, T.pillar - L / 2);
-  const glass = toCar(new THREE.ExtrudeGeometry(new THREE.Shape(T.glass.map(([s, y]) => new THREE.Vector2(s, y))), { depth: W + 0.012, bevelEnabled: false }), W + 0.012);
-  const dark = [];
-  for (const s of T.axles) for (const sx of [-1, 1]) {
-    dark.push(new THREE.CylinderGeometry(r, r, 0.22, ws).rotateZ(Math.PI / 2).translate(sx * hx, r, z(s)));
-    dark.push(new THREE.CylinderGeometry(r * 0.62, r * 0.62, 0.02, hs).rotateZ(Math.PI / 2).translate(sx * (hx + 0.115), r, z(s)));
-  }
-  dark.push(new THREE.BoxGeometry(W * 0.98, 0.16, 0.12).translate(0, T.top[0][1] + 0.06, z(0.04)), new THREE.BoxGeometry(W * 0.98, 0.16, 0.12).translate(0, T.top[0][1] + 0.06, z(L - 0.04)),
-    new THREE.BoxGeometry(W * 0.5, 0.17, 0.04).translate(0, T.lights[0] - 0.12, z(0) - 0.01), new THREE.BoxGeometry(0.52, 0.11, 0.02).translate(0, T.top[0][1] + 0.2, z(L) + 0.07),
-    ...[-1, 1].map((sx) => new THREE.BoxGeometry(0.1, 0.09, 0.16).translate(sx * (W / 2 + 0.07), T.glass[0][1] + 0.06, z(T.glass[0][0] + 0.15))));
-  const lamp = (s, y, w, d, u) => [-1, 1].map((sx) => { const g = new THREE.BoxGeometry(w, 0.12, d).translate(sx * (W / 2 - 0.22 - w / 2 + 0.1), y, z(s)), uv = g.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, u, 0.5); return g; });
-  return { body: join([body, pillar]), glass, dark: join(dark), lamp: join([...lamp(T.lights[2], T.lights[0], 0.36, 0.07, 0.25), ...lamp(T.lights[3], T.lights[1], 0.32, 0.06, 0.75)]) };
-}
+// ---- parked cars: the town's sedan (vehicle-geo.js, as town-traffic.js draws it), as instanced parts ----
+const SEDAN = TYPES.sedan;
 // A car cover: the sedan's body puffed out along its normals with pleats, the hem hanging to 12 cm over the wheels.
 function coverGeo(lo) {
   const T = SEDAN, g0 = new THREE.ExtrudeGeometry(bodyShape(T), { depth: T.W - 0.1, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: lo ? 1 : 2, curveSegments: lo ? 2 : 4 })
@@ -170,7 +147,7 @@ function coverGeo(lo) {
 }
 // cars: [[x, z, ry, color, covered]]; M: the camp materials (glass, tyre, rim). Adds instanced parts and the cover.
 export function carPark(kit, add, M, cars, cover, plate) {
-  const lo = kit.Q?.physicalPaint === false, geo = sedanGeo(lo), open = cars.filter((c) => !c[4]);
+  const lo = kit.Q?.physicalPaint === false, geo = vehicleGeo(SEDAN, lo), open = cars.filter((c) => !c[4]);
   const paint = lo ? kit.memo('sh:carPaintLo', () => new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.5, roughness: 0.34 }))
     : kit.memo('sh:carPaint', () => new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.55, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 }));
   const lampTex = kit.memo('sh:carLampTex', () => { const t = kit.texture(kit.canvas(2, 1, (g) => { g.fillStyle = '#e9e4d8'; g.fillRect(0, 0, 1, 1); g.fillStyle = '#7c1616'; g.fillRect(1, 0, 1, 1); }), { repeat: [1, 1] }); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t; });

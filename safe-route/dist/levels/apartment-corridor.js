@@ -4,8 +4,9 @@
 // buildElder: 304호 어르신 at her door, one hand on the wall handrail (design M2), shown by the 'elder304' state.
 import * as THREE from 'three';
 import { F3 } from './apartment-parts.js';
-import { buildElevator } from './apartment-core.js';
+import { buildElevator, potted } from './apartment-core.js';
 import { FONT } from '../engine/kit.js';
+import { detailOf, shoeGeo, soleGeo, join } from './soft-goods.js';
 
 export const DOORS = { 301: [-12.6, -11.65], 302: [-1.75, -0.8], 303: [9.0, 9.95], 304: [16.0, 16.95] };
 const KITCHEN = { 301: [-10.4, -9.1], 302: [-6.2, -4.9], 303: [11.0, 12.3], 304: [19.9, 21.2] };
@@ -94,14 +95,15 @@ export function buildCorridor(B, g, dyn, H) {
   g.add(kit.box(0.14, 0.004, 0.09, M.white, { x: -13.2, y: Y + 0.56, z: -0.3, cast: false }));
   B.solid(-13.5, -12.9, -0.55, -0.1, Y, Y + 0.6);
   g.add(kit.box(0.8, 0.012, 0.5, M.rubber, { x: 9.475, y: Y, z: -0.4, cast: false }));
-  g.add(kit.cyl(0.16, 0.12, 0.34, kit.mat('paint:#d8d2c6'), { x: 10.75, y: Y, z: -0.3 }));
-  const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), kit.mat('foliage')); leaf.position.set(10.75, Y + 0.62, -0.3); leaf.scale.set(1, 1.3, 1); leaf.castShadow = true; g.add(leaf);
+  potted(B, g, 'snake', 10.75, Y, -0.3, 0.16, 0.34, kit.mat('paint:#d8d2c6'), { rb: 0.12, seed: 303, old: [0.26, 0.62, 1.3] }); // 산세베리아 by 303's door
   B.solid(10.55, 10.95, -0.5, -0.1, Y, Y + 0.9);
   for (let i = 0; i < 3; i++) g.add(kit.box(1.0, 0.02, 0.3, M.darkMetal, { x: 18.1, y: Y + 0.05 + i * 0.25, z: -0.25 }));
   for (const x of [17.62, 18.58]) g.add(kit.box(0.02, 0.6, 0.3, M.darkMetal, { x, y: Y, z: -0.25 }));
   const shoes = [];
-  for (let i = 0; i < 7; i++) shoes.push({ x: 17.75 + (i % 4) * 0.24, y: Y + 0.11 + Math.floor(i / 4) * 0.25, z: -0.25, ry: (i % 2) * 0.2 });
-  const sh = kit.instanced(new THREE.BoxGeometry(0.11, 0.08, 0.27), kit.mat('paint:#ffffff', { roughness: 0.7 }), shoes, { cast: false });
+  const lv = detailOf(kit.Q); // from '낮음' up a pair of sneakers per slot (upper on a sole, the right one turned out a little)
+  for (let i = 0; i < 7; i++) shoes.push({ x: 17.75 + (i % 4) * 0.24, y: Y + (lv ? 0.07 : 0.11) + Math.floor(i / 4) * 0.25, z: -0.25, ry: (i % 2) * 0.2 });
+  const pair = lv && join([-1, 1].flatMap((sx) => [shoeGeo(), soleGeo(0.022, 0.28)].map((p) => p.rotateY(sx * 0.06 + (sx > 0 ? 0.08 : 0)).translate(sx * 0.048, 0, sx > 0 ? 0.012 : 0))));
+  const sh = kit.instanced(lv ? pair : new THREE.BoxGeometry(0.11, 0.08, 0.27), kit.mat('paint:#ffffff', { roughness: 0.7 }), shoes, { cast: false });
   shoes.forEach((_, i) => sh.setColorAt(i, new THREE.Color(['#2b2b2b', '#e8e4dc', '#7a4b2c', '#3d5a80', '#c94f4f', '#e8e4dc', '#2b2b2b'][i])));
   g.add(sh);
   B.solid(17.6, 18.6, -0.42, -0.1, Y, Y + 0.6);

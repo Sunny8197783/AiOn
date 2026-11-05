@@ -78,7 +78,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
 
   // Flashlight: one SpotLight that always stays in the light list (intensity 0 when off) so toggling it
   // never recompiles shaders, plus a faint additive cone for the beam.
-  const spot = new THREE.SpotLight(0xfff1dc, 0, 28, 0.42, 0.6, 1.6);
+  const spot = new THREE.SpotLight(0xfff1dc, 0, 28, 0.5, 0.6, 1.2);
   spot.shadow.mapSize.set(512, 512); spot.shadow.camera.near = 0.4; spot.shadow.bias = -0.0006; spot.shadow.autoUpdate = false;
   const flashShadow = (q) => { // the tier's flashlight shadow (castShadow changes recompile once, never per toggle)
     const n = profileOf(q).flash;

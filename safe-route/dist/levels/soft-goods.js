@@ -166,6 +166,10 @@ export function leafGeo(len, wid, { n = 6, droop = 0.3, fold = 0.25, kind = 'ova
 }
 // Pot with a rolled rim (lathe), soil a little below the rim, on a saucer. Returns { pot, soil } at base y = 0.
 export function potGeo(rt, h, lv = 2, { rb = rt * 0.74, saucer = true } = {}) {
+  if (!lv) { // 완전 낮음: a plain tapered pot, no saucer
+    const pot = new THREE.LatheGeometry(V2([[0, 0.012], [rb, 0.012], [rt * 1.05, h], [rt * 0.92, h - 0.05], [0, h - 0.05]]), 8);
+    return { pot, soil: new THREE.CircleGeometry(rt * 0.93, 8).rotateX(-Math.PI / 2).translate(0, h - 0.045, 0) };
+  }
   const seg = lv > 1 ? 20 : 12;
   const pot = new THREE.LatheGeometry(V2([[0, 0.012], [rb, 0.012], [rb * 1.02, 0.02], [rt * 0.97, h - 0.03], [rt * 1.05, h - 0.026], [rt * 1.07, h - 0.008], [rt * 1.03, h], [rt * 0.95, h - 0.004], [rt * 0.92, h - 0.05], [0, h - 0.05]]), seg);
   const parts = [pot];

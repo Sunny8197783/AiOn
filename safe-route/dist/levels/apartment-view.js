@@ -3,10 +3,37 @@
 // autumn trees and street lamps (light pools at night), the corridor faces of 102·104·105동 (corridor lamps and
 // kitchen windows lit at night, dark with green exit dots and a few torches in a blackout), and a far ring of city
 // and hills with stars and the moon. Everything is unlit (MeshBasic, no fog) and tinted per view; nothing is merged.
+// From '중간' up (soft-goods.js detailOf) the cars are the town's sedan (vehicle-geo.js), the crowns lumpy clusters and
+// the hedge a clipped 회양목 run; '완전 낮음' and '낮음' keep the cheaper boxes and icosahedra.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { TYPES, vehicleGeo } from './vehicle-geo.js';
+import { detailOf } from './soft-goods.js';
 
 const hash = (x, y) => { const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453; return s - Math.floor(s); };
+const NG = (g) => (g.index ? g.toNonIndexed() : g);
+// A tree crown of overlapping lumps (unit size, centred), each a little dented, the underside flattened.
+function crownGeo() {
+  const lumps = [[0, 0, 0, 0.72], [0.46, 0.22, 0.1, 0.5], [-0.42, 0.18, -0.24, 0.55], [0.1, 0.46, -0.34, 0.45], [-0.16, -0.2, 0.42, 0.5], [-0.1, 0.55, 0.28, 0.42]];
+  const g = mergeGeometries(lumps.map(([x, y, z, r]) => NG(new THREE.SphereGeometry(r, 6, 4).translate(x, y, z)))); // 216 triangles
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = 1 + 0.06 * Math.sin(x * 7.1 + z * 3.3) * Math.sin(y * 6.3 + x * 2.2);
+    p.setXYZ(i, x * k, Math.max(y * k, -0.42 - 0.05 * Math.sin(x * 5 + z * 4)), z * k);
+  }
+  g.computeVertexNormals(); return g;
+}
+// One 1.6 m run of clipped hedge (base y = 0): flat top and sides, rounded edges, leafy unevenness.
+function hedgeGeo() {
+  const g = new THREE.BoxGeometry(1.66, 0.72, 0.84, 5, 2, 2), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const ez = Math.abs(z) / 0.42, ey = (y + 0.36) / 0.72, round = ey > 0.6 ? (ey - 0.6) * ez * 0.5 : 0;
+    z *= 1 - 0.18 * round; y -= 0.12 * round * ez; y += 0.025 * Math.sin(x * 9 + z * 5) * ey; z *= 1 + 0.03 * Math.sin(x * 11 + y * 7);
+    p.setXYZ(i, x, y + 0.36, z);
+  }
+  g.computeVertexNormals(); return g;
+}
 // fac scales the facade picture: at night 1.3 keeps the kitchen windows just under the bloom threshold, only the
 // corridor lamp strips (some of them out) glow.
 const VIEWS = {
@@ -26,6 +53,7 @@ const VIEWS = {
 
 export function buildView(B) {
   const { kit } = B, r = kit.rng(1033), group = new THREE.Group(); group.name = 'apt-view';
+  const det = detailOf(kit.Q) > 1; // '중간' and up: modelled cars, lumpy crowns, a clipped hedge
   const tinted = []; // { mat, base: Color }
   const basic = (opts, base = 0xffffff) => { const m = new THREE.MeshBasicMaterial({ fog: false, ...opts }); tinted.push({ mat: m, base: new THREE.Color(base) }); return m; };
   const L = new THREE.Vector3(0.3, 0.85, 0.45).normalize();
@@ -83,17 +111,22 @@ export function buildView(B) {
   const nearEnd = spots.length;
   for (let x = -30; x < 30; x += 8) spots.push([x + r() * 2, -23 + (r() - 0.5) * 2]);
   const crowns = spots.map(([x, z], i) => { const s = i >= nearRow && i < nearEnd ? 1.8 + r() * 0.7 : 2.2 + r() * 1.2; return { x, y: 2.6 + s * 0.9, z, sx: s, sy: s * 1.15, sz: s, ry: r() * 6 }; });
-  const crownMesh = add(kit.instanced(shade(new THREE.IcosahedronGeometry(1, 1)), basic({ vertexColors: true }), crowns, { cast: false, receive: false }));
+  const shadeAO = (geo) => { shade(geo); const c = geo.attributes.color, pp = geo.attributes.position; for (let i = 0; i < c.count; i++) { const k = 0.62 + 0.38 * THREE.MathUtils.clamp((pp.getY(i) + 0.5) / 1.2, 0, 1); c.setXYZ(i, c.getX(i) * k, c.getY(i) * k, c.getZ(i) * k); } return geo; }; // the inside and the underside of a crown are darker
+  const crownMesh = add(kit.instanced(det ? shadeAO(crownGeo()) : shade(new THREE.IcosahedronGeometry(1, 1)), basic({ vertexColors: true }), crowns, { cast: false, receive: false }));
   crowns.forEach((_, i) => crownMesh.setColorAt(i, new THREE.Color(['#5a7a3a', '#4f6e34', '#c9a23a', '#c46a2a', '#a8442e', '#6b8a40'][(r() * 6) | 0])));
   add(kit.instanced(shade(new THREE.CylinderGeometry(0.16, 0.22, 3, 6).translate(0, 1.5, 0)), basic({ vertexColors: true }, 0x4b3a2c), spots.map(([x, z]) => ({ x, z })), { cast: false, receive: false }));
   const hedge = [];
-  for (let x = -40; x < 40; x += 1.6) if (x < -8 || x > 1) hedge.push({ x, y: 0.3, z: 10.2, sx: 1.0, sy: 0.55, sz: 0.8 });
-  add(kit.instanced(shade(new THREE.IcosahedronGeometry(1, 0)), basic({ vertexColors: true }, 0x3f5a2c), hedge, { cast: false, receive: false }));
+  for (let x = -40; x < 40; x += 1.6) if (x < -8 || x > 1) hedge.push(det ? { x, y: -0.04, z: 10.2, sy: 0.92 + 0.12 * hash(x, 10.2) } : { x, y: 0.3, z: 10.2, sx: 1.0, sy: 0.55, sz: 0.8 });
+  add(kit.instanced(det ? shadeAO(hedgeGeo()) : shade(new THREE.IcosahedronGeometry(1, 0)), basic({ vertexColors: true }, 0x3f5a2c), hedge, { cast: false, receive: false }));
   const cars = [];
-  for (const zc of [17.6, 28.9]) for (let x = -35.5; x < 31; x += 2.5) if (r() < 0.68) cars.push({ x, y: 0.28, z: zc + (r() - 0.5) * 0.3, ry: (r() - 0.5) * 0.04 });
-  const body = add(kit.instanced(shade(new THREE.BoxGeometry(1.84, 0.78, 4.6).translate(0, 0.39, 0)), basic({ vertexColors: true }), cars, { cast: false, receive: false }));
+  // Most cars reverse into the bays (nose to the aisle at z 23.2), a few went in nose first; the sedan's front is -z.
+  for (const zc of [17.6, 28.9]) for (let x = -35.5; x < 31; x += 2.5) if (r() < 0.68) cars.push({ x, y: det ? -0.03 : 0.28, z: zc + (r() - 0.5) * 0.3, ry: (r() - 0.5) * 0.04 + ((zc < 23) !== (hash(x, zc) < 0.2) ? Math.PI : 0) });
+  const car = det && vehicleGeo(TYPES.sedan, true, true), tone = (geo, f) => { const c = geo.attributes.color.array; for (let i = 0; i < c.length; i++) c[i] *= f; return geo; };
+  // glass, tyres and bumpers, lamp lenses: one geometry on the cab colour (lenses paler, tyres darker, not lit)
+  const carDark = (rot) => mergeGeometries([tone(shade(car.glass.clone().rotateY(rot)), 1.1), tone(shade(car.dark.clone().rotateY(rot)), 0.55), tone(shade(car.lamp.clone().rotateY(rot)), 5)]);
+  const body = add(kit.instanced(det ? shade(car.body.clone()) : shade(new THREE.BoxGeometry(1.84, 0.78, 4.6).translate(0, 0.39, 0)), basic({ vertexColors: true }), cars, { cast: false, receive: false }));
   cars.forEach((_, i) => { const k = r(); body.setColorAt(i, new THREE.Color(k < 0.36 ? '#ecebe7' : k < 0.56 ? '#1c1d20' : k < 0.76 ? '#b8bcc0' : k < 0.9 ? '#6e7378' : k < 0.95 ? '#26324a' : '#8a2a2a')); });
-  add(kit.instanced(shade(new THREE.BoxGeometry(1.6, 0.56, 2.5).translate(0, 1.06, -0.2)), basic({ vertexColors: true }, 0x2a3038), cars, { cast: false, receive: false }));
+  add(kit.instanced(det ? carDark(0) : shade(new THREE.BoxGeometry(1.6, 0.56, 2.5).translate(0, 1.06, -0.2)), basic({ vertexColors: true }, 0x2a3038), cars, { cast: false, receive: false }));
   const posts = [];
   for (const z of [14.7, 32.2]) for (let x = -34; x < 34; x += 13) posts.push({ x, z });
   add(kit.instanced(shade(new THREE.CylinderGeometry(0.07, 0.09, 6.2, 8).translate(0, 3.1, 0)), basic({ vertexColors: true }, 0x5d6368), posts, { cast: false, receive: false }));
@@ -105,11 +138,12 @@ export function buildView(B) {
 
   // ---- traffic on the inner road: a few cars loop east-west; head/tail lamps at dusk, at night and in a blackout ----
   const movers = [{ x: -50, z: 41.7, v: 7 }, { x: 8, z: 41.7, v: 6 }, { x: 30, z: 39.3, v: -6.5 }, { x: -20, z: 39.3, v: -7.5 }]; // keep right
-  const mBody = kit.instanced(shade(new THREE.BoxGeometry(4.5, 0.78, 1.84).translate(0, 0.67, 0)), basic({ vertexColors: true }), movers, { cast: false, receive: false });
+  const mBody = kit.instanced(det ? shade(car.body.clone().rotateY(-Math.PI / 2)) : shade(new THREE.BoxGeometry(4.5, 0.78, 1.84).translate(0, 0.67, 0)), basic({ vertexColors: true }), movers, { cast: false, receive: false });
   movers.forEach((_, i) => mBody.setColorAt(i, new THREE.Color(['#ecebe7', '#1c1d20', '#b8bcc0', '#26324a'][i])));
-  const mCab = kit.instanced(shade(new THREE.BoxGeometry(2.4, 0.56, 1.6).translate(-0.15, 1.34, 0)), basic({ vertexColors: true }, 0x2a3038), movers, { cast: false, receive: false });
-  const lampGeo = mergeGeometries([[2.26, 0.7, 2.5, 2.5, 2.1], [-2.26, 0.75, 2, 0.1, 0.05]].flatMap(([x, y, cr, cg, cb]) => [-0.62, 0.62].map((z) => {
-    const b = new THREE.BoxGeometry(0.04, 0.12, 0.3).translate(x, y, z); b.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b.attributes.position.count * 3).map((_, i) => [cr, cg, cb][i % 3]), 3)); return b; })));
+  const mCab = kit.instanced(det ? carDark(-Math.PI / 2) : shade(new THREE.BoxGeometry(2.4, 0.56, 1.6).translate(-0.15, 1.34, 0)), basic({ vertexColors: true }, 0x2a3038), movers, { cast: false, receive: false });
+  const lampAt = det ? [[2.36, 0.68], [-2.34, 0.86]] : [[2.26, 0.7], [-2.26, 0.75]]; // over the sedan's lenses (lamps: x, y; heading +x)
+  const lampGeo = mergeGeometries([[...lampAt[0], 2.5, 2.5, 2.1], [...lampAt[1], 2, 0.1, 0.05]].flatMap(([x, y, cr, cg, cb]) => [-0.62, 0.62].map((z) => {
+    const b = new THREE.BoxGeometry(det ? 0.09 : 0.04, 0.12, 0.3).translate(x, y, z); b.setAttribute('color', new THREE.BufferAttribute(new Float32Array(b.attributes.position.count * 3).map((_, i) => [cr, cg, cb][i % 3]), 3)); return b; })));
   const mLamp = kit.instanced(lampGeo, new THREE.MeshBasicMaterial({ fog: false, vertexColors: true }), movers, { cast: false, receive: false });
   const traffic = [mBody, mCab, mLamp];
   for (const m of traffic) { m.frustumCulled = false; add(m); }

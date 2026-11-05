@@ -1,12 +1,13 @@
 // Street furniture: street lights (instanced heads in light group 'street', ground glow, a few real
 // lights), 전봇대 with sagging wires and service drops, the bus stop, bollards, hydrants, planters,
-// trash bags at collection points, bicycles, parcels at the logistics centre, AC units, 현수막,
+// tied 종량제 bags piled at collection points, bicycles, parcels at the logistics centre, AC units, 현수막,
 // vending machines and the apartment recycling shed. Fences live in town-fences.js.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CROSSWALKS, ROADS, BUILDINGS } from '../game/townmap.js';
 import { CURB } from './town-plan.js';
 import { sway, yawTo } from './town-util.js';
+import { detailOf } from './soft-goods.js';
 
 const Y = CURB;
 const NG = (g) => (g.index ? g.toNonIndexed() : g);
@@ -23,6 +24,28 @@ export function shrubSpots(rand) {
   for (let x = 66; x <= 110; x += 2.2) out.push({ x, z: 42.9, type: 'shrub', s: 0.7 + rand() * 0.3, ry: rand() * 6.28, tint: rand() });
   for (let z = 18; z <= 44; z += 2.4) out.push({ x: -113.2, z, type: 'shrub', s: 0.8, ry: rand() * 6.28, tint: rand() });
   return out;
+}
+
+// 종량제 봉투, base on y = 0: a full bag slumped onto its bottom (lathe), the neck twisted into a knot with the two
+// tied corners sticking up as ears. The body leans and bulges to one side, with soft creases (deterministic, so
+// every bag is the same shape; scale, yaw, tilt and colour vary per instance). lv 0 (완전 낮음): fewer
+// triangles than the icosahedron it replaces (the ears' bases are open there, hidden in the knot).
+export function bagGeo(lv = 2) {
+  const seg = lv > 1 ? 14 : lv ? 10 : 6;
+  const prof = lv ? [[0, 0], [0.15, 0.004], [0.225, 0.03], [0.258, 0.09], [0.262, 0.17], [0.245, 0.25], [0.2, 0.33], [0.13, 0.39], [0.06, 0.43], [0.03, 0.45], [0.045, 0.47], [0.04, 0.495], [0, 0.505]]
+    : [[0, 0], [0.22, 0.02], [0.262, 0.15], [0.21, 0.32], [0.07, 0.43], [0.045, 0.48], [0, 0.505]];
+  const body = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+  body.deleteAttribute('normal'); body.deleteAttribute('uv');
+  const g = mergeVertices(body, 1e-4), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), a = Math.atan2(z, x), t = y / 0.505, mid = Math.sin(Math.PI * Math.min(1, t * 1.25));
+    const k = 1 + mid * (0.09 * Math.sin(a + 0.6) + 0.035 * Math.sin(3 * a + 1.3) + (lv > 1 ? 0.02 * Math.sin(7 * a + t * 9) : 0)); // bulge + creases
+    p.setXYZ(i, x * k + 0.04 * t * t, y * (1 - 0.06 * Math.max(0, Math.cos(a + 0.6)) * mid), z * k * 0.9 + 0.015 * t * t); // the top leans, one flank sags
+  }
+  g.computeVertexNormals();
+  const ears = [0.75, -0.6].map((rz, k) => new THREE.ConeGeometry(0.05 - k * 0.008, 0.13 - k * 0.02, lv ? 5 : 3, 1, !lv).scale(1, 1, 0.28).translate(0, 0.06, 0).rotateZ(rz).rotateY(0.4).translate(0.04, 0.48, 0.015));
+  for (const e of ears) e.deleteAttribute('uv');
+  return mergeAll([g, ...ears]);
 }
 
 export function buildProps(kit, { avoid = [] } = {}) {
@@ -184,12 +207,13 @@ export function buildProps(kit, { avoid = [] } = {}) {
     const [ex, ez] = alongX ? [0.8, 0.3] : [0.3, 0.8]; // pile half-size along / across the wall
     for (let i = 0; i < n; i++) {
       const a = rand() * 6.28, d = rand(), s = 0.75 + rand() * 0.5;
-      bags.push({ x: cx + Math.cos(a) * d * (ex - 0.1), y: Y + 0.24 * s + (i > n - 3 ? 0.35 : 0), z: cz + Math.sin(a) * d * (ez - 0.1), ry: rand() * 6.28, sx: s, sy: s * (0.75 + rand() * 0.35), sz: s });
+      const top = i > n - 3, tw = ((i * 0.618 + cx) % 1 + 1) % 1 - 0.5; // the top two lie on the pile, tipped over
+      bags.push({ x: cx + Math.cos(a) * d * (ex - 0.1), y: Y - 0.01 + (top ? 0.28 : 0), z: cz + Math.sin(a) * d * (ez - 0.1), ry: rand() * 6.28, rx: top ? 0.5 * tw : 0.06 * tw, rz: top ? 0.35 + 0.3 * tw : 0.08 * tw, sx: s, sy: s * (0.75 + rand() * 0.35), sz: s });
       bagCol.push(['#ecead8', '#f1e6a2', '#e9e3cc', '#cfdff0', '#f6f2e4'][(rand() * 5) | 0]);
     }
     box(cx - ex - 0.1, cx + ex + 0.1, cz - ez - 0.1, cz + ez + 0.1, 1, 'trash');
   }
-  const bagMesh = kit.instanced(new THREE.IcosahedronGeometry(0.3, 1), kit.mat('paint:#ffffff', { roughness: 0.32, metalness: 0 }), bags);
+  const bagMesh = kit.instanced(bagGeo(detailOf(kit.Q)), kit.mat('paint:#ffffff', { roughness: 0.32, metalness: 0 }), bags);
   const bc = new THREE.Color(); bagCol.forEach((h, i) => bagMesh.setColorAt(i, bc.set(h))); bagMesh.instanceColor.needsUpdate = true; group.add(bagMesh);
 
   // ---- bicycles (frame tinted per instance) ----

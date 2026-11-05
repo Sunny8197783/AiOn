@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { BUILDINGS, BOUNDS } from '../game/townmap.js';
 import { FONT } from '../engine/kit.js';
 import { CURB } from './town-plan.js';
-import { detailOf, apartmentFaces } from './town-buildings-detail.js';
+import { detailOf, apartmentFaces, pipeXs } from './town-buildings-detail.js';
 import { apartmentRoof, roofKit as roofParts, officeDetail } from './town-buildings-roof.js';
 import { villaFront, civicFaces, isPiloti } from './town-facade-detail.js';
 
@@ -107,6 +107,7 @@ export function buildBuildings(kit, { holes = {} } = {}) {
       const core = ENTRY[b.id] ?? (b.x0 + b.x1) / 2, gm = gable(b.label);
       shell(b.x0, b.x1, b.z0, b.z1, h, { short: gm, roof: greenRoof }, { skip: 'sn' }); // urethane-coated roof
       const fh = apartmentFaces(kit, { b, h, core, k: aptN++, target: stat, facePlane, parapetMat, detail });
+      if (detail) for (const x of pipeXs(b, core)) solids.push({ x0: x - 0.1, x1: x + 0.1, z0: b.z0 - 0.5, z1: b.z0 - 0.3, y0: -0.5, y1: 3, id: 'downpipe', noVault: true, noClimb: true });
       // balcony slabs in register with the facade's floors, fins between every other pair of units
       for (let f = 1; f < 15; f++) stat.add(kit.box(b.x1 - b.x0, 0.14, 0.35, parapetMat, { x: (b.x0 + b.x1) / 2, y: CURB + f * fh - 0.05, z: b.z1 + 0.17 }));
       for (let x = b.x0 + 6; x < b.x1; x += 12) stat.add(kit.box(0.3, h - 0.4, 0.45, parapetMat, { x, y: CURB, z: b.z1 + 0.22 }));

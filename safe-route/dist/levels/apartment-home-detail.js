@@ -1,6 +1,6 @@
 // Lived-in detail for 302호 (apartment-home.js), by graphics tier (soft-goods.js detailOf; '완전 낮음' keeps the
 // plain shapes and adds nothing): real potted plants (인도고무나무 by the TV, 산세베리아 and 스킨답서스 on the
-// 베란다), sneakers on soles and 실내화 at the step, a wire 식기건조대 with plates, bowls and a 수저통, pink
+// 베란다), 사과 and 단감 in the dining bowl, sneakers on soles and 실내화 at the step, a wire 식기건조대 with plates, bowls and a 수저통, pink
 // 고무장갑 over the sink edge, a 행주 on a cabinet handle, the 행정복지센터 wall calendar by the fridge, a knit
 // throw over the sofa back and soft cushions, the TV stand's 공유기, photo frame, reed diffuser and cable, a puffy
 // duvet hanging over the bed, the nightstand's phone and book, a standing 빨래건조대 with towels and socks (its own
@@ -26,9 +26,25 @@ export function homeDetail(B, g, { W, P, glow, F3, FL, BF, CT }) {
   function plant(kind, x, y, z, rt, h, potMat, s = 1) { // '완전 낮음': fewer leaves on the old foliage and pot materials
     const { pot, soil: dirt } = potGeo(rt, h, lv);
     mesh(pot, lv ? potMat : W.pot, x, y, z); if (lv) mesh(dirt, soil, x, y, z, { cast: false });
-    const p = plantGeo(kind, r, lv, s);
-    mesh(lv ? p.leaves : twoSided(p.leaves), lv ? leafMat : kit.mat('foliage'), x, y + h - 0.045, z, { ry: r() * 6.28 });
-    if (p.stems) mesh(p.stems, M.darkWood, x, y + h - 0.045, z);
+    const p = plantGeo(kind, r, lv, s), ry = r() * 6.28; // leaves and stems turn together (the leaves sit on the stems)
+    mesh(lv ? p.leaves : twoSided(p.leaves), lv ? leafMat : kit.mat('foliage'), x, y + h - 0.045, z, { ry });
+    if (p.stems) mesh(p.stems, M.darkWood, x, y + h - 0.045, z, { ry });
+  }
+  // ---- fruit in the dining-table bowl: 사과 (dimpled top, a stalk) and 단감 (flattened, squarish, a four-leaf calyx);
+  // '완전 낮음' keeps the plain spheres. Base on y; own rng, so the room's other random picks stay put.
+  function fruit(kind, x, y, z, mat) {
+    if (!lv) { const s = mesh(new THREE.SphereGeometry(0.035, 12, 8), mat, x, y + 0.035, z); s.receiveShadow = false; return; }
+    const fr = kit.rng(121 + Math.round(x * 100)), seg = lv > 1 ? 14 : 10, ry = fr() * 6.28, V = (pts) => pts.map(([a, b]) => new THREE.Vector2(a, b));
+    if (kind === 'apple') {
+      mesh(new THREE.LatheGeometry(V([[0, 0.006], [0.014, 0], [0.028, 0.007], [0.036, 0.024], [0.036, 0.042], [0.03, 0.058], [0.016, 0.066], [0.006, 0.062], [0, 0.056]]), seg), mat, x, y, z, { ry, rz: (fr() - 0.5) * 0.3 });
+      mesh(new THREE.CylinderGeometry(0.0018, 0.0025, 0.02, 4).translate(0, 0.064, 0).rotateZ(0.25), M.darkWood, x, y, z, { ry }); // cast: merged with the room's other dark wood
+      return;
+    }
+    const body = new THREE.LatheGeometry(V([[0, 0], [0.024, 0.002], [0.037, 0.012], [0.041, 0.026], [0.037, 0.04], [0.024, 0.049], [0.008, 0.051], [0, 0.049]]), seg), p = body.attributes.position;
+    for (let i = 0; i < p.count; i++) { const k = 1 + 0.05 * Math.cos(4 * Math.atan2(p.getZ(i), p.getX(i))); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); } // four soft corners
+    body.computeVertexNormals(); mesh(body, mat, x, y, z, { ry });
+    const calyx = [0, 1, 2, 3].map((k) => new THREE.CircleGeometry(0.012, 5).scale(1, 0.62, 1).translate(0.011, 0, 0).rotateX(-Math.PI / 2 + 0.25).rotateY(k * Math.PI / 2).translate(0, 0.051, 0));
+    mesh(join(calyx), leafMat, x, y, z, { ry }); // cast: merged with the plants' leaves
   }
   // ---- shoes at the 현관 ([x, z, ry] per shoe, colours); the last pair, on the hall floor, are 실내화 ----
   function shoes(list, cols) {
@@ -137,7 +153,7 @@ export function homeDetail(B, g, { W, P, glow, F3, FL, BF, CT }) {
     for (const [dx, dz, c, ry] of [[-0.04, 0.02, '#e8e4dc', 0.3], [0.05, -0.03, '#5d7fa3', -0.5], [0, 0.05, '#3f4a56', 1.1]])
       mesh(pillowGeo(0.24, 0.07, 0.2, 1), P(c, 0.98), -6.55 + dx, BF + 0.3 + (c === '#3f4a56' ? 0.04 : 0), 8.35 + dz, { ry, rz: (r() - 0.5) * 0.3 });
   }
-  return { lv, plant, shoes, dishRack, sofa, bed, furnish };
+  return { lv, plant, fruit, shoes, dishRack, sofa, bed, furnish };
 }
 
 function drawPhoto(c, w, h) { // a family snapshot at the beach: sky, sea, sand, three figures
