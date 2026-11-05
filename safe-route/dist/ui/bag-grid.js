@@ -43,6 +43,9 @@ function spot(L, w, h) {
 }
 const putGrid = (L, id) => { const c = CATALOG[id]?.cells, at = c && spot(L, c[0], c[1]); if (!at) return false; L.pieces.push({ id, ...at }); return true; };
 const pocketRoom = (L, id) => !!CATALOG[id]?.pocket && round2(pocketLoad(L) + vol(id)) <= POCKET_L;
+// Reopening the bag re-packs it with packGrid (biggest first), which can need more room than a hand-packed order:
+// a unit only stays in the main part when the re-pack still holds everything, so reopening never moves one home.
+const repacks = (L) => packGrid(listOf(L), { cols: L.cols, rows: L.rows }).fits;
 
 export function createLayout(list, { cols = BAG_GRID.cols, rows = BAG_GRID.rows } = {}) {
   const r = packGrid(list, { cols, rows });
@@ -54,7 +57,7 @@ export function createLayout(list, { cols = BAG_GRID.cols, rows = BAG_GRID.rows 
 
 export function addUnit(L, id) {
   if (!CATALOG[id]?.cells) return 'full'; // a fixture (the curtain) never goes in a bag
-  if (putGrid(L, id)) return 'grid';
+  if (putGrid(L, id)) { if (repacks(L)) return 'grid'; L.pieces.pop(); }
   if (pocketRoom(L, id)) { L.pocket[id] = (L.pocket[id] ?? 0) + 1; return 'pocket'; }
   return canAdd(listOf(L), id, { cols: L.cols, rows: L.rows }) ? 'tidy' : 'full';
 }
@@ -77,13 +80,11 @@ export function togglePocket(L, id) {
   const n = L.pocket[id] ?? 0;
   if (!n) return { refused: 'notPocket' };
   const before = L.pieces.length;
-  for (let k = 0; k < n; k++) if (!putGrid(L, id)) {
-    L.pieces.length = before; // undo: stays in the pocket
-    const out = { ...L, pieces: [...L.pieces], pocket: { ...L.pocket } }; delete out.pocket[id];
-    return { refused: packGrid(listOf(out).concat({ id, n }), { cols: L.cols, rows: L.rows }).fits ? 'tidy' : 'full' };
-  }
-  delete L.pocket[id];
-  return { to: 'grid', n };
+  let put = 0; while (put < n && putGrid(L, id)) put++;
+  if (put === n) { const pocket = { ...L.pocket }; delete pocket[id]; if (repacks({ ...L, pocket })) { delete L.pocket[id]; return { to: 'grid', n }; } }
+  L.pieces.length = before; // undo: stays in the pocket
+  const out = { ...L, pieces: [...L.pieces], pocket: { ...L.pocket } }; delete out.pocket[id];
+  return { refused: packGrid(listOf(out).concat({ id, n }), { cols: L.cols, rows: L.rows }).fits ? 'tidy' : 'full' };
 }
 
 // null when the tidy order would not hold everything (first-fit decreasing is not always best): keep L then.

@@ -1,12 +1,14 @@
 // Shop fronts and civic entrances: Hangul signboards from two atlases (one draw call each, light group
-// 'shops'), fake lit interiors behind glass, awnings, canopies, 돌출간판, the convenience-store terrace,
-// cafe deck, mart carts, flags (태극기) and the three notice boards whose text follows `notices`.
+// 'shops'), lit rooms behind the glass (levels/town-interior.js), awnings, canopies, 돌출간판, the convenience-store
+// terrace, cafe deck, mart carts, flags (태극기) and the three notice boards whose text follows `notices`.
 import * as THREE from 'three';
 import { FONT } from '../engine/kit.js';
 import { BUILDINGS, PLACES } from '../game/townmap.js';
 import { CURB } from './town-plan.js';
 import { board, sway } from './town-util.js';
 import { heightOf } from './town-buildings.js';
+import { detailOf } from './town-buildings-detail.js';
+import { INTERIORS, paintInterior, roomShader } from './town-interior.js';
 
 const Y = CURB;
 const B = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
@@ -21,7 +23,6 @@ const SIGNS = [
   ['엄마손반찬', '#f2e6c8', '#4a3a20'], ['연무철물', '#2f3a44', '#f2c230'], ['한빛아파트 102동', '#f4f0e6', '#3f7d5c'], ['한빛아파트 101동', '#f4f0e6', '#3f7d5c'],
 ];
 const VSIGNS = [['약', '#1f7a3a'], ['학원', '#1d3f8f'], ['치킨', '#c8312a'], ['국밥', '#3b2a1e'], ['PC', '#141c3a'], ['미용실', '#7a3a6a'], ['노래방', '#5a2a8a'], ['세탁', '#2f7fb5']];
-const INTERIORS = ['store', 'pharmacy', 'snack', 'mart', 'cafe', 'lobby', 'office', 'civic'];
 
 // Atlas of equal slots; plane(i, w, h) returns a PlaneGeometry whose UVs cover slot i.
 function atlas(kit, key, W, H, cols, rows, paint) {
@@ -61,37 +62,6 @@ function paintVSign(g, i, w, h) {
   g.fillStyle = '#ffffff'; g.font = `800 ${step * 0.78}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
   chars.forEach((c, k) => g.fillText(c, w / 2, 15 + step * (k + 0.5)));
 }
-function paintInterior(g, i, w, h) {
-  const kind = INTERIORS[i], r = (s => () => ((s = (s * 16807) % 2147483647) / 2147483647))(i * 97 + 13);
-  const warm = kind === 'cafe' || kind === 'snack' || kind === 'lobby';
-  g.fillStyle = warm ? '#5a4030' : kind === 'civic' || kind === 'office' ? '#c9ccc8' : '#e8ece9'; g.fillRect(0, 0, w, h);
-  g.fillStyle = warm ? '#3a2a20' : '#b8bcb8'; g.fillRect(0, h * 0.78, w, h * 0.22);
-  for (let x = 20; x < w; x += 70) { g.fillStyle = warm ? '#ffd9a0' : '#ffffff'; if (kind === 'cafe') { g.beginPath(); g.arc(x + 20, h * 0.2, 9, 0, 7); g.fill(); g.fillRect(x + 19, 0, 2, h * 0.2); } else g.fillRect(x, h * 0.04, 50, 6); }
-  if (kind === 'store' || kind === 'mart' || kind === 'pharmacy') {
-    const n = kind === 'pharmacy' ? 3 : 5;
-    for (let s = 0; s < n; s++) {
-      const x = 14 + s * (w - 28) / n, sw = (w - 28) / n - 14;
-      g.fillStyle = '#d0d4d2'; g.fillRect(x, h * 0.22, sw, h * 0.56);
-      for (let row = 0; row < 4; row++) for (let k = 0; k < 7; k++) { g.fillStyle = `hsl(${r() * 360 | 0},${50 + r() * 30}%,${45 + r() * 20}%)`; g.fillRect(x + 4 + k * sw / 7, h * 0.25 + row * h * 0.13, sw / 7 - 3, h * 0.1); }
-    }
-    if (kind === 'store') { g.fillStyle = '#cfe8ff'; g.fillRect(w * 0.72, h * 0.18, w * 0.25, h * 0.6); g.fillStyle = '#0f8a6c'; g.fillRect(0, h * 0.12, w, 8); }
-    if (kind === 'pharmacy') { g.fillStyle = '#1f7a3a'; g.fillRect(w * 0.8, h * 0.3, 40, 12); g.fillRect(w * 0.8 + 14, h * 0.3 - 14, 12, 40); }
-  } else if (kind === 'snack') {
-    g.fillStyle = '#c8312a'; g.fillRect(w * 0.05, h * 0.12, w * 0.5, h * 0.2); g.fillStyle = '#fff'; g.font = `700 ${h * 0.1}px ${FONT}`; g.fillText('떡볶이 · 김밥 · 순대', w * 0.08, h * 0.25);
-    g.fillStyle = '#8a8f94'; g.fillRect(w * 0.6, h * 0.45, w * 0.35, h * 0.33); for (let k = 0; k < 4; k++) { g.fillStyle = '#c8312a'; g.fillRect(w * 0.08 + k * 60, h * 0.6, 30, h * 0.18); }
-  } else if (kind === 'cafe') {
-    for (let k = 0; k < 5; k++) { g.fillStyle = '#8a5a3a'; g.fillRect(30 + k * 95, h * 0.58, 60, 8); g.fillRect(56 + k * 95, h * 0.58, 8, h * 0.2); }
-    g.fillStyle = '#2d2a26'; g.fillRect(w * 0.7, h * 0.35, w * 0.28, h * 0.43); g.fillStyle = '#f3e3c3'; g.fillRect(w * 0.72, h * 0.12, w * 0.24, h * 0.16);
-  } else if (kind === 'lobby') {
-    g.fillStyle = '#9a8f80'; g.fillRect(w * 0.08, h * 0.25, w * 0.35, h * 0.4); for (let y = 0; y < 5; y++) for (let x = 0; x < 6; x++) { g.fillStyle = '#c9c2b4'; g.fillRect(w * 0.09 + x * w * 0.057, h * 0.27 + y * h * 0.075, w * 0.05, h * 0.06); }
-    g.fillStyle = '#6a7a8a'; g.fillRect(w * 0.6, h * 0.2, w * 0.18, h * 0.58);
-  } else {
-    g.fillStyle = '#7a8a94'; g.fillRect(w * 0.1, h * 0.45, w * 0.5, h * 0.33); g.fillStyle = '#2b4c7e'; g.fillRect(w * 0.15, h * 0.15, w * 0.3, h * 0.12);
-    for (let k = 0; k < 6; k++) { g.fillStyle = '#4a5560'; g.fillRect(w * 0.65 + k * 25, h * 0.55, 14, h * 0.23); }
-  }
-  const glare = g.createLinearGradient(0, 0, w, h); glare.addColorStop(0, 'rgba(255,255,255,0.18)'); glare.addColorStop(0.5, 'rgba(255,255,255,0)'); g.fillStyle = glare; g.fillRect(0, 0, w, h);
-}
-
 export function buildFronts(kit) {
   const group = new THREE.Group(); group.name = 'fronts';
   const stat = new THREE.Group(); group.add(stat);
@@ -101,10 +71,13 @@ export function buildFronts(kit) {
 
   const hs = atlas(kit, 'signs', 1024, 1020, 2, 12, paintSign);
   const vs = atlas(kit, 'vsigns', 1024, 512, 8, 1, paintVSign);
-  const ins = atlas(kit, 'interiors', 1024, 1024, 2, 4, paintInterior);
+  // Room atlas: twice as wide where the goods atlas is (sharper shelves); a box room behind the glass on 높음+.
+  const deep = detailOf(kit) > 1, iw = (kit.Q?.atlas ?? 1024) >= 2048 ? 2048 : 1024;
+  const ins = atlas(kit, `interiors:${iw}:${deep}`, iw, 1024, 2, 4, (g, i, w, h) => paintInterior(g, i, w, h, deep));
   const glow = (map, group, v) => kit.lit(group, new THREE.MeshStandardMaterial({ map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: v, roughness: 0.45 }), v);
   const signMat = kit.memo('town:signMat', () => glow(hs.tex, 'shops', 0.9)), vMat = kit.memo('town:vsignMat', () => glow(vs.tex, 'shops', 1.1));
-  const shopIn = kit.memo('town:shopInterior', () => glow(ins.tex, 'shops', 0.75)), civIn = kit.memo('town:civInterior', () => glow(ins.tex, 'indoor', 0.6));
+  const room = (m) => (deep ? roomShader(m) : m);
+  const shopIn = kit.memo(`town:shopInterior:${iw}:${deep}`, () => room(glow(ins.tex, 'shops', 0.75))), civIn = kit.memo(`town:civInterior:${iw}:${deep}`, () => room(glow(ins.tex, 'indoor', 0.6)));
 
   // Flat panel on a face. side: n|s|e|w (outward normal), a = along-face centre, y = centre height.
   const onFace = (geo, mat, side, c, a, y, out = 0.06) => {

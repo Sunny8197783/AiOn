@@ -40,12 +40,33 @@ export function applyTier(root, tier) {
   });
 }
 
-// Free the GPU buffers of a level that is dropped from the cache (its tier changed). Materials and textures are
-// shared through the kit, so they stay; geometry shared with another level is simply uploaded again when drawn.
-export function disposeLevel(L, persons) {
+// Free what a level build dropped from the cache (its tier changed) holds: its crowds' registrations (L.dispose), its
+// kit light-group entries (kit.forget), geometry, skeleton bone textures, instance buffers, light shadow maps, and the
+// materials and textures no other live root uses (keep: the scene and the other built levels; kit-memoized ones that
+// a later build picks up again are simply re-uploaded then). Render-target textures (environment, shadows) are never
+// touched here. Geometry shared with another level is uploaded again when drawn.
+export function disposeLevel(L, persons, { kit = null, keep = [] } = {}) {
   if (!L?.group) return;
+  const objs = [], mine = new Set(), mats = new Set(), used = new Set();
+  const each = (o, fn) => { for (const m of [].concat(o.material || [])) if (m) fn(m); };
+  L.group.traverse((o) => { objs.push(o); mine.add(o); each(o, (m) => mats.add(m)); }); // before L.dispose detaches its people
+  try { kit?.forget?.(L.group); } catch (err) { console.error(`[engine] kit.forget for level "${L.id}" failed`, err); }
   try { L.dispose?.(); } catch (err) { console.error(`[engine] level "${L.id}" dispose failed`, err); }
-  const mine = new Set();
-  L.group.traverse((o) => { mine.add(o); o.geometry?.dispose?.(); });
+  for (const o of objs) {
+    o.geometry?.dispose?.();
+    if (o.isSkinnedMesh) o.skeleton?.dispose?.();
+    if (o.isInstancedMesh || o.isLight) o.dispose?.(); // instance attributes / shadow map
+  }
+  for (const r of keep) if (r && r !== L.group) r.traverse?.((o) => { if (!mine.has(o)) each(o, (m) => used.add(m)); });
+  const texOf = (m, out) => {
+    for (const v of Object.values(m)) if (v?.isTexture) out.add(v);
+    if (m.uniforms) for (const u of Object.values(m.uniforms)) if (u?.value?.isTexture) out.add(u.value);
+    return out;
+  };
+  const usedTex = new Set();
+  for (const m of used) texOf(m, usedTex);
+  const freeTex = new Set();
+  for (const m of mats) if (!used.has(m)) { texOf(m, freeTex); m.dispose(); }
+  for (const t of freeTex) if (!usedTex.has(t) && !t.isRenderTargetTexture && !t.isCubeTexture && t.image) t.dispose();
   if (persons) for (const p of [...persons]) if (mine.has(p.group)) persons.delete(p);
 }

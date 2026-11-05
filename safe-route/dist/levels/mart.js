@@ -297,6 +297,7 @@ export function buildMart(kit, people, fx) {
     npcs: { cashier: cashiers[0], cashier2: cashiers[1] },
     states: { crowd: ['normal', 'busy'], soldOut: [[], ['water'], ['water', 'elec'], ['water', 'food', 'daily', 'elec', 'health']], power: ['on', 'off'], outside: [null, ...MOODS] },
     setState,
+    dispose() { for (const p of [...shoppers.map((s) => s.p), ...queue, ...cashiers]) p.dispose?.(); }, // the build is dropped
     update(dt, t, ctx = {}) {
       const pl = ctx.player, on = state.power === 'on';
       if (on) {

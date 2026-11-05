@@ -142,6 +142,6 @@ export function buildShelter(kit, people, fx) {
 
   return {
     id: 'shelter', group, env: 'underground', walk: shell.walk, solids, points, spawns, ceilings: shell.ceilings,
-    npcs: crowd.npcs, states: STATES, setState, update, anchors,
+    npcs: crowd.npcs, states: STATES, setState, update, anchors, dispose: () => crowd.dispose(),
   };
 }

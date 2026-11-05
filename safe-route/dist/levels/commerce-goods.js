@@ -8,7 +8,7 @@ import { FONT, rng } from '../engine/kit.js';
 
 const GRID = 8;
 // name: [style, label bg, text, accent/cap, title, sub, liquid]. Brands are fictional.
-const LABELS = {
+export const LABELS = { // also the shop-window shelves in town (levels/town-interior.js)
   water2a: ['pet', '#1f6fb2', '#fff', '#1f6fb2', '맑은샘', '먹는샘물 2L'], water2b: ['pet', '#2f9e7a', '#fff', '#2a7d5f', '한빛수', '먹는샘물 2L'],
   water5: ['pet', '#1f6fb2', '#fff', '#1f6fb2', '맑은샘', '먹는샘물 500mL'], water5b: ['pet', '#eef5fb', '#1f4f8c', '#7fb2d8', '산골물', '먹는샘물 500mL'],
   cola: ['pet', '#c8202f', '#fff', '#c8202f', '톡톡콜라', '500mL', '#3a1a0e'], cider: ['pet', '#2f9a3c', '#fff', '#2f9a3c', '맑은사이다', '500mL', '#d6f0d2'],

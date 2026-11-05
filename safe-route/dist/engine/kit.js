@@ -24,8 +24,11 @@ export function createKit(renderer, { quality = 'high' } = {}) {
   let tier = normQ(quality, 'high');
   const maxAniso = renderer?.capabilities?.getMaxAnisotropy?.() || 1;
   let S = PROFILES[tier].tex; // surface texture size, read when a surface is first made at this tier
-  const cache = new Map();
-  const memo = (key, make) => { if (!cache.has(key)) cache.set(key, make()); return cache.get(key); };
+  const cache = new Map(), kept = new WeakSet(); // kept: memoized objects, shared by every build (never forgotten)
+  const memo = (key, make) => {
+    if (!cache.has(key)) { const v = make(); cache.set(key, v); if (v && typeof v === 'object') kept.add(v); }
+    return cache.get(key);
+  };
 
   function canvas(w, h, draw) {
     const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -339,6 +342,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
     if (dim !== undefined) it.obj.color.setScalar(dim + (1 - dim) * Math.min(1, v / (it.base || 1)));
   };
   function lit(group, obj, on) {
+    if (itemOf.has(obj)) return obj; // already in a group (a shared material handed in again): one entry only
     if (!groups.has(group)) groups.set(group, { items: [], on: true, scale: 1 });
     const G = groups.get(group);
     const isLight = obj.isLight;
@@ -350,6 +354,23 @@ export function createKit(renderer, { quality = 'high' } = {}) {
     const G = groups.get(group); if (!G) return;
     G.on = on; G.scale = scale;
     for (const it of G.items) put(G, it);
+  }
+  // Drop a level build's items from every group (engine/tier-apply.js, when the build is disposed): lights that are
+  // root or under it, and materials its meshes use, except memoized ones (kit.memo), which later builds share.
+  // roots: an Object3D or a list of them. Returns how many items were removed.
+  function forget(roots) {
+    const objs = new Set(), mats = new Set();
+    for (const root of [roots].flat()) root?.traverse?.((o) => {
+      objs.add(o);
+      if (o.material) for (const m of [o.material].flat()) if (m && !kept.has(m)) mats.add(m);
+    });
+    let n = 0;
+    for (const G of groups.values()) {
+      const keep = [];
+      for (const it of G.items) if (objs.has(it.obj) || mats.has(it.obj)) { itemOf.delete(it.obj); n++; } else keep.push(it);
+      G.items = keep;
+    }
+    return n;
   }
   // Per-object switch on top of its group (a lamp behind a shutter, a unit on mains power).
   function gateLit(obj, on) { const r = itemOf.get(obj); if (r) { r[1].off = !on; put(...r); } }
@@ -424,7 +445,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
     setQuality(q) { tier = normQ(q, tier); },
     surfaceMaps: (name) => [...(surfaceSrc.get(name) || [])],
     THREE, rng, memo, canvas, texture, normalFrom, surface, worldUV, mat, facade,
-    signTexture, sign, shelterSign, guideSign, lit, setLit, gateLit, isLit,
+    signTexture, sign, shelterSign, guideSign, lit, setLit, gateLit, isLit, forget,
     place, box, rbox, cyl, plane, slab, instanced, merge,
   };
 }

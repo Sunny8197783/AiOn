@@ -1,10 +1,10 @@
 // Roofs and small facade parts for town-buildings.js: the apartments' 옥탑 (elevator machine room with the brand
 // mark, stair houses with steel doors, an FRP panel water tank on a steel base, antenna, lightning rods, vent
-// pipes), rooftop stair houses of the low buildings, the 한결물류 office's mullion fins and rooftop 실외기, and
-// sills and 방범창 on the villa faces along the streets. What is built follows detailOf (town-buildings-detail.js).
+// pipes), rooftop stair houses of the low buildings and the 한결물류 office's mullion fins and rooftop 실외기 (the villa
+// faces' sills and 방범창 moved to town-facade-detail.js). What is built follows detailOf (town-buildings-detail.js).
 import * as THREE from 'three';
 import { CURB } from './town-plan.js';
-import { box, cylG, quad, parts, barsMat, acMat, acBox } from './town-buildings-detail.js';
+import { box, cylG, parts, acMat, acBox } from './town-buildings-detail.js';
 
 // FRP water tank panels: 1 m squares, darker bolted seams, a slight bulge per panel (tile = 2 m).
 const frpMat = (kit) => kit.memo('town:frp', () => new THREE.MeshStandardMaterial({ roughness: 0.45, map: kit.texture(kit.canvas(256, 256, (g, w) => {
@@ -91,19 +91,5 @@ export function officeDetail(kit, target, { b, h, colsL, colsS, fh, detail }) {
   for (let i = 1; i < colsS; i++) { const z = b.z0 + (b.z1 - b.z0) * i / colsS; P.add(metal, box(0.15, H, 0.12, b.x1 + 0.075, ys, z, { drop: 'nx' })); P.add(metal, box(0.15, H, 0.12, b.x0 - 0.075, ys, z, { drop: 'px' })); }
   P.add(steel, box(6 * 1.45 + 0.4, 0.25, 1.0, b.x0 + 4 + 2.5 * 1.45, h, b.z0 + 2.6));
   for (let i = 0; i < 6; i++) P.add(acMat(kit), acBox(1.3, 1.6, 0.75, b.x0 + 4 + i * 1.45, h + 0.25, b.z0 + 2.6));
-  P.flush(target);
-}
-
-// Sills and 방범창 on one villa face (kit.facade 'villa': 4 window columns per texture repeat, rows of fhv).
-const RY = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 };
-export function villaFace(kit, target, { side, c, a0, a1, y0, floors, fhv, reps, seed }) {
-  const P = parts(), sill = kit.mat('curb'), bars = barsMat(kit), q = kit.rng(seed), ry = RY[side];
-  const out = side === 's' || side === 'e' ? 1 : -1, cw = (a1 - a0) / (reps * 4), ww = cw * 0.5, wh = fhv * 0.45;
-  const at = (a, o) => side === 's' || side === 'n' ? [a, c + out * o] : [c + out * o, a];
-  for (let i = 0; i < reps * 4; i++) for (let f = 0; f < floors; f++) {
-    const a = a0 + (i + 0.5) * cw, yb = y0 + f * fhv + fhv * 0.3;
-    const [x, z] = at(a, 0.07); P.add(sill, box(ww + 0.16, 0.06, 0.14, x, yb - 0.11, z, { ry, drop: 'nz' }), false);
-    if (f <= 1 || q() < 0.25) { const [gx, gz] = at(a, 0.08); P.add(bars, quad(ww + 0.1, wh + 0.1, gx, yb - 0.05, gz, ry, 2.52), false); }
-  }
   P.flush(target);
 }

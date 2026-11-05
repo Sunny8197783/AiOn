@@ -205,6 +205,7 @@ export async function buildTown(kit, people, fx) {
       waterPoint: ['off', 'on'], buses: ['off', 'on'], strike: ['none', 'hit'], notices: Object.keys(NOTICES), noticeText: [], season: ['autumn'],
     },
     setState, update,
+    dispose() { crowd.dispose(); }, // engine/tier-apply.js disposeLevel (the rest is freed there)
     get state() { return { ...state, gates: { ...state.gates }, closures: [...state.closures] }; },
     anchors: {
       craneShelter: { x: -80, y: 110, z: 31, look: { x: -89, y: 0, z: 31 } },

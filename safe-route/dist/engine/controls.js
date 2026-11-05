@@ -20,7 +20,8 @@ const TP = { dist: 3.4, height: 1.7, shoulder: 0.45 };
 const EYE_FWD = 0.1, EYE_UP = 0.07; // first person: where the eyes sit relative to the head joint
 const FOV = 70, FOV_RUN = 4, D2R = Math.PI / 180, LOOK = 0.0042, LOCK_LOOK = 0.0024;
 const JUMP_V = 3.6, GRAVITY = 12, STAIR_SLOPE = 0.2;
-const FLASH = 6; // flashlight candela; dimmed further when the beam hits something close
+const FLASH = 16; // flashlight candela; dimmed further when the beam hits something close
+const FLASH_DROP = Math.tan(10 * Math.PI / 180); // held about 10° below the gaze: the ground 3-8 m ahead reads in a blackout
 const UI_KEYS = new Set(['KeyM', 'Tab', 'KeyI', 'Escape', 'KeyF', 'KeyV', 'KeyP', 'KeyH', 'KeyG', 'KeyQ', 'KeyC', 'KeyX', 'KeyB']);
 const MOVE = { KeyW: [0, 1], ArrowUp: [0, 1], KeyS: [0, -1], ArrowDown: [0, -1], KeyA: [-1, 0], ArrowLeft: [-1, 0], KeyD: [1, 0], ArrowRight: [1, 0] };
 const damp = (k, dt) => 1 - Math.exp(-k * dt);
@@ -440,7 +441,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       handLocal.set(0.26, 1.05, -0.3).applyAxisAngle(THREE.Object3D.DEFAULT_UP, bodyYaw).add(position);
       origin.copy(camera.position).addScaledVector(right, 0.16).addScaledVector(up, -0.2).addScaledVector(fwd, 0.32); // ahead of the own body, which would shadow it
       origin.lerp(handLocal, viewK);
-      tmp.copy(camera.position).addScaledVector(fwd, 16);
+      tmp.copy(camera.position).addScaledVector(fwd, 16); tmp.y -= 16 * FLASH_DROP;
       if (snap) aim.copy(tmp); else aim.lerp(tmp, damp(RM ? 30 : 14, dt));
       spot.position.copy(origin); spot.target.position.copy(aim); spot.target.updateMatrixWorld();
       beam.position.copy(origin); beam.lookAt(aim);

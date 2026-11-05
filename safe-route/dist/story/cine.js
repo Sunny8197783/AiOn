@@ -11,6 +11,7 @@
 //   fill: { at: [x,y,z] | () => [x,y,z], i, color } a soft light that stays on the subject.
 import * as THREE from 'three';
 import { groundAt } from '../engine/geom.js';
+import { gradeFor } from '../engine/presets.js';
 
 const SKIP = new Set(['Space', 'Enter', 'NumpadEnter', 'Escape']);
 const ease = { inout: (k) => k * k * (3 - 2 * k), linear: (k) => k, out: (k) => 1 - (1 - k) ** 2, in: (k) => k * k };
@@ -28,7 +29,11 @@ export function createCine(ctx) {
   const ui = overlay(), live = new Set(); // actors and effects to remove when the cutscene ends
   // A fill light for dark shots (shot.fill), in the scene from the start so it never forces a shader recompile.
   const fill = new THREE.PointLight(0xdfe6ff, 0, 14, 1.6); fill.position.set(0, -500, 0); engine.scene.add(fill);
-  let busy = false, baseExp = 0;
+  let busy = false;
+  // The exposure shots add to and the cutscene returns to: the current preset's own (engine.gradeExposure: its grade
+  // plus the held eye adaptation of the low tiers), so a shot that changes the environment (the time-lapse) or the tier
+  // ends on the right exposure, not on the one the cutscene started with.
+  const base = () => engine.gradeExposure ?? (engine.env ? gradeFor(engine.env).exposure : 0);
 
   // Typed-out title lines in the corner (place, time), the way a film opens on a location.
   let titleT = 0;
@@ -54,7 +59,7 @@ export function createCine(ctx) {
       const cleanup = shot.setup?.();
       if (shot.env) engine.setEnv(shot.env[0], { seconds: shot.env[1] ?? 0 });
       engine.timeScale = shot.slow ?? 1;
-      engine.post.setGrade({ exposure: baseExp + (shot.exposure ?? 0) }, shot.exposure ? 0.4 : 0.2);
+      engine.post.setGrade({ exposure: base() + (shot.exposure ?? 0) }, shot.exposure ? 0.4 : 0.2);
       if (shot.fade) { engine.post.fadeTo(0, 0); engine.post.fadeTo(1, 0.6); }
       const events = [...(shot.at ?? [])];
       for (const [at, text, speaker, ms] of shot.lines ?? []) events.push([at, () => ctx.caption(text, speaker, ms)]);
@@ -92,17 +97,17 @@ export function createCine(ctx) {
     let skipped = false;
     const onKey = (e) => { if (SKIP.has(e.code) && !e.repeat) { e.preventDefault(); e.stopPropagation(); skipped = true; } };
     addEventListener('keydown', onKey, true);
+    const wasOn = engine.controlsEnabled !== false; // a cutscene inside a modal leaves the controls off after it
     engine.setControls(false); hud.setCinematic(true); ui.el.hidden = false; void ui.el.offsetWidth; ui.el.classList.add('on');
     engine.setModelHidden(true);
-    baseExp = engine.post.grade.exposure;
     title(lines);
     try { for (const shot of shots) { if (skipped) break; await runShot(shot, () => skipped); } }
     finally {
       removeEventListener('keydown', onKey, true);
-      engine.setCameraOverride(null); engine.timeScale = 1; engine.post.fadeTo(1, 0); engine.post.setGrade({ exposure: baseExp }, 0.6);
+      engine.setCameraOverride(null); engine.timeScale = 1; engine.post.fadeTo(1, 0); engine.post.setGrade({ exposure: base() }, 0.6);
       for (const o of live) o.dispose(); live.clear();
       ui.el.classList.remove('on'); setTimeout(() => { if (!busy) ui.el.hidden = true; }, 700);
-      title(null); if (skipped) hud.clearCaption?.(); hud.setCinematic(false); engine.setModelHidden(false); engine.setControls(true);
+      title(null); if (skipped) hud.clearCaption?.(); hud.setCinematic(false); engine.setModelHidden(false); engine.setControls(wasOn);
       busy = false;
     }
     return skipped ? 'skipped' : 'done';

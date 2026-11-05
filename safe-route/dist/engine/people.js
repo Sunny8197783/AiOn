@@ -283,7 +283,8 @@ export function createPerson({ preset = 'crowd', seed, detail = 1 } = {}) {
       for (const ob of Object.values(objs)) ob.traverse(m => { if (m.isMesh) m.castShadow = shadow && !!(m.userData.cast ?? ob.userData.cast); });
     },
     update,
-    dispose() { mesh.geometry.dispose(); group.removeFromParent(); },
+    // GPU buffers of the body and its props, the bone textures (body, rollator); the shared material stays.
+    dispose() { group.traverse((m) => { m.geometry?.dispose(); if (m.isSkinnedMesh) m.skeleton.dispose(); }); group.removeFromParent(); },
   };
   syncProps();
   update(0);

@@ -209,5 +209,6 @@ export function buildPeople(kit, people, { seats, walk }) {
     setFire(pos) { fire = pos; reset(); },   // {x, z} or null: clears the seats around it and pauses toilet trips
     setWays(list) { ways = list; },   // open entrances: arrivals and leavers only use these
     update,
+    dispose() { for (const p of [...ev.map((e) => e.p), ...still]) p.dispose?.(); },   // the level build is dropped
   };
 }

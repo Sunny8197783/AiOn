@@ -266,7 +266,7 @@ export function buildPark(kit, { spots } = {}) {
   gymSign.position.set(gx + 4.3, Y + 1.25, gz + 3.2); gymSign.rotation.y = -Math.PI / 4; stat.add(gymSign, kit.box(0.06, 1.0, 0.06, steel, { x: gx + 4.3, y: Y, z: gz + 3.24 }));
 
   // ---- park lamps (short, globe heads, light group 'street'), bins, fountain, the gate stone ----
-  const lampMat = kit.memo('town:parkLamp', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0xfff3dc, emissive: 0xffe2b0, emissiveIntensity: 3, roughness: 0.3 }), 3));
+  const lampMat = kit.memo('town:parkLamp', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0xfff3dc, emissive: 0xffe2b0, emissiveIntensity: 2, roughness: 0.3 }), 2));
   const lamps = [[-2, 16], [-13, 23], [-13.4, 34], [-22, 43.6], [-35, 36], [-40, 32.4], [3, 30], [-19, 16]].map(([x, z]) => ({ x, y: Y, z }));
   group.add(kit.instanced(new THREE.CylinderGeometry(0.05, 0.07, 3.6, 8).translate(0, 1.8, 0), kit.mat('darkMetal'), lamps));
   group.add(kit.instanced(new THREE.SphereGeometry(0.2, 14, 10).translate(0, 3.75, 0), lampMat, lamps, { cast: false }));

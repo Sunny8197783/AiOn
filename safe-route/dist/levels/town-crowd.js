@@ -2,7 +2,7 @@
 // sidewalk and evacuation paths they use (cut by active closures), queue lines at the water point and
 // the assembly bay, and the walk signals strollers wait for at the signalled zebras. Crowds are created lazily
 // and every call is guarded, so a missing or failing crowd module only empties the streets.
-import { SIDEWALKS, BARRICADES, EVAC, ENTRY, clipPaths, signalAt } from './town-plan.js';
+import { SIDEWALKS, BARRICADES, EVAC, ENTRY, clipPaths, CYCLE } from './town-plan.js';
 import { heightAt } from './town-util.js';
 import { WATER, ASSEMBLY } from './town-events.js';
 import { zebraZones } from './town-geo.js';
@@ -10,6 +10,13 @@ import { CROSSWALKS, ROADS } from '../game/townmap.js';
 
 const SIZES = { main: 26, extra: 14, few: 8, line: 14 };
 export const CROWD_MODES = ['none', 'normal', 'busy', 'evacuating', 'sparse', 'queue', 'assembly'];
+// Seconds of steady green left for group 'EW' | 'NS' at time t (town-plan signalAt without its per-call objects).
+const CYCLE_S = CYCLE.reduce((s, c) => s + c[2], 0);
+function greenLeft(t, grp) {
+  let u = ((t % CYCLE_S) + CYCLE_S) % CYCLE_S;
+  for (const [g, c, d] of CYCLE) { if (u < d) return g === grp && c === 'green' ? d - u : 0; u -= d; }
+  return 0;
+}
 const toPts = (paths) => paths.map(p => p.map(([x, z]) => ({ x, z })));
 // The carriageway of every zebra with pedestrian signals (town-traffic draws them on these three roads); crossing an
 // east-west road is allowed while north-south traffic has green, and the other way round.
@@ -78,8 +85,7 @@ export function createTownCrowd({ people, group, walk, solids = null, quality = 
     // Walk signals at time t (town-plan CYCLE); on = the signals have power and run. A steady green man opens a
     // crossing; it closes again when the green starts to blink (5 s left), so nobody starts across too late.
     setSignals(t, on) {
-      const s = on ? signalAt(t) : null;
-      for (const h of holds) h.open = !s || (s[h.group] === 'green' && s.left > 5);
+      for (const h of holds) h.open = !on || greenLeft(t, h.group) > 5;
     },
     // Where the shown crowd members are ({x, z}), for cars that give way (town-traffic). `out` is reused.
     positions(out = []) {
@@ -88,5 +94,7 @@ export function createTownCrowd({ people, group, walk, solids = null, quality = 
       return out;
     },
     get mode() { return mode; },
+    // The level build is dropped (engine/tier-apply.js): each crowd's members and its body registration go.
+    dispose() { for (const n in crowds) guard(`${n}.dispose`, () => crowds[n]?.dispose?.()); },
   };
 }
