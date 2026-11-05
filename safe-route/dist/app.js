@@ -19,7 +19,7 @@ import { extinguisher } from './ui/extinguisher.js';
 import { docs } from './ui/docs.js';
 import { routemap } from './ui/routemap.js';
 import { createAudio } from './audio.js';
-import { createGame, save, load, checkpoint, restore, bagLoad, usable, check, drainCharge } from './game/state.js';
+import { createGame, save, load, checkpoint, restore, bagLoad, bagCells, usable, check, drainCharge } from './game/state.js';
 import { seenRumors } from './game/rumors.js';
 import { failDebrief } from './game/debrief.js';
 import { SOURCES } from './game/facts.js';
@@ -93,7 +93,7 @@ if (DEBUG) {
   };
   window.requestAnimationFrame = (cb) => {
     const f = { at: performance.now(), ran: false, run(t) { if (!f.ran) { f.ran = true; cb(t); } } };
-    q.push(f); raf((t) => f.run(t)); ch.port2.postMessage(0);
+    q.push(f); raf(() => f.run(performance.now())); ch.port2.postMessage(0); // one monotonic clock for both paths
     return 0;
   };
 }
@@ -212,7 +212,7 @@ engine.onKey(async ({ code }) => {
   } else if (code === 'KeyV') { settings.view = settings.view === 'first' ? 'third' : 'first'; store.set(SETTINGS_KEY, JSON.stringify(settings)); }
   else if (!ctx.roaming) return;
   else if (code === 'Tab') await ctx.modal(() => notebook(G.info));
-  else if (code === 'KeyI') await ctx.modal(() => inventory({ home: G.items, bag: G.items, catalog: CATALOG, load: bagLoad(G), limit: BAG_LIMIT }));
+  else if (code === 'KeyI') await ctx.modal(() => inventory({ home: G.items, bag: G.items, catalog: CATALOG, load: bagLoad(G), cells: bagCells(G), limit: BAG_LIMIT }));
   else if (code === 'KeyH') await ctx.modal(() => controlsCard());
   else if (code === 'KeyX') firstAid();
   else if (code === 'KeyB') await echo.chalk();

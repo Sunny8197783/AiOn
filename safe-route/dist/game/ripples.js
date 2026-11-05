@@ -14,6 +14,7 @@ export const PREP = {
   bag: '비상가방', cash: '현금', docs: '비상연락처 카드·서류 사본', entrances: '대피소 출입구 확인', extinguisher: '소화기 위치·사용 순서',
   flashlight: '손전등 건전지', judgement: '화재 상황 판단', powerbank: '보조배터리 충전', radio: '라디오 주파수·건전지',
   route: '경로 확인', tub: '받아 둔 물', water_jug: '접이식 물통', curtain: '암막 커튼', towel: '젖은 수건', elder: '304호 어르신과 함께',
+  gas: '가스 밸브 위치',
 };
 
 const has = (key) => (d) => (d?.cart?.[key] ?? 0) > 0;
@@ -35,6 +36,7 @@ export const CAUSES = {
   elder: [{ type: 'help', when: (d) => d.who === 'elder', text: '304호 어르신과 함께 계단을 내려갔다' },
     { type: 'help', when: (d) => d.who === 'manager' && /304호/.test(d.what ?? ''), text: '박 소장에게 304호 어르신을 알렸다' }],
   towel: [{ type: 'tub_filled', text: '큰 통에 물을 받아 두었다' }],
+  gas: [{ type: 'gas_checked', text: '주방 가스 중간 밸브 위치를 확인해 두었다' }],
 };
 
 const DAY = (d) => (d === 0 ? 'D-day' : d < 0 ? `D${d}` : `D+${d}`);

@@ -199,7 +199,7 @@ export async function doEquip(ctx) {
       recordEncounter(G, 'extinguisher', 'practice');
       G.know.extinguisherLocated = true; done.ext = true; show();
     },
-    homeGas: async () => { G.know.gasValve = true; done.gas = true; await ctx.ui.talk({ speaker: '가스 중간 밸브', role: '주방', lines: ['레인지 옆 가스 중간 밸브 위치를 확인했다.', fact('alert_caution').text] }); show(); },
+    homeGas: async () => { if (!G.know.gasValve) ctx.event('gas_checked', {}); G.know.gasValve = true; done.gas = true; await ctx.ui.talk({ speaker: '가스 중간 밸브', role: '주방', lines: ['레인지 옆 가스 중간 밸브 위치를 확인했다.', fact('alert_caution').text] }); show(); },
     homeBreaker: async () => { G.know.breaker = true; done.breaker = true; await ctx.ui.talk({ speaker: '분전반', role: '현관 위', lines: ['누전차단기와 개폐기가 있다.', fact('power_home').text] }); show(); },
     homePlanner: async () => {
       const pick = await ctx.ui.talk({ speaker: '점검', role: '달력', lines: ['점검을 마칠까?'], choices: [{ id: 'yes', label: '마친다' }, { id: 'no', label: '조금 더 한다' }] });
@@ -225,8 +225,10 @@ export async function doDocs(ctx) {
     { id: 'idcopy', label: '신분증·통장·계약서 사본', value: '프린터로 사본 1부씩', why: fact('bag_copies').text, recommended: true },
   ];
   const res = await ctx.modal(() => ctx.ui.docs({ mode: 'guided', fields, carry: ['bag', 'home'] }));
-  recordEncounter(G, 'docs', 'written');
   const card = res?.card || {};
+  // Nothing ticked (or Esc): no card exists, so no bag goal, payoff or debrief credit.
+  if (!Object.keys(card).length) { recordEncounter(G, 'docs', 'skipped'); ctx.toast('아무것도 적지 않았다.'); return; }
+  recordEncounter(G, 'docs', 'written');
   const where = res?.where === 'bag' ? 'bag' : 'home';
   G.items.contact_card = { home: 0, bag: 0, bought: 0, checked: true, used: 0, ...(G.items.contact_card || {}) };
   G.items.contact_card[where] += 1;

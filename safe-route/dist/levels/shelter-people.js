@@ -22,6 +22,15 @@ export const ENTRANCES = ['stairs', 'ramp', 'access', 'east'];
 const DESK = { x: 2.55, z: -9.5, wait: 2.6, anim: 'talk', face: Math.PI };   // arrivals by stair A write in the roster
 const COLS = [-19.3, -17.1, -14.9, -12.7, -10.5, -3.9, -1.7, 2.7, 4.9];      // gaps between mats clear of pillars, radio table, bins
 const FIRE_CLEAR = 6.5;   // seats this close to a fire are left (their people moved away)
+// Walkers share the WAYS polylines: hold behind someone ahead going the same way (or stopped), step
+// aside past someone coming the other way. Holds that wait on each other in a ring: the lowest rank goes.
+const GAP = 0.8, PASS = { near: 1.8, side: 0.34, rate: 1.2 };
+// Does following x's holds come back to e? Then e may go if it has the lowest rank in that ring.
+function ringLeader(e, x) {
+  let min = e.rank;
+  for (let c = x, k = 0; c && k < 12; c = c.wait, k++) { if (c === e) return e.rank === min; min = Math.min(min, c.rank); }
+  return false;
+}
 
 // Walk-zone height at (x, z); the lowest zone wins where zones overlap (stair foot under the top landing).
 export function heightAt(walk, x, z) {
@@ -62,7 +71,7 @@ export function buildPeople(kit, people, { seats, walk }) {
   const ev = Array.from({ length: n }, (_, i) => {
     const s = seats[Math.floor(i * seats.length / n)];
     return { p: at('crowd', 600 + i, s.x, s.z, s.yaw, 'sit', 0.012), home: s, mode: 'seat', path: null, i: 0, pause: 0, face: null, done: null,
-      speed: 0.95 + r() * 0.4, brisk: false, acc: 0, away: 0, rank: 0 };
+      speed: 0.95 + r() * 0.4, brisk: false, acc: 0, away: 0, rank: 0, q: { x: s.x, z: s.z }, off: { x: 0, z: 0 }, dir: { x: 0, z: 0 }, wait: null };
   });
   const order = ev.slice();
   for (let i = order.length - 1; i > 0; i--) { const j = (r() * (i + 1)) | 0; [order[i], order[j]] = [order[j], order[i]]; }
@@ -103,11 +112,11 @@ export function buildPeople(kit, people, { seats, walk }) {
   function hide(e) { e.mode = 'gone'; e.path = null; e.p.group.visible = false; }
   function go(e, path, done, fromSeat = false) {
     const g = e.p.group;
-    e.mode = 'walk'; e.path = path; e.done = done; e.face = null; g.visible = true;
+    e.mode = 'walk'; e.path = path; e.done = done; e.face = null; g.visible = true; e.off.x = e.off.z = 0; e.wait = null; e.dir.x = e.dir.z = 0;
     e.brisk = phase === 'alert' && mode === 'arriving';
     e.p.setSpeed(e.speed * (e.brisk ? 1.3 : 1));
-    if (fromSeat) { e.i = 0; e.pause = 1.0; e.p.setAnim('idle'); }   // stand up first
-    else { const p0 = path[0]; g.position.set(p0.x, heightAt(walk, p0.x, p0.z), p0.z); g.rotation.y = yawTo(path[1].x - p0.x, path[1].z - p0.z); e.i = 1; e.pause = 0; }
+    if (fromSeat) { e.i = 0; e.pause = 1.0; e.p.setAnim('idle'); e.q.x = g.position.x; e.q.z = g.position.z; }   // stand up first
+    else { const p0 = path[0]; g.position.set(p0.x, heightAt(walk, p0.x, p0.z), p0.z); g.rotation.y = yawTo(path[1].x - p0.x, path[1].z - p0.z); e.i = 1; e.pause = 0; e.q.x = p0.x; e.q.z = p0.z; }
   }
   function reset() {
     timer = 1;
@@ -164,14 +173,33 @@ export function buildPeople(kit, people, { seats, walk }) {
       e.face = null;
     }
     if (e.i >= e.path.length) { const f = e.done; e.done = null; f?.(e); return; }
-    const t = e.path[e.i], dx = t.x - g.position.x, dz = t.z - g.position.z, d = Math.hypot(dx, dz);
+    const q = e.q, t = e.path[e.i], dx = t.x - q.x, dz = t.z - q.z, d = Math.hypot(dx, dz);
     if (d < 0.06) { e.i++; if (t.wait) { e.pause = t.wait; e.face = t.face ?? null; e.p.setAnim(t.anim || 'idle'); } return; }
+    const ux = dx / d, uz = dz / d; e.dir.x = ux; e.dir.z = uz;
     if (pl) {   // wait for the player instead of walking through them
       const px = pl.x - g.position.x, pz = pl.z - g.position.z;
       if (px * px + pz * pz < 1.2 && px * dx + pz * dz > 0) { e.p.setAnim('idle'); return; }
     }
+    // Others ahead within PASS.near: hold behind someone going my way, crossing my way or stopped on my line
+    // (a ring of holds, e.g. two at a merge: its lowest rank goes); step aside past anyone coming at me.
+    let hold = null, aside = 0;
+    for (const x of ev) {
+      if (x === e || x.mode !== 'walk') continue;
+      const ox = x.p.group.position.x - g.position.x, oz = x.p.group.position.z - g.position.z, o = Math.hypot(ox, oz);
+      if (ox * ux + oz * uz <= 0 || o > PASS.near) continue;
+      const lat = oz * ux - ox * uz, same = x.dir.x * ux + x.dir.z * uz, stopped = x.pause > 0 || !!x.wait;
+      if (same < -0.3 || stopped) { if (Math.abs(lat) < PASS.side * 2) aside = lat > 0.02 ? -1 : 1; if (same < -0.3) continue; }
+      if (o < GAP && !(x.pause <= 0 && ringLeader(e, x))) { hold = x; break; }
+    }
+    e.wait = hold;
+    if (hold) { e.p.setAnim('idle'); return; }
+    // step aside (away from whoever is in the way), back onto the line otherwise and on the last leg (seat / exit)
+    // (a world-space offset eased at PASS.rate, so turning a corner while aside never jumps)
+    const want = e.i < e.path.length - 1 ? aside * PASS.side : 0, o = e.off, wx = -uz * want - o.x, wz = ux * want - o.z, wd = Math.hypot(wx, wz);
+    if (wd > 1e-4) { const m = Math.min(1, PASS.rate * dt / wd); o.x += wx * m; o.z += wz * m; }
     const k = Math.min(d, e.speed * (e.brisk ? 1.3 : 1) * dt) / d;
-    g.position.x += dx * k; g.position.z += dz * k; g.position.y = heightAt(walk, g.position.x, g.position.z);
+    q.x += dx * k; q.z += dz * k;
+    g.position.x = q.x + e.off.x; g.position.z = q.z + e.off.z; g.position.y = heightAt(walk, g.position.x, g.position.z);
     g.rotation.y += turn(g.rotation.y, yawTo(dx, dz)) * Math.min(1, dt * 7);
     const x = g.position.x, z = g.position.z, flight = z < -17.45 && z > -19.97;   // flight 1 rises north, flight 2 south
     const f1 = flight && x > 3.6 && x < 4.95, f2 = flight && x > 5.05 && x < 6.4;

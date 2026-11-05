@@ -4,6 +4,7 @@
 // Sections ('water','food','daily','elec','health') swap to empty shelves with '품절' tags via setState('soldOut').
 import * as THREE from 'three';
 import { MART_SECTIONS } from '../game/items.js';
+import { produceGeos } from './produce-geo.js';
 import { createGoods, gondola, panels, lamps, windowView, moodFor, npc, solidOf, yawTo, cartsAndBaskets, MOODS } from './commerce-goods.js';
 
 const H = 3.6;
@@ -138,20 +139,25 @@ export function buildMart(kit, people, fx) {
   solids.push({ x0: -4.05, x1: -2.95, z0: -1.55, z1: -1.05, y0: 0, y1: 0.75, id: 'baskets' }); // the stacked baskets, not just the base
 
   // ---- produce tables (east) ----
-  const produce = [], col = [];
+  const produce = [], col = [], kind = [];
   const KINDS = [['#b8262a', 0.042], ['#f08a1c', 0.04], ['#c79a5a', 0.038], ['#a07848', 0.036], ['#8fbf5a', 0.09], ['#d8c06a', 0.045], ['#e9e6d8', 0.05]];
   for (const tx of [8.3, 11.5]) for (const tz of [-11.8, -17.2]) {
     add(kit.slab(1.8, 0.72, 4.4, M.wood, { x: tx, z: tz }), true);
     for (let cx = 0; cx < 3; cx++) for (let cz = 0; cz < 8; cz++) {
-      const x = tx - 0.6 + cx * 0.6, z = tz - 1.93 + cz * 0.55, [c, s] = KINDS[(r() * KINDS.length) | 0];
+      const ki = (r() * KINDS.length) | 0, x = tx - 0.6 + cx * 0.6, z = tz - 1.93 + cz * 0.55, [c, s] = KINDS[ki];
       stat.add(kit.slab(0.56, 0.12, 0.5, M.wood, { x, y: 0.72, z }));
       const n = s > 0.08 ? 4 : 14;
-      for (let k = 0; k < n; k++) { produce.push({ x: x + (r() - 0.5) * 0.4, y: 0.84 + s * 0.8 + (k > n * 0.6 ? s * 1.2 : 0), z: z + (r() - 0.5) * 0.36, s, sy: s * (c === '#e9e6d8' ? 3 : 0.92), rx: r() * 3 }); col.push(c); }
+      // the radish (last kind) lies on its side: its lathe runs along y, rz turns it along x, rx spins it
+      for (let k = 0; k < n; k++) { const rad = ki === 6, q = rad ? s * 2.2 : s; produce.push({ x: x + (r() - 0.5) * 0.4, y: 0.84 + s * 0.8 + (k > n * 0.6 ? s * 1.2 : 0), z: z + (r() - 0.5) * 0.36, s: q, sy: rad ? q : s * 0.92, rx: r() * 3, rz: rad ? Math.PI / 2 : 0 }); col.push(c); kind.push(ki); }
     }
   }
-  // 80 triangles a fruit, 20 on the lighter graphics tiers (1.2k of them: 96k vs 24k triangles)
-  const prodMesh = kit.instanced(new THREE.IcosahedronGeometry(1, (kit.Q?.goodsSeg ?? 10) >= 8 ? 1 : 0), new THREE.MeshStandardMaterial({ roughness: 0.55 }), produce, { cast: false });
-  const tc = new THREE.Color(); col.forEach((c, i) => prodMesh.setColorAt(i, tc.set(c).multiplyScalar(0.85 + r() * 0.3))); dyn.add(prodMesh);
+  // one instanced mesh per kind (its own shape, sized by the tier's goodsSeg), one shared material; colours are drawn
+  // in the original order so the seeded rng sequence is unchanged
+  const prodGeo = produceGeos(kit.Q?.goodsSeg ?? 10), prodMat = new THREE.MeshStandardMaterial({ roughness: 0.55 });
+  const prodMeshes = KINDS.map((_, k) => kit.instanced(prodGeo[k], prodMat, produce.filter((_, i) => kind[i] === k), { cast: false }));
+  const nth = KINDS.map(() => 0), slot = kind.map((k) => nth[k]++); // instance i's index inside its kind's mesh
+  const tc = new THREE.Color(); col.forEach((c, i) => prodMeshes[kind[i]].setColorAt(slot[i], tc.set(c).multiplyScalar(0.85 + r() * 0.3)));
+  for (const m of prodMeshes) if (m.count) dyn.add(m);
 
   // ---- travelator to the 2nd floor (east wall) ----
   const run = 13.4, ang = Math.atan2(H, run), L = run / Math.cos(ang) + 1.5;
@@ -166,7 +172,8 @@ export function buildMart(kit, people, fx) {
     const gl = kit.box(0.02, 0.86, L, M.glass, { x: s * 0.62, y: 0.05, z: -L / 2, cast: false }); gl.userData.keep = true; tilt.add(gl);
   }
   stat.add(kit.box(1.4, 0.02, 0.6, kit.mat('paint:#c9a227', { metalness: 0.6 }), { x: 14.4, z: -6.1 }));
-  solids.push({ x0: 13.2, x1: 15.6, y0: 0, y1: H, z0: -21, z1: -6.4, id: 'travelator' });
+  solids.push({ x0: 13.2, x1: 15.6, y0: 0, y1: H, z0: -21.95, z1: -6.4, id: 'travelator' }); // the whole clad prism (to z -21.9)
+  solids.push({ x0: 13.2, x1: 15.96, y0: 0, y1: H, z0: -23.96, z1: -21.95, id: 'travelatorBack' }); // the dead pocket behind it
   dyn.add(sign(['2층 · 주방 · 문구 · 의류', '카트는 바퀴를 고정해 주세요'], { w: 1.4, h: 0.5, bg: '#1d1d1f', fg: '#ffffff', emissive: 0.5 }, { x: 14.4, y: 2.5, z: -5.95 }, 'indoor'));
 
   // ---- signs: hanging section boards, posters ----
@@ -212,7 +219,8 @@ export function buildMart(kit, people, fx) {
   const q = kit.Q?.shop ?? 1; // share of the shoppers the graphics tier keeps
   const nNormal = Math.round(6 * q), nBusy = Math.round(12 * q);
   const shoppers = Array.from({ length: nBusy }, (_, i) => {
-    const cart = i % 3 === 0, x = AISLES[(r() * AISLES.length) | 0], z = r() < 0.5 ? FRONT : BACK;
+    // distinct starts (one per aisle end); the two r() draws stay so the rest of the seeded sequence is unchanged
+    r(); r(); const cart = i % 3 === 0, x = AISLES[i % AISLES.length], z = i < AISLES.length ? FRONT : BACK;
     const p = npc(people, 'crowd', 300 + i, { x, z, ry: r() * 6, props: [cart ? 'cart' : 'basket'], detail: kit.Q?.people });
     // 'walk' for everyone: the 'walker' anim would auto-show a rollator; the cart prop alone sets the grip.
     const s = { p, cart, walk: 'walk', speed: (cart ? 0.75 : 0.85) + r() * 0.35, off: (r() - 0.5) * 0.6, path: [], wait: r() * 3, blocked: false };
@@ -227,6 +235,31 @@ export function buildMart(kit, people, fx) {
     s.path = [{ x: ax, z: z0 }, { x: ax, z: zb, wait: 2 + r() * 5, face: yawTo(side, 0) }, { x: ax, z: z1 }];
   }
   const turn = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
+  const open = (x, z) => !solids.some((o) => o.y0 < 1 && x > o.x0 - 0.3 && x < o.x1 + 0.3 && z > o.z0 - 0.3 && z < o.z1 + 0.3);
+  // Other people in the way: follow a slower one going the same way (stop 0.75 m behind), step aside (right-hand
+  // rule, about 0.6 m clear) for someone oncoming or standing; a crossing walker yields to one on its right.
+  // After 2.5 s of yielding a shopper only steps aside for a while, so nobody waits on anybody forever.
+  function traffic(s, ux, uz, dt) {
+    const g = s.p.group.position; let stop = false, side = 0;
+    const others = [...shoppers.filter((o) => o !== s && o.p.group.visible).map((o) => [o.p.group.position, o]), ...queue.filter((p) => p.group.visible).map((p) => [p.group.position, null])];
+    for (const [q, o] of others) {
+      const rx = q.x - g.x, rz = q.z - g.z, dd = Math.hypot(rx, rz), ahead = rx * ux + rz * uz;
+      if (dd > 1.2 || ahead <= 0) continue;
+      const lat = rx * -uz + rz * ux; // + : on my right
+      const t = o && o.wait <= 0 && o.path[0], od = t && Math.hypot(t.x - q.x, t.z - q.z);
+      const dot = od > 0.01 ? ((t.x - q.x) * ux + (t.z - q.z) * uz) / od : null; // null: standing still
+      if (dot !== null && dot > 0.5) { if (dd < 0.75 && Math.abs(lat) < 0.45) stop = true; continue; }
+      if (dot !== null && dot > -0.5 && lat > 0 && dd < 0.9) { stop = true; continue; }
+      if (Math.abs(lat) < 0.6) side += (lat > 0.05 ? -1 : 1) * (0.6 - Math.abs(lat)); // away from it, right if dead ahead
+    }
+    if (stop && (s.push ?? 0) <= 0) { s.stuck = (s.stuck ?? 0) + dt; if (s.stuck > 2.5) { s.stuck = 0; s.push = 1.2; } else return true; }
+    s.push = Math.max(0, (s.push ?? 0) - dt); if (!stop) s.stuck = 0;
+    if (side) {
+      const k = Math.sign(side) * Math.min(Math.abs(side), s.speed * dt * 0.9), nx = g.x - uz * k, nz = g.z + ux * k;
+      if (open(nx, nz)) { g.x = nx; g.z = nz; }
+    }
+    return false;
+  }
   function stepShopper(s, dt, pl) {
     const g = s.p.group;
     if (s.wait > 0) { s.wait -= dt; if (s.wait <= 0) s.p.setAnim(s.walk); else if (s.face !== undefined) g.rotation.y += turn(g.rotation.y, s.face) * Math.min(1, dt * 4); return; }
@@ -239,6 +272,11 @@ export function buildMart(kit, people, fx) {
       if (block !== s.blocked) { s.blocked = block; s.p.setAnim(block ? 'idle' : s.walk); }
       if (block) return;
     }
+    // the stop point is taken by someone already standing there: stop short, a step before them
+    if (t.wait && d < 1.6 && shoppers.some((o) => o !== s && o.p.group.visible && o.wait > 0 && Math.hypot(o.p.group.position.x - t.x, o.p.group.position.z - t.z) < 0.7)) t.z = Math.min(-8.8, Math.max(-19.2, t.z + (g.position.z > t.z ? 0.9 : -0.9)));
+    const held = traffic(s, dx / d, dz / d, dt);
+    if (held !== s.held) { s.held = held; if (!s.blocked) s.p.setAnim(held ? 'idle' : s.walk); }
+    if (held) return;
     const k = Math.min(d, s.speed * dt) / d; g.position.x += dx * k; g.position.z += dz * k;
     g.rotation.y += turn(g.rotation.y, yawTo(dx, dz)) * Math.min(1, dt * 7);
   }

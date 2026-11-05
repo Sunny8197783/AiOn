@@ -8,6 +8,7 @@
 //     rows: one { day, water, meals, power, place, drank, ate, cooked, skipped, trips, loose, gasLeft } per day.
 //     lines: 1..5 calm Korean sentences for the timelapse (ctx.skip text array).
 //     use: { id: { home, bag } } units eaten/drunk; stats: { stat: delta } already capped (see below).
+//     usedStove / usedJug / usedBank: durable tools the days put to work (applyLedger marks them used).
 // applyLedger(G, result) -> rows: consumes the items, applies the stats, phone and radio charge, charges the
 //   powerbank, sets G.know.radioDaily, appends rows to G.ledger and records 'ledger' { plan, place, days, ... }.
 // planLine(plan) -> '하루 배분: 물 2L · 두 끼 · 보조배터리' (chapter summary). ledgerSummary(G) -> totals.
@@ -17,10 +18,11 @@
 // Ramen needs gas_stove + butane AND place 'home' (home_stove, shelter_rules); one butane bundle cooks 12
 // meals. Other food: canned, rice_instant, bars, then last year's old_bars (health -4, tension +4 each).
 // At the shelter, water and two meals a day are provided; a third meal comes from the bag. Daily radio
-// listening drains the radio 8 %/day. The ledger alone never pushes thirst past 80 or fatigue past 85,
+// listening drains the radio 8 %/day; the 'powerbank' hour drains the phone 6 %/day and the bank tops it
+// up once (+60) when it falls to 20 %. The ledger alone never pushes thirst past 80 or fatigue past 85,
 // so it cannot cause the 'exhausted' fail (that stays tied to story/endure.js).
 import { CATALOG } from './items.js';
-import { adjust, consume, check, drainCharge, recordEvent } from './state.js';
+import { adjust, consume, check, use as useItem, drainCharge, recordEvent } from './state.js';
 
 export const PICKS = {
   water: [{ id: 1, label: '하루 1L' }, { id: 2, label: '하루 2L' }, { id: 3, label: '하루 3L' }],
@@ -30,10 +32,12 @@ export const PICKS = {
 const label = (k, id) => PICKS[k].find(p => p.id === id)?.label;
 const LITRES = { water_2l: 2, water_500: 0.5 };
 const FOOD = ['canned', 'rice_instant', 'bars'];
-const RADIO_PER_DAY = 8, GAS_MEALS = 12, TRIP_FATIGUE = 6;
+const RADIO_PER_DAY = 8, GAS_MEALS = 12, TRIP_FATIGUE = 6, BANK_LOW = 20, BANK_TOP = 60;
 const THIRST = { 1: 8, 2: 2, 3: -4 }, TIRED = { 1: 4, 2: 1, 3: 0 };
 const CAP = { thirst: 80, fatigue: 85 }, FLOOR = { health: 20 };
 const r1 = (x) => Math.round(x * 10) / 10;
+// 으로 after a final consonant except ㄹ (충전으로, 라디오 매일 듣기로, 보조배터리로).
+const ro = (w) => { const c = w.charCodeAt(w.length - 1) - 0xac00, t = c % 28; return c >= 0 && c < 11172 && t !== 0 && t !== 8 ? '으로' : '로'; };
 const times = (n, unit) => (n >= 1 && n <= 4 ? `${['한', '두', '세', '네'][n - 1]} ${unit}` : `${n}${unit}`); // 한 번, 두 끼, 12번
 
 export const planLine = (plan) => `하루 배분: 물 ${plan.water}L · ${label('meals', plan.meals)} · ${label('power', plan.power)}`;
@@ -64,7 +68,7 @@ export function simulateDays(G, plan, days, { place = 'home' } = {}) {
   const bank = plan.power === 'powerbank' && owns('powerbank');
   let radioCharge = radioOn ? G.items.radio.charge ?? 100 : 0, radioDays = 0;
   const raw = { thirst: 0, fatigue: 0, tension: 0, health: 0 };
-  let phone = G.phone.battery;
+  let phone = G.phone.battery, topped = false;
   const rows = [], tot = { trips: 0, cooked: 0, skipped: 0, oldBars: 0 };
 
   for (let i = 0; i < days; i++) {
@@ -79,7 +83,7 @@ export function simulateDays(G, plan, days, { place = 'home' } = {}) {
       take(id); loose = r1(loose + LITRES[id]); sip();
     }
     if (need > 0) { trips++; loose = r1(loose + (jug ? 10 : 4)); raw.fatigue += TRIP_FATIGUE; sip(); }
-    raw.thirst += THIRST[plan.water];
+    raw.thirst += THIRST[place === 'shelter' ? 2 : plan.water]; // the shelter hands out water
     // Meals: provided at the shelter (two a day), otherwise cooked ramen first, then no-cook food.
     let ate = 0, cooked = 0, skipped = 0;
     for (let m = place === 'shelter' ? Math.min(2, plan.meals) : 0; m < plan.meals; m++) {
@@ -97,6 +101,8 @@ export function simulateDays(G, plan, days, { place = 'home' } = {}) {
     // The power hour.
     if (plan.power === 'phone' || (!bank && !radioOn)) phone = 100;
     else phone = Math.max(0, phone - (bank ? 6 : 12));
+    // The charged bank tops the phone up once when it runs low (and is charged again in the power hour).
+    if (bank && !topped && phone <= BANK_LOW) { phone = Math.min(100, phone + BANK_TOP); topped = true; }
     if (radioOn && radioCharge > 0) { radioCharge = Math.max(0, radioCharge - RADIO_PER_DAY); radioDays++; raw.tension -= 2; }
     rows.push({ day: G.day + i, water: plan.water, meals: plan.meals, power: plan.power, place, drank: plan.water, ate, cooked, skipped, trips, loose, gasLeft });
     tot.trips += trips; tot.cooked += cooked; tot.skipped += skipped;
@@ -107,19 +113,21 @@ export function simulateDays(G, plan, days, { place = 'home' } = {}) {
     const cur = G.stats[s], hi = CAP[s] ? Math.max(cur, CAP[s]) : 100, lo = FLOOR[s] ? Math.min(cur, FLOOR[s]) : 0;
     stats[s] = Math.min(hi, Math.max(lo, cur + d)) - cur;
   }
-  const lines = [`${planLine(plan).replace('하루 배분: ', '하루 ')}로 ${days}일을 보냈다.`];
+  const lines = [`${planLine(plan).replace('하루 배분: ', '하루 ')}${ro(label('power', plan.power))} ${days}일을 보냈다.`];
   if (place === 'shelter') lines.push('임시 거처에서 물을 받고, 하루 두 번 배식을 받았다.');
   if (tot.trips) lines.push(`급수소에 ${times(tot.trips, '번')} 다녀왔다. ${jug ? '접이식 물통 덕분에 한 번에 10L씩 받아 왔다.' : '물통이 없어 한 번에 4L만 들고 올 수 있었다.'}`);
   if (tot.cooked) lines.push(`휴대용 가스레인지로 라면을 ${times(tot.cooked, '번')} 끓였다.`);
   if (tot.oldBars) lines.push('작년 가방에서 나온 건빵을 먹었다. 기한이 지나 속이 편하지 않았다.');
   if (tot.skipped) lines.push(`먹을 것이 모자라 ${times(tot.skipped, '끼')}를 걸렀다.`);
-  if (plan.water === 1) lines.push('물을 아끼느라 목이 자주 말랐다.');
+  if (plan.water === 1 && place === 'home') lines.push('물을 아끼느라 목이 자주 말랐다.');
   if (plan.power === 'radio' && !radioOn) lines.push('라디오를 켤 수 없어 그 시간에 휴대폰을 충전했다.');
   else if (radioOn) lines.push(radioCharge === 0 ? '매일 라디오를 듣다 보니 건전지가 다 닳았다.' : `매일 라디오로 안내를 들었다. 건전지가 ${radioCharge}% 남았다.`);
   if (plan.power === 'powerbank' && !bank) lines.push('보조배터리가 없어 그 시간에 휴대폰을 충전했다.');
+  else if (topped) lines.push('휴대폰이 꺼져 갈 때 보조배터리로 한 번 채웠다.');
   return {
     plan: { ...plan }, place, rows, lines: lines.slice(0, 5), use, stats, phone,
-    radioDrain: radioOn ? (G.items.radio.charge ?? 100) - radioCharge : 0, radioDaily: radioDays > 0, powerbankCharged: bank,
+    radioDrain: radioOn ? (G.items.radio.charge ?? 100) - radioCharge : 0, radioDaily: radioDays > 0, powerbankCharged: bank, usedBank: topped,
+    usedStove: tot.cooked > 0, usedJug: jug && tot.trips > 0,
     summary: { days, ...tot },
   };
 }
@@ -136,6 +144,10 @@ export function applyLedger(G, result) {
   if (result.radioDrain) drainCharge(G, 'radio', result.radioDrain);
   if (result.radioDaily) G.know.radioDaily = true;
   if (result.powerbankCharged) check(G, 'powerbank');
+  if (result.usedBank) useItem(G, 'powerbank');
+  // Durable tools the days put to work count as used (debrief: not 'bought but never needed').
+  if (result.usedStove) useItem(G, 'gas_stove');
+  if (result.usedJug) useItem(G, 'water_jug');
   (G.ledger ??= []).push(...result.rows.map(r => ({ ...r })));
   recordEvent(G, 'ledger', { plan: result.plan, place: result.place, ...result.summary });
   return result.rows;

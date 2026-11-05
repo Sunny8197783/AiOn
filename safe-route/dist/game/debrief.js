@@ -2,7 +2,7 @@
 // blame the player or anyone else; safety statements are FACTS texts, game advice names planner actions.
 import { CATALOG, BAG_LIMIT, itemName } from './items.js';
 import { fact } from './facts.js';
-import { bagLoad, hhmm } from './state.js';
+import { bagLoad } from './state.js';
 import { pickEnding } from './endings.js';
 import { EXT_STEPS } from './drills.js';
 import { PREP, ripples } from './ripples.js';
@@ -18,7 +18,7 @@ const RESULT = {
   out: '불을 껐습니다', 'retreat-ok': '대피하며 알렸습니다', escalated: '불이 커져 물러났습니다', incomplete: '끝까지 마치지 못했습니다',
   risky: '연기 속으로 바로 나섰습니다', practice: '사용 순서를 익혔습니다', tuned: '공식 방송을 찾아 들었습니다', opened: '라디오를 켜 보았습니다',
   missed: '공식 방송은 찾지 못했습니다', complete: '필요한 것을 다 챙겼습니다', partial: '몇 가지가 빠졌습니다', planned: '경로를 정해 두었습니다',
-  written: '카드를 적어 두었습니다', sorted: '출처를 가려 들었습니다', misled: '소문을 따라갔습니다', doubted: '확인된 소식도 한 번 더 의심했습니다', checked: '한 번 더 확인했습니다',
+  written: '카드를 적어 두었습니다', skipped: '아무것도 적지 않았습니다', sorted: '출처를 가려 들었습니다', misled: '소문을 따라갔습니다', doubted: '확인된 소식도 한 번 더 의심했습니다', checked: '한 번 더 확인했습니다',
 };
 const STAT = { health: '체력', thirst: '갈증', fatigue: '피로', tension: '긴장' };
 const LABEL = { official: '공식 안내', site: '현장 확인', neighbor: '이웃에게 들음', rumor: '소문·미확인', self: '내 기록' };
@@ -33,22 +33,27 @@ const resultWord = (r) => typeof r === 'string' ? RESULT[r] ?? '해 봤습니다
     : typeof r?.ok === 'boolean' ? (r.ok ? '잘 해냈습니다' : '아쉬움이 남았습니다') : '해 봤습니다';
 
 const FAIL = {
-  // Health ran out: a fall, a fight, a blast or debris. detail.why says which.
+  // Health ran out: a fall, a fight, a blast, debris, outdoor flames or indoor smoke. detail.why says which.
   dead(G, { why = 'hurt' } = {}) {
     const W = {
       fall: ['높은 곳에서 떨어졌습니다', '떨어지기 전, 아래까지의 높이를 가늠할 시간이 있었습니다.', '내려갈 때는 계단·사다리처럼 몸을 붙일 수 있는 길을 먼저 찾기'],
       fight: ['몸싸움 끝에 쓰러졌습니다', '상대가 먼저 물러설 여지가 있었습니다.', '시비가 붙으면 물건을 내주거나 자리를 피하는 것도 선택지로 두기'],
       blast: ['폭발에 휘말렸습니다', '휘파람 같은 낙하음이 들린 뒤 몇 초의 여유가 있었습니다.', "낙하음이 들리면 바로 엎드리고, 건물 안쪽·지하로 몸을 숨기기"],
       debris: ['무너진 잔해에 다쳤습니다', '금이 가고 먼지가 떨어지는 건물은 무너지기 전에 신호를 보냅니다.', '흔들리거나 금 간 건물 곁에서는 멀리 떨어져 걷기'],
-      fire: ['불길 속에서 쓰러졌습니다', '연기가 짙어지기 전에 빠져나갈 길이 있었습니다.', '불이 번진 곳은 자세를 낮추고 바람이 불어오는 쪽으로 빠져나가기'],
+      fire: ['불길 속에서 쓰러졌습니다', '연기가 짙어지기 전에 빠져나갈 길이 있었습니다.', '불길에서 멀리 떨어지고, 연기가 오지 않는 쪽으로 피하기'],
+      smoke: ['연기를 너무 많이 마셨습니다', '복도 가운데 계단과 비상구 표시등까지는 몇 걸음이었습니다.', fact('fire_big').text],
       hurt: ['더 이상 버틸 수 없을 만큼 다쳤습니다', '쉬면서 상처를 돌볼 수 있는 순간이 있었습니다.', '구급함을 챙기고, 다쳤을 때는 안전한 곳에서 먼저 처치하기'],
     }[why] ?? null;
     const [title, seen, next] = W ?? ['더 이상 버틸 수 없을 만큼 다쳤습니다', '쉬면서 상처를 돌볼 수 있는 순간이 있었습니다.', '다친 뒤에는 먼저 안전한 곳에서 처치하기'];
-    const facts = { blast: ['alert_airraid', 'shelter_near'], debris: ['alert_airraid', 'shelter_near'], fire: ['fire_big'] }[why] ?? ['mind_breath'];
-    return { title, seen, missed: G.injury?.length ? '이미 다친 몸으로 움직이고 있었습니다.' : '몸 상태를 살필 여유가 없었습니다.', next, facts };
+    const facts = { blast: ['alert_airraid', 'shelter_near'], debris: ['alert_airraid', 'shelter_near'], fire: ['fire_big'], smoke: ['fire_big', 'fire_lift'],
+      fall: ['alert_stairs'], fight: ['people_order'], hurt: ['home_stock'] }[why] ?? ['home_stock'];
+    const missed = why === 'smoke' ? (G.events.some(e => e.type === 'towel_wet') ? '연기 속에서 몸을 낮추지 않고(C) 오래 머물렀습니다.' : '젖은 수건으로 코와 입을 막지 못한 채 연기 속에 있었습니다.')
+      : G.injury?.length ? '이미 다친 몸으로 움직이고 있었습니다.' : '몸 상태를 살필 여유가 없었습니다.';
+    return { title, seen, missed, next, facts };
   },
   late(G) {
-    const k = G.know;
+    const k = G.know, dep = G.events.findLast(e => e.type === 'departure')?.details?.bag; // dday.js: packed / none / late
+    const prep = !k.shelterLocated || !k.entrancesChecked;
     return {
       title: '대피소에 제때 닿지 못했습니다',
       seen: k.gateClosedSeen ? '동쪽 출입구가 닫혀 있다는 것은 현장에서 확인했습니다.'
@@ -56,9 +61,10 @@ const FAIL = {
           : '경보는 들었지만, 가까운 대피소 위치는 아직 확인 전이었습니다.',
       missed: !k.entrancesChecked ? '출입구 A·B·C 가운데 어디가 열려 있는지 미리 알 방법이 없었습니다.'
         : !k.routeChecked ? '통제된 길을 돌아가는 경로는 아직 정해 두지 않은 상태였습니다.'
-          : '경보가 울린 뒤 출발하기까지 시간이 걸렸습니다.',
-      next: !k.shelterLocated || !k.entrancesChecked ? "준비 단계에서 '대피소·경로 확인'으로 출입구 A·B·C를 둘러보기"
-        : "'비상가방 꾸리기'로 가방을 현관에 두고 바로 나설 수 있게 하기",
+          : !dep ? '경보가 울린 뒤에도 집을 나서지 않았습니다.' : '경보가 울린 뒤 출발하기까지 시간이 걸렸습니다.',
+      next: prep ? "준비 단계에서 '대피소·경로 확인'으로 출입구 A·B·C를 둘러보기"
+        : dep === 'late' || !k.bagPacked ? "'비상가방 꾸리기'로 가방을 현관에 두고 바로 나설 수 있게 하기"
+          : !dep ? fact('bag_take').text : '경보가 울리면 도착할 시각을 정해 두고, 가는 길에 멈추지 않기',
       facts: ['shelter_know', 'shelter_near', 'bag_take'],
     };
   },
@@ -71,7 +77,7 @@ const FAIL = {
       seen: `그때 피로는 ${word('fatigue', s.fatigue)}, 갈증은 ${word('thirst', s.thirst)} 상태였습니다.`,
       missed: '무거운 물통을 들고 쉬지 않고 걸었습니다. 물 1리터는 1kg입니다.',
       next: '급수소에서 돌아올 때는 중간중간 멈춰 서서 숨을 고르고, 접이식 물통으로 나눠 들기',
-      facts: ['bag_days'],
+      facts: ['water_point', 'water_sphere'],
     };
     return {
       title: '더 걷기 어려울 만큼 지쳤습니다',
@@ -124,7 +130,7 @@ const FAIL = {
     const k = G.know;
     return {
       title: '길을 찾느라 시간이 걸렸습니다',
-      seen: k.routeChecked ? '미리 본 경로가 현장 통제로 막혀 있었습니다.' : `${hhmm(G.cond.commsWeakAt)}쯤부터 휴대폰 지도가 잘 열리지 않았습니다.`,
+      seen: k.routeChecked ? '미리 본 경로가 현장 통제로 막혀 있었습니다.' : '정전 뒤부터 휴대폰 지도가 잘 열리지 않았습니다.',
       missed: fact('shelter_signs').text,
       next: k.routeChecked ? '돌아가는 두 번째 경로까지 정해 두기' : "'대피소·경로 확인'으로 경로를 미리 걸어 보고 수첩에 적어 두기",
       facts: ['shelter_signs', 'evac_note'],
@@ -153,7 +159,13 @@ export function chapterSummary(G, chapter) {
   if (Object.keys(bought).length) lines.push(`산 물건: ${Object.entries(bought).map(([id, n]) => `${itemName(id)} ${n}${CATALOG[id]?.unit ?? '개'}`).join(', ')}`);
   const checked = of('check').map(e => itemName(e.details.id));
   if (checked.length) lines.push(`점검해서 쓸 수 있게 된 것: ${checked.join(', ')}`);
-  for (const e of of('encounter')) lines.push(`${TOOL[e.details.tool] ?? e.details.tool}: ${resultWord(e.details.result)}`);
+  // 4장 stay branch (evac.js stayAndSmoke) files its smoke judgement under 'extinguisher' for the ladder; no extinguisher is used.
+  const smoke = of('smoke_choice').length > 0;
+  for (const e of of('encounter')) {
+    const t = e.details.tool, r = e.details.result;
+    if (smoke && t === 'extinguisher') lines.push(`화재 판단: ${r === 'risky' ? '연기 속으로 바로 나섰습니다' : r === 'retreat-ok' ? '문을 닫고 신고한 뒤 안내를 기다렸습니다' : resultWord(r)}`);
+    else lines.push(`${TOOL[t] ?? t}: ${resultWord(r)}`);
+  }
   const notes = G.info.filter(i => i.chapter === chapter);
   if (notes.length) {
     const byLabel = Object.entries(LABEL).map(([k, l]) => [l, notes.filter(i => i.label === k).length]).filter(([, n]) => n);
@@ -212,7 +224,10 @@ export function endingRecord(G) {
   }
   const unchecked = Object.entries(KNOW_TEXT).filter(([k]) => !G.know[k]).map(([, t]) => t);
   const people = helpRows(G);
-  for (const [k, r] of Object.entries(G.rel)) if (r.contact) people.push({ who: PEOPLE[k] ?? k, what: `비상 연락 방법을 정했습니다 (${CONTACT[r.contact] ?? r.contact})` });
+  for (const [k, r] of Object.entries(G.rel)) if (r.contact) { // merged into that person's help row
+    const who = PEOPLE[k] ?? k, what = `비상 연락 방법을 정했습니다 (${CONTACT[r.contact] ?? r.contact})`, row = people.find(p => p.who === who);
+    if (row) row.what += ` · ${what}`; else people.push({ who, what });
+  }
   const f = fact(PRACTICE.find(([k]) => !G.know[k])?.[1] ?? 'shelter_know');
   return { fate: pickEnding(G), helped, unused, unchecked, people, ripples: ripples(G), practice: { text: f.text, sourceId: f.sourceId } };
 }

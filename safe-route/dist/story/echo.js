@@ -21,7 +21,7 @@ export function readEcho(raw) {
   })).filter(worth) };
 }
 
-const WHY = { fall: '추락', fight: '몸싸움', blast: '포격', debris: '붕괴', fire: '화재', hurt: '부상' };
+const WHY = { fall: '추락', fight: '몸싸움', blast: '포격', debris: '붕괴', fire: '화재', smoke: '연기', hurt: '부상' };
 
 function textPlane(text, color, w = 3) {
   const c = document.createElement('canvas'); c.width = 512; c.height = 128;

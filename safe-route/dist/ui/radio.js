@@ -141,7 +141,7 @@ export async function radio({ mode = 'guided', stations = [], start = 89.5, batt
   }
 
   function loop(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
     if (closed) return;
     if (cur && cur.lines?.length) {
       lockT += dt;

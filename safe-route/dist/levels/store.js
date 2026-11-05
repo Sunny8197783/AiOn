@@ -59,7 +59,7 @@ export function buildStore(kit, people) {
   for (const [w, h, x, y] of [[0.98, 0.05, 0.49, 0.02], [0.98, 0.05, 0.49, 2.17], [0.05, 2.2, 0.025, 0.02], [0.05, 2.2, 0.955, 0.02]]) leaf.add(kit.box(w, h, 0.05, M.metal, { x, y }));
   leaf.add(kit.box(0.03, 0.5, 0.03, M.steel, { x: 0.86, y: 0.8, z: -0.07 }));
   const sticker = (lines, w, h, bg, fg, x, y, parent = dyn, z = -0.075) => { const s = kit.sign(lines, { w, h, bg, fg, single: true }); s.position.set(x, y, z); s.rotation.y = Math.PI; return keep(s, parent); };
-  sticker(['당기세요', 'PULL'], 0.22, 0.12, '#18a58f', '#ffffff', 0.86, 1.42, leaf, -0.02);
+  sticker(['미세요', 'PUSH'], 0.22, 0.12, '#18a58f', '#ffffff', 0.86, 1.42, leaf, -0.02);
   sticker(['24시간 영업'], 0.5, 0.16, '#ffffff', '#18a58f', -0.6, 1.6);
   sticker(['2+1 행사', '음료 · 생수'], 0.7, 0.5, '#f28a1a', '#ffffff', -3.1, 1.75);
   sticker(['1+1', '컵라면 골라 담기'], 0.7, 0.5, '#c4161c', '#ffffff', 3.1, 1.75);
@@ -139,6 +139,15 @@ export function buildStore(kit, people) {
   for (const [x, lines, bg] of [[-2.5, ['2+1', '과자'], '#f28a1a'], [0.3, ['1+1', '즉석밥'], '#c4161c']]) {
     stat.add(kit.cyl(0.008, 0.008, 0.3, M.steel, { x, y: 1.45, z: -2.48, cast: false }));
     sign(lines, { w: 0.34, h: 0.26, bg, fg: '#ffffff' }, { x, y: 1.86, z: -2.47 });
+  }
+  // End-cap displays on the door-facing gondola ends, stocked with what the sign advertises.
+  for (const [x, sec, items, seed] of [[-2.5, 'misc', ['chips', 'cookie'], 91], [0.3, 'food', ['rice', 'rice'], 95]]) {
+    for (const dx of [-0.465, 0.465]) stat.add(kit.box(0.03, 1.32, 0.24, M.white, { x: x + dx, z: -2.38 }));
+    [0.35, 0.75, 1.15].forEach((y, i) => {
+      stat.add(kit.box(0.9, 0.02, 0.22, M.white, { x, y: y - 0.02, z: -2.39 }));
+      goods.stock({ sec, x: x - 0.45, z: -2.28, dir: [1, 0], face: [0, 1], len: 0.9, depth: 0.2, y, clear: 0.36, items, seed: seed + i });
+    });
+    solids.push({ x0: x - 0.49, x1: x + 0.49, y0: 0, y1: 1.45, z0: -2.52, z1: -2.25, id: 'endcap' });
   }
 
   // ---- drink fridges (north wall): cabinet, lit back, shelves, glass doors with LED mullions ----
@@ -326,7 +335,7 @@ export function buildStore(kit, people) {
     update(dt, t, ctx = {}) {
       const pl = ctx.player, near = pl && Math.abs(pl.x - DOOR) < 1.3 && pl.z > -1.9;
       door += Math.max(-dt * 2, Math.min(dt * 2, (near ? 1 : 0) - door));
-      leaf.rotation.y = door * 1.25;
+      leaf.rotation.y = -door * 1.25; // swings out over the storefront step, off the shop floor
       view.set(state.outside || moodFor(ctx.env, ctx.env === 'interiorNight' ? 'night' : 'dusk'));
       clerk.update(dt);
       for (const p of extras) if (p.group.visible) p.update(dt);

@@ -26,6 +26,10 @@ export function buildServices(kit, T, shell) {
   const tube = (c) => new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: c, emissiveIntensity: 3.2, roughness: 0.3 });
   const tubes = { A: tube(0xeaf3ff), B: tube(0xeaf3ff), F: tube(0xe4f0ff) };
   for (const m of Object.values(tubes)) kit.lit('indoor', m, 3.2);
+  // The env preset's 'indoor' level, read by shelter.js update(): a material no update() ever writes (the tubes are
+  // rewritten every frame), on a hidden mesh in `live` so kit.forget() still drops it with the build.
+  const indoorRef = tube(0xffffff); kit.lit('indoor', indoorRef, 1);
+  const refMesh = new THREE.Mesh(new THREE.BufferGeometry(), indoorRef); refMesh.visible = false; live.add(refMesh);
 
   // ---- fluorescent battens: grid along the aisles and over the bays, plus the shell's extra spots ----
   const spots = [];
@@ -80,7 +84,7 @@ export function buildServices(kit, T, shell) {
   inst(new THREE.SphereGeometry(0.008, 6, 4), emLed, leds);
   const emLights = [];
   for (const [p, t] of [[[-4, 2.4, -15.6], [-4, 0, -6]], [[2, 2.4, 15.6], [2, 0, 6]]]) {
-    const s = new THREE.SpotLight(0xdfe9ff, 0, 16, 0.95, 0.85, 2); s.position.set(...p); s.target.position.set(...t);
+    const s = new THREE.SpotLight(0xffb070, 0, 16, 0.95, 0.85, 2); s.position.set(...p); s.target.position.set(...t); // warm battery lamps: the blackout reads at a glance
     add(s, live); add(s.target, live); emLights.push(s);
   }
 
@@ -163,8 +167,12 @@ export function buildServices(kit, T, shell) {
   // ---- hydrant cabinets with their always-on red lamp ----
   const hydrantFace = new THREE.MeshStandardMaterial({ map: T.hydrantTex(), roughness: 0.45, metalness: 0.2 });
   const hydLamp = kit.lit('emergency', new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff2010, roughness: 0.3 }), 2.2);
+  const solids = []; // the cabinets and extinguishers you bump into (shelter.js adds them to the level)
   for (const [x, z, ry] of [[-21.9, -2, Math.PI / 2], [-6, -15.9, 0], [-2, 15.9, Math.PI], [21.9, -9, -Math.PI / 2]]) {
     const sx = Math.sin(ry), cz = Math.cos(ry);
+    // from just behind the wall line to 0.3 m into the room, ±0.42 along the wall
+    const [a0, a1] = [-0.1, 0.3].map((d) => [x + sx * d, z + cz * d]), wx = Math.abs(cz) * 0.42, wz = Math.abs(sx) * 0.42;
+    solids.push({ x0: Math.min(a0[0], a1[0]) - wx, x1: Math.max(a0[0], a1[0]) + wx, z0: Math.min(a0[1], a1[1]) - wz, z1: Math.max(a0[1], a1[1]) + wz, y0: -1, y1: 1.9, id: 'hydrant' });
     add(kit.box(0.75, 1.3, 0.2, M.red, { x: x + sx * 0.1, y: 0.5, z: z + cz * 0.1, ry }));
     const f = add(new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.24), hydrantFace)); f.position.set(x + sx * 0.205, 1.15, z + cz * 0.205); f.rotation.y = ry;
     const l = add(new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 6), hydLamp)); l.position.set(x + sx * 0.1, 1.86, z + cz * 0.1);
@@ -175,6 +183,7 @@ export function buildServices(kit, T, shell) {
   const ext = [[GRID.xs[0], GRID.zs[0], 1], [GRID.xs[2], GRID.zs[0], 1], [GRID.xs[4], GRID.zs[0], 1], [GRID.xs[1], GRID.zs[1], -1], [GRID.xs[3], GRID.zs[1], 1], [GRID.xs[1], GRID.zs[2], -1], [GRID.xs[3], GRID.zs[2], -1]];
   for (const [px, pz, face] of ext) {
     const z = pz + face * 0.5, x = px + 0.22;
+    solids.push({ x0: x - 0.14, x1: x + 0.14, z0: z - 0.14, z1: z + 0.14, y0: -1, y1: 0.6, noVault: true, id: 'extinguisher' });
     add(kit.box(0.26, 0.04, 0.26, M.dark, { x, z }));
     add(kit.cyl(0.085, 0.085, 0.46, M.red, { x, y: 0.04, z }, 16));
     add(kit.cyl(0.03, 0.05, 0.08, M.dark, { x, y: 0.5, z }, 8));
@@ -203,5 +212,5 @@ export function buildServices(kit, T, shell) {
     const s = add(kit.shelterSign({ w: 0.36 })); s.position.set(x, 1.85, z); s.rotation.y = ry;
   }
 
-  return { group: g, live, tubes, lights, emLamp, emLed, emLights, fans, cctvLed, faulty };
+  return { group: g, live, tubes, indoorRef, lights, emLamp, emLed, emLights, fans, cctvLed, faulty, solids };
 }

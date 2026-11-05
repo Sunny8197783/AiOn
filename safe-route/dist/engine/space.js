@@ -2,7 +2,7 @@
 // the camera boom, prompts, crowds and thrown things only test the few solids near them. The grid keeps in step
 // with a solids array that grows or swaps entries (rebuild) and with solids that move (traffic, door leaves:
 // they are tested every query). Also the headroom rules the camera and the vault share. Pure, no three.js.
-import { segBox, ceilAt } from './geom.js';
+import { segBox, ceilAt, groundAt } from './geom.js';
 
 const CELL = 4, BIG = 24; // a solid spanning more than BIG cells per side is tested every query
 const cache = new WeakMap();
@@ -126,10 +126,13 @@ export function headroomAt(L, x, z, feetY) {
 
 // Highest a third-person camera may sit over (x, z): under the ceiling (0.15 m margin, the near plane is 0.08),
 // under any solid whose underside is above the head (stair flights, landings, overhangs), and indoors without
-// ceiling data no higher than feet + 2.15.
+// ceiling data no higher than feet + 2.15. A ceiling plane under a floor at (x, z) that is below the head is not a
+// lid: it is the underside of a landing the camera boom stands above (walking down a stair, the landing just left;
+// the boom's walk-zone test keeps it over that floor). headroomAt (vault, jump) still looks from feet + 0.5.
 export function camTop(L, grid, x, z, feetY, headY) {
   let top = Infinity;
-  const c = ceilAt(L?.ceilings, x, z, feetY + 0.5);
+  const f = groundAt(L?.walk, x, z, headY - 0.45, false, 50); // the highest floor at (x, z) under the head
+  const c = ceilAt(L?.ceilings, x, z, Math.max(feetY + 0.5, f ? f.y : -Infinity));
   if (c < Infinity) top = c - 0.15;
   else if (indoor(L)) top = feetY + ROOM_H - 0.15;
   if (grid) for (const s of grid.query(x - 0.15, x + 0.15, z - 0.15, z + 0.15, hitList)) {

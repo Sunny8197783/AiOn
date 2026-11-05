@@ -29,7 +29,7 @@ function signalHolds() {
 }
 
 export function createTownCrowd({ people, group, walk, solids = null, quality = 'high' }) {
-  const crowds = {}, failed = new Set(), tmp = [], holds = signalHolds();
+  const crowds = {}, failed = new Set(), tmp = [], holds = signalHolds(), peers = []; // peers: every crowd separates from every other
   let mode = 'none', closures = [], gates = { east: 'open', stairs: 'open', ramp: 'open', access: 'closed' };
   const heightFn = (x, z) => heightAt(walk, x, z);
   const guard = (what, fn) => { try { return fn(); } catch (err) { if (!failed.has(what)) { failed.add(what); console.error(`[town] crowd ${what} failed`, err); } return undefined; } };
@@ -37,7 +37,7 @@ export function createTownCrowd({ people, group, walk, solids = null, quality = 
   function get(name) {
     if (name in crowds) return crowds[name];
     crowds[name] = guard(`create ${name}`, () => {
-      const c = people.createCrowd({ count: SIZES[name], seed: 900 + Object.keys(crowds).length * 17, people, heightAt: heightFn, quality, solids, holds });
+      const c = people.createCrowd({ count: SIZES[name], seed: 900 + Object.keys(crowds).length * 17, people, heightAt: heightFn, quality, solids, holds, peers });
       if (!c?.group) throw new Error('createCrowd returned no group');
       c.group.name = `crowd:${name}`; group.add(c.group); return c;
     }) || null;

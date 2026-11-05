@@ -200,7 +200,7 @@ export function buildOffice(kit, people) {
     for (let k = 0; k < 1 + r() * 3; k++) stat.add(kit.box(0.21, 0.004, 0.297, M.paper, at(-0.15 + r() * 0.3, 0.42 + r() * 0.1, { y: 0.72 + k * 0.004, ry: (r() - 0.5) * 0.6 })));
     if (r() < 0.5) for (let k = 0; k < 3; k++) stat.add(kit.box(0.06, 0.3, 0.24, kit.mat('paint:' + ['#1f4f8c', '#c4161c', '#2f8a57', '#3b3f46'][(r() * 4) | 0]), at(-0.62 + k * 0.065, 0.2, { y: 0.72 })));
     else if (r() < 0.5) { const p = at(0.55, 0.15); stat.add(kit.cyl(0.06, 0.05, 0.1, M.white, { ...p, y: 0.72 }, 10), deskPlant(kit, p.x, 0.81, p.z, chairs.length)); }
-    chairs.push(mine ? { x: cx + 0.35, z: zc + s * 1.45, ry: ry + 0.5 } : { x: cx + (r() - 0.5) * 0.2, z: zc + s * (1.05 + r() * 0.25), ry: ry + (r() - 0.5) * 0.7 });
+    chairs.push(mine ? { x: cx + 0.35, z: zc + s * 1.45, ry: ry + 0.5, free: true } : { x: cx + (r() - 0.5) * 0.2, z: zc + s * (1.05 + r() * 0.25), ry: ry + (r() - 0.5) * 0.7 });
   }
   for (const zc of ISL) {
     for (const s of [-1, 1]) for (const cx of DX) desk(cx, zc, s, zc === ME.z && s > 0 && cx === ME.x);
@@ -224,7 +224,7 @@ export function buildOffice(kit, people) {
   stat.add(kit.box(0.2, 0.06, 0.18, M.black, { x: 6.8, y: 0.72, z: LEAD.z - 0.7 }));
   for (let k = 0; k < 6; k++) stat.add(kit.box(0.297, 0.004, 0.21, M.paper, { x: 6.85, y: 0.72 + k * 0.006, z: LEAD.z + 0.25, ry: (r() - 0.5) * 0.3 }));
   sign(['운영팀장 윤'], { w: 0.26, h: 0.07, bg: '#3b3f46', fg: '#ffffff' }, { x: 6.29, y: 0.55, z: LEAD.z, ry: -Math.PI / 2 });
-  chairs.push({ x: LEAD.x, z: LEAD.z, ry: Math.PI / 2 });
+  chairs.push({ x: LEAD.x, z: LEAD.z, ry: Math.PI / 2, free: true });
   const wallTex = kit.texture(kit.canvas(1280, 720)), wallG = wallTex.image.getContext('2d');
   let wallAlerts = 0, blink = false;
   const redrawWall = () => { drawWall(wallG, 1280, 720, wallAlerts, blink); wallTex.needsUpdate = true; };
@@ -377,6 +377,8 @@ export function buildOffice(kit, people) {
   const staff1 = npc(people, 'crowd', 61, { x: -4.4, z: ISL[1] + 1.15, ry: 0, anim: 'sitChair' });
   const staff2 = npc(people, 'crowd', 62, { x: 4.6, z: -11.35, ry: 0.2, anim: 'phone' });
   chairs.forEach((c) => { if (Math.abs(c.x + 4.4) < 0.2 && Math.abs(c.z - ISL[1] - 1.15) < 0.3) { c.x = -4.4; c.z = ISL[1] + 1.15; c.ry = 0; } });
+  // Desk chairs block the body; the player's own chair and the lead's (prompts, the seated 윤 팀장) stay free.
+  for (const c of chairs) if (!c.free) solids.push({ x0: c.x - 0.26, x1: c.x + 0.26, z0: c.z - 0.26, z1: c.z + 0.26, y0: 0, y1: 0.9, noClimb: true, noVault: true, id: 'chair' });
   const worker = npc(people, 'crowd', 63, { x: -7, y: GY, z: -18.6, ry: -Math.PI / 2, anim: 'walk' }); worker.setSpeed(1.1);
   const driver = npc(people, 'crowd', 64, { x: 35.4, y: GY, z: -32.8, ry: 2.6, anim: 'phone' });
   const crew = [coworker, staff1, staff2, worker, driver];

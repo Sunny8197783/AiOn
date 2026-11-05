@@ -1,6 +1,7 @@
 // Game state for 〈경보 이전〉: one plain JSON-safe object G plus the functions that change it.
 // Pure logic: no DOM, no three.js. Thrown errors are for developers; player text lives in the UI/story.
-import { CATALOG, START_HOME, BAG_LIMIT, POCKET_L, packable } from './items.js';
+import { CATALOG, START_HOME, BAG_LIMIT, BAG_GRID, POCKET_L, packable } from './items.js';
+import { packGrid, bagList } from './pack.js';
 
 const STATS = ['health', 'thirst', 'fatigue', 'tension'];
 const LABELS = ['official', 'site', 'neighbor', 'rumor', 'self'];
@@ -174,7 +175,13 @@ export function bagLoad(G) {
   let w = 0, v = 0;
   for (const [id, e] of Object.entries(G.items)) { w += e.bag * CATALOG[id].weightKg; v += e.bag * CATALOG[id].volumeL; }
   const weightKg = round2(w), volumeL = round2(v);
-  return { weightKg, volumeL, over: { weight: weightKg > BAG_LIMIT.weightKg, volume: volumeL > BAG_LIMIT.volumeL } };
+  // The real room limit is the 10x5 cell grid (game/pack.js): litres alone never reach 25 L before the grid is full.
+  return { weightKg, volumeL, over: { weight: weightKg > BAG_LIMIT.weightKg, volume: volumeL > BAG_LIMIT.volumeL || !bagCells(G).fits } };
+}
+// Grid cells the packed things take (packGrid layout) out of BAG_GRID's cols x rows.
+export function bagCells(G) {
+  const r = packGrid(bagList(G));
+  return { used: r.used, total: BAG_GRID.cols * BAG_GRID.rows, fits: r.fits };
 }
 
 // Litres in the front pocket. setPocket(G, id, n) puts n of the packed id there (0 takes them out);

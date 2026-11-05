@@ -4,9 +4,11 @@
 // How much of each depends on the chapter (INTENSITY). Rubble piles are solids you can climb over.
 // ctx.calm (the 서연 interlude) holds the whole layer: nothing new falls and nothing pending lands.
 // createDanger({ ctx, actions, hurt }) -> { isHostile, trigger, reset }; reset() also clears rubble, craters and fires.
+// shellAim(P, close) -> { x, z }: where a shell lands (pure, tested).
 import * as THREE from 'three';
 import { BUILDINGS } from '../game/townmap.js';
 import { groundAt } from '../engine/geom.js';
+import { consume } from '../game/state.js';
 
 // shell / collapse / looter: chance weights 0..1 per chapter (null = peace).
 const INTENSITY = {
@@ -17,6 +19,14 @@ const INTENSITY = {
 };
 const FOOD = ['water_2l', 'water_500', 'canned', 'bars', 'rice_instant', 'ramen'];
 const rnd = (a, b) => a + Math.random() * (b - a);
+// Where a shell lands around P { x, z, yaw }. Mostly in front of the camera, so it is seen (yaw 0 looks toward -z).
+// A close one lands off to the side (1.2-2 rad from the facing, 5-8 m): it hurts, but a player who keeps walking
+// the 2.3 s until the blast never walks into its 4 m core.
+export function shellAim(P, close) {
+  const a = close ? P.yaw + (Math.random() < 0.5 ? -1 : 1) * rnd(1.2, 2.0) : (Math.random() < 0.75 ? P.yaw + rnd(-0.9, 0.9) : Math.random() * Math.PI * 2);
+  const r = close ? rnd(5, 8) : rnd(9, 32);
+  return { x: P.x - Math.sin(a) * r, z: P.z - Math.cos(a) * r };
+}
 const LOOTER_LINES = [['야, 거기. 가방 내려놔.', '물이랑 먹을 거 있지? 다 알아. 순순히 내놔.'], ['애들이 사흘째 굶었어요…', '먹을 거 좀 나눠 줘요. 안 주면… 나도 어쩔 수 없어.']];
 
 export function createDanger({ ctx, actions, hurt }) {
@@ -91,10 +101,7 @@ export function createDanger({ ctx, actions, hurt }) {
 
   // ---- shells ----
   function shell(I) {
-    const P = engine.player, close = Math.random() < 0.18 * I.shell;
-    // mostly in front of the camera, so it is seen; yaw 0 looks toward -z
-    const a = (Math.random() < 0.75 ? P.yaw + rnd(-0.9, 0.9) : Math.random() * Math.PI * 2), r = close ? rnd(3, 8) : rnd(9, 32);
-    const x = P.x - Math.sin(a) * r, z = P.z - Math.cos(a) * r;
+    const close = Math.random() < 0.18 * I.shell, { x, z } = shellAim(engine.player, close);
     audio.hit('whistle', 2.3);
     ctx.toast(close ? '휘이이익— 바로 머리 위다! 엎드려! (C)' : '휘이익— 포탄 낙하음!', 'site', 2600);
     later(2.3, () => blast(x, z));
@@ -186,20 +193,20 @@ export function createDanger({ ctx, actions, hurt }) {
   function dropLoot(p) {
     const w = p.group.position;
     actions.spawn('can', w.x, w.y + 0.5, w.z, rnd(-1, 1), 2, rnd(-1, 1));
-    const G = ctx.G; (G.items.canned ||= { home: 0, bag: 0, bought: 0, checked: false, used: 0 }).bag += 1;
+    const G = ctx.G; (G.items.canned ||= { home: 0, bag: 0, bought: 0, checked: false, used: 0 })[G.know.bagOn ? 'bag' : 'home'] += 1; // the bag may be sitting at home
     ctx.toast('상대가 쓰러졌다. 떨어뜨린 통조림 하나를 챙겼다.', 'self', 4200);
     ctx.event('looter', { result: 'fought' });
   }
   async function confront() {
     looter.state = 'talking';
-    const G = ctx.G, have = FOOD.filter((id) => (G.items[id]?.bag ?? 0) > 0);
+    const G = ctx.G, have = G.know.bagOn ? FOOD.filter((id) => (G.items[id]?.bag ?? 0) > 0) : []; // no bag on your back, nothing to hand over
     looter.p.setAnim('talk'); looter.p.lookAt?.(engine.player.x, engine.player.z);
     const pick = await ctx.say('낯선 사람', LOOTER_LINES[looter.talk], [
       ...(have.length ? [{ id: 'give', label: '가방에서 먹을 것을 내준다' }] : []),
       { id: 'refuse', label: '거절한다' }, { id: 'run', label: '등을 돌려 뛴다' }], '눈빛이 심상치 않다');
     if (!looter) return;
     if (pick === 'give') {
-      for (const id of have.slice(0, 2)) G.items[id].bag -= 1;
+      for (const id of have.slice(0, 2)) consume(G, id, 1, 'bag'); // keeps pocket <= bag (a save that loads) and counts it used
       ctx.toast('먹을 것을 건넸다. 그는 말없이 골목으로 사라졌다.', 'self', 4200);
       ctx.event('looter', { result: 'gave' }); G.karma = (G.karma ?? 0) + 1;
       looter.state = 'leave';

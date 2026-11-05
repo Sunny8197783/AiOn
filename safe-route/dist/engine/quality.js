@@ -31,7 +31,7 @@ export const lowerQ = (q) => TIERS[Math.max(0, rankQ(q) - 1)];
 //   crowdCap, crowdScale, crowdShadowM, crowdAnimM, people: crowd members, how many of a requested crowd, shadow
 //     and full-rate animation distances (m), body mesh detail (loft segment factor)
 //   fx: particle count factor   shop: share of the mart shoppers   shelterPeople: [seated, walking] shelter residents
-//   keyLights: town street key lights   pool: apartment emergency light pool   shelterLights: shelter area lights
+//   keyLights: town street key lights (canopy, then town-props stops: 3 reaches the 103동 lot lamp)   pool: apartment emergency light pool   shelterLights: shelter area lights
 //   roomLights: below 1, long rows of shop ceiling lamps are merged in pairs (levels/commerce-goods.js lamps)
 //   accentLights: small decorative lights (the corridor's green exit glow)   towerLights: the closures' light-tower
 //     spotlights (without them the tower head still glows)   parked: share of parked cars kept
@@ -41,12 +41,12 @@ export const PROFILES = {
     gtao: 0, bloom: 0, adapt: false, blur: false, sharpen: 0, chroma: false, smaa: false, clouds: 3, indoorKey: 0.65,
     aniso: 1, tex: 256, atlas: 1024, goodsSeg: 5, shelterTex: 512,
     crowdCap: 8, crowdScale: 0.5, crowdShadowM: 0, crowdAnimM: 15, people: 0.5, fx: 0.3, shop: 0.35, shelterPeople: [6, 1],
-    keyLights: 1, pool: 2, shelterLights: 4, roomLights: 0.5, accentLights: false, towerLights: false, parked: 0.5, physicalPaint: false, prewarm: false },
+    keyLights: 3, pool: 2, shelterLights: 4, roomLights: 0.5, accentLights: false, towerLights: false, parked: 0.5, physicalPaint: false, prewarm: false },
   low: { pr: { cap: 1, scale: 1 }, sun: 512, shadowEvery: 2, darkEvery: 0, casterMin: 0.35, lightShadows: 0, lightShadowMap: 0, flash: 0,
     gtao: 0, bloom: 1, adapt: true, blur: false, sharpen: 0, chroma: true, smaa: false, clouds: 4, indoorKey: 1,
     aniso: 2, tex: 256, atlas: 1024, goodsSeg: 7, shelterTex: 512,
     crowdCap: 12, crowdScale: 0.7, crowdShadowM: 12, crowdAnimM: 25, people: 0.6, fx: 0.45, shop: 0.5, shelterPeople: [8, 2],
-    keyLights: 2, pool: 3, shelterLights: 4, roomLights: 0.5, accentLights: false, towerLights: false, parked: 0.7, physicalPaint: false, prewarm: true },
+    keyLights: 3, pool: 3, shelterLights: 4, roomLights: 0.5, accentLights: false, towerLights: false, parked: 0.7, physicalPaint: false, prewarm: true },
   medium: { pr: { cap: 1.25, scale: 1 }, sun: 1024, shadowEvery: 1, darkEvery: 0, casterMin: 0.2, lightShadows: 1, lightShadowMap: 512, flash: 0,
     gtao: 0, bloom: 2, adapt: true, blur: true, sharpen: 0.25, chroma: true, smaa: true, clouds: 4, indoorKey: 1,
     aniso: 4, tex: 512, atlas: 2048, goodsSeg: 8, shelterTex: 1024,

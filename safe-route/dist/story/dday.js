@@ -1,6 +1,6 @@
 // 2장 정전과 경보 · D-day 금요일. 19:40 blackout, 20:05 air-raid alert, the first evacuation.
 // What was prepared shows up here as time saved, not as a score.
-import { recordEvent, hhmm, use } from '../game/state.js';
+import { recordEvent, hhmm, use, usable, consume, inPocket, adjust } from '../game/state.js';
 import { chapterSummary } from '../game/debrief.js';
 import { ladderStage, recordEncounter, evalBag, BAG_GOALS } from '../game/drills.js';
 import { CLOSURES, graph } from '../game/townmap.js';
@@ -170,7 +170,8 @@ async function alert(ctx) {
   const takeBag = async () => {
     if (G.know.bagOn) return;
     if (G.know.bagPacked && Object.values(G.items).some(e => e.bag > 0)) { G.know.bagOn = true; ctx.setLevelState('apartment', 'bag', 'none'); ctx.payoff('bag', '현관에 둔 배낭을 메고 바로 나섰다'); recordEvent(G, 'departure', { bag: 'packed' }); return; }
-    const pick = await ctx.ui.talk({ speaker: '현관', role: '배낭이 비어 있다', lines: ['지금 챙길까, 그냥 나갈까?'], choices: [{ id: 'pack', label: '급히 챙긴다 (시간이 든다)' }, { id: 'go', label: '휴대폰만 들고 나간다' }] });
+    const empty = !Object.values(G.items).some(e => e.bag > 0); // something may already be in it (the contact card, say)
+    const pick = await ctx.ui.talk({ speaker: '현관', role: empty ? '배낭이 비어 있다' : '배낭을 아직 꾸리지 않았다', lines: ['지금 챙길까, 그냥 나갈까?'], choices: [{ id: 'pack', label: '급히 챙긴다 (시간이 든다)' }, { id: 'go', label: '휴대폰만 들고 나간다' }] });
     if (pick !== 'pack') { recordEvent(G, 'departure', { bag: 'none' }); return; }
     const items = bagInfo(G, bagItems(G));
     const mode = ladderStage(G, 'bag');
@@ -260,6 +261,23 @@ async function enterGate(ctx, point) {
   return 'arrived';
 }
 
+// Reception: only a bag on your back counts (one left by the door at home does not help), and the line says where
+// the card was. -> { card, line }
+export function receptionCard(G) {
+  const card = !!G.know.bagOn && ((G.items.contact_card?.bag ?? 0) > 0 || (G.items.doc_copies?.bag ?? 0) > 0);
+  const front = inPocket(G, 'contact_card') || inPocket(G, 'doc_copies');
+  return { card, line: !card ? '(휴대폰을 보며 기억나는 대로 적었다. 배터리가 아깝다.)' : front ? '(배낭 앞주머니의 비상연락카드를 보고 바로 적었다.)' : '(배낭에서 비상연락카드를 꺼내 보고 적었다.)' };
+}
+// Settled in: drink what the bag holds (500 mL first) and wrap up in its blanket. -> the payoff line naming only what
+// was there, or null (no bag on, or nothing of the kind in it).
+export function unpackAtShelter(G) {
+  if (!G.know.bagOn) return null;
+  const w = ['water_500', 'water_2l'].find(id => (G.items[id]?.bag ?? 0) > 0), b = (G.items.blanket?.bag ?? 0) > 0 && usable(G, 'blanket');
+  if (w) { consume(G, w, 1, 'bag'); adjust(G, 'thirst', w === 'water_2l' ? -45 : -20); }
+  if (b) use(G, 'blanket');
+  return w || b ? `배낭에서 ${[w && '물', b && '담요'].filter(Boolean).join('과 ')}${b ? '를' : '을'} 꺼냈다` : null;
+}
+
 async function shelter(ctx) {
   const G = ctx.G;
   ctx.setLevelState('shelter', 'crowd', 'arriving');
@@ -275,8 +293,8 @@ async function shelter(ctx) {
     shelterExit: async () => { ctx.toast('경보가 해제될 때까지 대피소 안에 머뭅니다.', 'site'); },
     reception: async () => {
       if (signed) return void ctx.toast('명부를 썼다.');
-      const card = (G.items.contact_card?.bag ?? 0) > 0 || (G.items.doc_copies?.bag ?? 0) > 0;
-      await ctx.ui.talk({ speaker: '대피소 관리자', role: '접수대', lines: ['이름이랑 연락처, 복용하는 약 있으면 여기 적어 주세요.', card ? '(배낭 앞주머니의 비상연락카드를 보고 바로 적었다.)' : '(휴대폰을 보며 기억나는 대로 적었다. 배터리가 아깝다.)'] });
+      const { card, line } = receptionCard(G);
+      await ctx.ui.talk({ speaker: '대피소 관리자', role: '접수대', lines: ['이름이랑 연락처, 복용하는 약 있으면 여기 적어 주세요.', line] });
       if (card) ctx.payoff('docs', '비상연락카드를 보고 명부를 바로 적었다'); else drainBattery(G, 2);
       await ctx.ui.talk({ speaker: '대피소 관리자', role: '접수대', lines: [fact('shelter_rules').text, fact('shelter_rumor').text] });
       signed = true;
@@ -286,7 +304,8 @@ async function shelter(ctx) {
     shelterBoard: async () => { await ctx.ui.talk({ speaker: '대피소 게시판', role: '안내', lines: ['연무 생활문화센터 지하주차장 · 민방위 대피소', fact('shelter_share').text] }); },
     spot: async () => (signed ? 'sit' : void ctx.toast('먼저 접수대에서 명부를 써 주세요.', 'site')),
   } });
-  if (G.know.bagOn) for (const id of ['water_500', 'water_2l', 'blanket']) if (G.items[id]?.bag) { use(G, id); ctx.payoff('bag', '배낭에서 물과 담요를 꺼냈다'); break; }
+  const got = unpackAtShelter(G);
+  if (got) { ctx.refresh(); ctx.payoff('bag', got); }
   if (!G.know.bagOn) { ctx.stat('thirst', 6); ctx.toast('맨손으로 나와 마실 물이 없다. 옆 사람이 물 한 모금을 나눠 주었다.', 'neighbor'); }
 }
 

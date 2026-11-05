@@ -155,7 +155,7 @@ export async function dayLedger(ctx, days, place = 'home') {
   const radioOk = !!G.items.radio?.checked, bank = (G.items.powerbank?.home ?? 0) + (G.items.powerbank?.bag ?? 0) > 0;
   const power = await ctx.ui.talk({ speaker: '하루 장부', role, lines: ['전기가 들어오는 하루 한두 시간에는 무엇을 할까?'],
     choices: PICKS.power.map(p => ({ id: p.id, label: p.label,
-      note: p.id === 'radio' ? (radioOk ? `건전지가 닳는다 (지금 ${G.items.radio.charge ?? 100}%)` : '라디오가 켜지지 않는다') : p.id === 'powerbank' && !bank ? '보조배터리가 없다' : p.id === 'phone' ? `지금 ${G.phone.battery}%` : '' })) }) ?? 'phone';
+      note: p.id === 'radio' ? (radioOk ? `건전지가 닳는다 (지금 ${G.items.radio.charge ?? 100}%)` : '라디오가 켜지지 않는다') : p.id === 'powerbank' ? (bank ? '휴대폰 대신 보조배터리를 채워 둔다 · 밖에서 꺼질 때 대비' : '보조배터리가 없다') : p.id === 'phone' ? `지금 ${G.phone.battery}%` : '' })) }) ?? 'phone';
   const res = simulateDays(G, { water, meals: food, power }, days, { place });
   applyLedger(G, res);
   ctx.refresh();

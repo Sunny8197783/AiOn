@@ -11,7 +11,7 @@ export function buildProps(B, g, dyn) {
   const P = (hex, roughness = 0.6, metalness = 0) => kit.mat('paint:' + hex, { roughness, metalness });
 
   // ---- radio (휴대용 라디오): body, speaker grille, lit dial window, knobs, handle, extended antenna ----
-  const radio = new THREE.Group(); radio.position.set(-2.2, T, 5.88); radio.rotation.y = Math.PI + 0.35; dyn.add(radio);
+  const radio = new THREE.Group(); radio.position.set(-1.66, T, 6.12); radio.rotation.y = Math.PI + 0.35; dyn.add(radio);
   const dial = new THREE.MeshStandardMaterial({ color: 0x1a1408, map: B.tex('radioDial', 256, 112, drawDial), emissive: 0xffb04a, emissiveMap: B.tex('radioDial', 256, 112, drawDial), emissiveIntensity: 0, roughness: 0.25 });
   const led = new THREE.MeshStandardMaterial({ color: 0x0b1a0e, emissive: 0x3cff6a, emissiveIntensity: 0, roughness: 0.4 });
   radio.add(kit.rbox(0.26, 0.15, 0.075, 0.016, P('#3a3d40', 0.45, 0.2), {}));
@@ -22,7 +22,7 @@ export function buildProps(B, g, dyn) {
   radio.add(kit.box(0.008, 0.008, 0.004, led, { x: 0.02, y: 0.045, z: 0.038 }));
   radio.add(kit.box(0.2, 0.014, 0.022, M.black, { y: 0.17 }), kit.box(0.014, 0.03, 0.02, M.black, { x: -0.093, y: 0.145 }), kit.box(0.014, 0.03, 0.02, M.black, { x: 0.093, y: 0.145 }));
   B.rod(radio, [0.11, 0.15, -0.02], [0.2, 0.5, -0.09], 0.0035, M.metal); kit.merge(radio);
-  const radioPt = B.point('homeRadio', '라디오', -2.2, FL, 5.86, 'radio', 1.7); // on the radio, apart from the wallet
+  const radioPt = B.point('homeRadio', '라디오', -1.66, FL, 6.12, 'radio', 1.7); // on the radio, ~0.7 m from the wallet (opposite corners)
   function setRadio(v) {
     radio.visible = v !== 'none';
     dial.emissiveIntensity = v === 'on' ? 1.7 : 0; led.emissiveIntensity = v === 'on' ? 2.2 : 0;
@@ -59,10 +59,10 @@ export function buildProps(B, g, dyn) {
   }
 
   // ---- wallet with the ID card on the living-room table (picked up = gone from the table and from E) ----
-  const wallet = new THREE.Group(); wallet.position.set(-1.98, T, 6.13); wallet.rotation.y = 0.4; dyn.add(wallet);
+  const wallet = new THREE.Group(); wallet.position.set(-2.3, T, 5.82); wallet.rotation.y = 0.4; dyn.add(wallet);
   wallet.add(kit.rbox(0.11, 0.022, 0.09, 0.008, P('#4a2e1e', 0.7), {}));
   wallet.add(kit.box(0.085, 0.003, 0.054, P('#dfe7ee', 0.4), { x: 0.035, y: 0.022, z: 0.02, ry: 0.3 })); // card peeking out
-  const walletPt = B.point('homeWallet', '지갑 · 신분증', -1.92, FL, 6.16, 'pickup', 1.4);
+  const walletPt = B.point('homeWallet', '지갑 · 신분증', -2.3, FL, 5.82, 'pickup', 1.4);
   function setWallet(v) { wallet.visible = v !== 'taken'; walletPt.enabled = v !== 'taken'; }
 
   // ---- 계획판: whiteboard with this week's slots, sticky notes and magnets, on the bathroom wall facing the living room ----

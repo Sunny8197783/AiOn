@@ -153,6 +153,7 @@ export function buildShelterSite(kit) {
     for (let x = xl + 0.3; x <= xt + 0.3; x += 1.5) { const y = x > xm ? yb + (Y - yb) * (x - xm) / (xt - xm) : yb; stat.add(kit.cyl(0.025, 0.025, 0.85, kit.mat('metal'), { x, y, z: 13.85 }, 6)); }
     shelterSign(-108.4, yb + 1.95, 15.94, Math.PI);
     stat.add(kit.cyl(0.04, 0.04, 2.6, steel, { x: xt + 0.7, y: Y, z: 13.2 }, 8)); shelterSign(xt + 0.7, Y + 2.55, 13.15, Math.PI, 0.4);
+    solid(xt + 0.6, xt + 0.8, 13.1, 13.3, 'signPost', -0.5, 2.7);
     const cs = kit.sign(['출입구 C · 경사로', '휠체어 · 유모차 · 보행 보조기'], { w: 1.5, h: 0.42, bg: '#ffffff', fg: '#1f4e8c', single: true }); cs.position.set(-106, Y + 1.45, 15.94); cs.rotation.y = Math.PI; stat.add(cs);
     // shutter box, slats, opening behind
     stat.add(kit.box(2.0, 0.35, 0.3, kit.mat('paint:#9aa1a6', { metalness: 0.6, roughness: 0.4 }), { x: -110.7, y: yb + 2.4, z: 15.82 }));

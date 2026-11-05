@@ -4,7 +4,9 @@
 // kitchen windows lit at night, dark with green exit dots and a few torches in a blackout), and a far ring of city
 // and hills with stars and the moon. Everything is unlit (MeshBasic, no fog) and tinted per view; nothing is merged.
 // From '중간' up (soft-goods.js detailOf) the cars are the town's sedan (vehicle-geo.js), the crowns lumpy clusters and
-// the hedge a clipped 회양목 run; '완전 낮음' and '낮음' keep the cheaper boxes and icosahedra.
+// the hedge a clipped 회양목 run; '완전 낮음' and '낮음' keep the cheaper boxes and hedge blobs (the crowns are lumpy on
+// every tier: instanced and unlit, they cost the same). Foliage dims by its own per-view `trees` factor, darker than
+// `tint` after dark, so the crowns sit with the near-black facades instead of glowing red and yellow through the glass.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TYPES, vehicleGeo } from './vehicle-geo.js';
@@ -37,16 +39,16 @@ function hedgeGeo() {
 // fac scales the facade picture: at night 1.3 keeps the kitchen windows just under the bloom threshold, only the
 // corridor lamp strips (some of them out) glow.
 const VIEWS = {
-  day: { tint: 0.95, far: 1, fac: 1, lamps: 0, cap: '#4f86cf', sky: ['#4f86cf', '#9cc2e6', '#dde8ee'], hill: ['#9aabb9', '#b2bec7'], bFar: '#c3c9cd', bNear: '#adb3b6', ground: '#8d9188',
+  day: { tint: 0.95, trees: 0.95, far: 1, fac: 1, lamps: 0, cap: '#4f86cf', sky: ['#4f86cf', '#9cc2e6', '#dde8ee'], hill: ['#9aabb9', '#b2bec7'], bFar: '#c3c9cd', bNear: '#adb3b6', ground: '#8d9188',
     win: 0, dayWin: '#7f8f9a', stars: 0, moon: 0, glow: 0, beacon: 0,
     wall: '#e4dfd4', recess: '#9b978f', parapet: '#e9e4d9', rail: '#7d7a73', core: '#d9d4c9', door: '#6a5d52', winC: '#73828d', kitchen: 0, corridor: 0, stair: 0, exit: 0, dots: 0 },
-  dusk: { tint: 0.5, far: 1.1, fac: 1.15, lamps: 1, cap: '#1f2550', sky: ['#1f2550', '#7a5878', '#f0955a'], hill: ['#3b3150', '#4e3d58'], bFar: '#55485e', bNear: '#3f3648', ground: '#2c2630',
+  dusk: { tint: 0.5, trees: 0.35, far: 1.1, fac: 1.15, lamps: 1, cap: '#1f2550', sky: ['#1f2550', '#7a5878', '#f0955a'], hill: ['#3b3150', '#4e3d58'], bFar: '#55485e', bNear: '#3f3648', ground: '#2c2630',
     win: 0.35, lit: '#ffc98a', lit2: '#dbe6ff', stars: 0.04, moon: 0, glow: 0.12, beacon: 1,
     wall: '#5a5258', recess: '#2e2a30', parapet: '#605860', rail: '#2a272b', core: '#544d54', door: '#241f22', winC: '#2a2e38', litWin: '#ffcf96', kitchen: 0.4, corridor: 0.9, lamp: '#fff3d6', stair: 0.3, exit: 0, dots: 0 },
-  night: { tint: 0.15, far: 1.45, fac: 1.3, lamps: 1, cap: '#03050c', sky: ['#03050c', '#0b1020', '#2a2430'], hill: ['#07090f', '#0b0d14'], bFar: '#10131c', bNear: '#0b0d14', ground: '#07080b',
+  night: { tint: 0.15, trees: 0.05, far: 1.45, fac: 1.3, lamps: 1, cap: '#03050c', sky: ['#03050c', '#0b1020', '#2a2430'], hill: ['#07090f', '#0b0d14'], bFar: '#10131c', bNear: '#0b0d14', ground: '#07080b',
     win: 0.6, lit: '#ffd9a0', lit2: '#dbe8ff', stars: 0.15, moon: 1, glow: 0.22, beacon: 1,
     wall: '#15161b', recess: '#0b0b0e', parapet: '#1c1c20', rail: '#0a0a0c', core: '#131418', door: '#0a090a', winC: '#0c0e12', litWin: '#ffd39a', kitchen: 0.55, corridor: 0.85, lamp: '#fff6e2', stair: 0.25, exit: 0, dots: 0 },
-  blackout: { tint: 0.07, far: 1.3, fac: 1.4, lamps: 0, cap: '#010208', sky: ['#010208', '#050a18', '#0b1324'], hill: ['#04060c', '#060912'], bFar: '#080b14', bNear: '#05070d', ground: '#030406',
+  blackout: { tint: 0.07, trees: 0.025, far: 1.3, fac: 1.4, lamps: 0, cap: '#010208', sky: ['#010208', '#050a18', '#0b1324'], hill: ['#04060c', '#060912'], bFar: '#080b14', bNear: '#05070d', ground: '#030406',
     win: 0.012, lit: '#ff9a4a', lit2: '#e8eeff', stars: 1, moon: 1, glow: 0, beacon: 0,
     wall: '#0c0f16', recess: '#06070a', parapet: '#10131b', rail: '#050609', core: '#0b0d13', door: '#050506', winC: '#07080b', litWin: '#ff9a4a', kitchen: 0.02, corridor: 0, stair: 0, exit: 1, dots: 0.05 },
 };
@@ -55,7 +57,8 @@ export function buildView(B) {
   const { kit } = B, r = kit.rng(1033), group = new THREE.Group(); group.name = 'apt-view';
   const det = detailOf(kit.Q) > 1; // '중간' and up: modelled cars, lumpy crowns, a clipped hedge
   const tinted = []; // { mat, base: Color }
-  const basic = (opts, base = 0xffffff) => { const m = new THREE.MeshBasicMaterial({ fog: false, ...opts }); tinted.push({ mat: m, base: new THREE.Color(base) }); return m; };
+  const leafy = []; // foliage: { mat, base }, scaled by V.trees
+  const basic = (opts, base = 0xffffff, list = tinted) => { const m = new THREE.MeshBasicMaterial({ fog: false, ...opts }); list.push({ mat: m, base: new THREE.Color(base) }); return m; };
   const L = new THREE.Vector3(0.3, 0.85, 0.45).normalize();
   const shade = (geo) => { // bake simple sun shading into vertex colours (MeshBasic has no lighting)
     const n = geo.attributes.normal, c = new Float32Array(n.count * 3);
@@ -112,12 +115,14 @@ export function buildView(B) {
   for (let x = -30; x < 30; x += 8) spots.push([x + r() * 2, -23 + (r() - 0.5) * 2]);
   const crowns = spots.map(([x, z], i) => { const s = i >= nearRow && i < nearEnd ? 1.8 + r() * 0.7 : 2.2 + r() * 1.2; return { x, y: 2.6 + s * 0.9, z, sx: s, sy: s * 1.15, sz: s, ry: r() * 6 }; });
   const shadeAO = (geo) => { shade(geo); const c = geo.attributes.color, pp = geo.attributes.position; for (let i = 0; i < c.count; i++) { const k = 0.62 + 0.38 * THREE.MathUtils.clamp((pp.getY(i) + 0.5) / 1.2, 0, 1); c.setXYZ(i, c.getX(i) * k, c.getY(i) * k, c.getZ(i) * k); } return geo; }; // the inside and the underside of a crown are darker
-  const crownMesh = add(kit.instanced(det ? shadeAO(crownGeo()) : shade(new THREE.IcosahedronGeometry(1, 1)), basic({ vertexColors: true }), crowns, { cast: false, receive: false }));
-  crowns.forEach((_, i) => crownMesh.setColorAt(i, new THREE.Color(['#5a7a3a', '#4f6e34', '#c9a23a', '#c46a2a', '#a8442e', '#6b8a40'][(r() * 6) | 0])));
+  const crownMesh = add(kit.instanced(shadeAO(crownGeo()), basic({ vertexColors: true }, 0xffffff, leafy), crowns, { cast: false, receive: false }));
+  // an autumn mix, muted 40 % toward an olive grey so no crown reads as a pure red or yellow ball
+  const CROWN = ['#5a7a3a', '#4f6e34', '#c9a23a', '#c46a2a', '#a8442e', '#6b8a40'].map((c) => new THREE.Color(c).lerp(new THREE.Color('#6f7a4a'), 0.4));
+  crowns.forEach((_, i) => crownMesh.setColorAt(i, CROWN[(r() * 6) | 0]));
   add(kit.instanced(shade(new THREE.CylinderGeometry(0.16, 0.22, 3, 6).translate(0, 1.5, 0)), basic({ vertexColors: true }, 0x4b3a2c), spots.map(([x, z]) => ({ x, z })), { cast: false, receive: false }));
   const hedge = [];
   for (let x = -40; x < 40; x += 1.6) if (x < -8 || x > 1) hedge.push(det ? { x, y: -0.04, z: 10.2, sy: 0.92 + 0.12 * hash(x, 10.2) } : { x, y: 0.3, z: 10.2, sx: 1.0, sy: 0.55, sz: 0.8 });
-  add(kit.instanced(det ? shadeAO(hedgeGeo()) : shade(new THREE.IcosahedronGeometry(1, 0)), basic({ vertexColors: true }, 0x3f5a2c), hedge, { cast: false, receive: false }));
+  add(kit.instanced(det ? shadeAO(hedgeGeo()) : shade(new THREE.IcosahedronGeometry(1, 0)), basic({ vertexColors: true }, 0x3f5a2c, leafy), hedge, { cast: false, receive: false }));
   const cars = [];
   // Most cars reverse into the bays (nose to the aisle at z 23.2), a few went in nose first; the sedan's front is -z.
   for (const zc of [17.6, 28.9]) for (let x = -35.5; x < 31; x += 2.5) if (r() < 0.68) cars.push({ x, y: det ? -0.03 : 0.28, z: zc + (r() - 0.5) * 0.3, ry: (r() - 0.5) * 0.04 + ((zc < 23) !== (hash(x, zc) < 0.2) ? Math.PI : 0) });
@@ -166,6 +171,7 @@ export function buildView(B) {
     drawFar(far.getContext('2d'), far.width, far.height, V, layout); farTex.needsUpdate = true;
     drawFacade(fac.getContext('2d'), fac.width, fac.height, V); facTex.needsUpdate = true;
     for (const t of tinted) t.mat.color.copy(t.base).multiplyScalar(V.tint);
+    for (const t of leafy) t.mat.color.copy(t.base).multiplyScalar(V.trees);
     farMat.color.setScalar(V.far); facMat.color.setScalar(V.fac); capMat.color.set(V.cap);
     headMat.color.set(V.lamps ? new THREE.Color(2.2, 1.85, 1.3) : new THREE.Color(0xb9bcc0).multiplyScalar(V.tint)); // lit head: a small glow, no star
     pools.visible = !!V.lamps; mLamp.visible = name !== 'day';

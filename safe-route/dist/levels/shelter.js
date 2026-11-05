@@ -3,7 +3,7 @@
 // shelter-camp (mats, reception, board, radio, supplies, parked cars) and shelter-people (evacuees, staff, 서연).
 // Local frame: x east, z south, floor y = 0, yaw 0 faces north (-z). Town footprint: local = town + (91, 0, -31).
 // States: crowd 'arriving'|'settled'|'leaving', phase 'alert'|'calm', power 'grid'|'emergency' (emergency: circuit B
-// tubes and area lights off, battery emergency lights on, jet fans spin down, lift display dark),
+// tubes and area lights off, circuit A at 55 %, warm battery emergency lights on, jet fans spin down, lift display dark),
 // fire 'none'|'large' (a camping-burner fire on stacked cartons in the north-west corner: flames reach the cable
 // tray and sprinkler main, a smoke layer spreads under the slab, nearby evacuees have moved away, a solid blocks it),
 // boardText string[]|null (lines the director pins on the notice board; no text is invented here),
@@ -71,7 +71,7 @@ export function buildShelter(kit, people, fx) {
   const motes = fx.dust({ box: { x0: -21.5, x1: 21.5, y0: 0.2, y1: 2.8, z0: -15.5, z1: 15.5 }, count: 420, opacity: 0.22 });
   group.add(flames.group, lick.group, smoke.group, motes.group);
   const fireSolid = { id: 'fire', x0: FIRE.x - 1.0, x1: FIRE.x + 1.2, z0: FIRE.z - 0.9, z1: FIRE.z + 1.0, y0: -1, y1: 3, off: true };
-  const solids = [...shell.solids, ...camp.solids, fireSolid];
+  const solids = [...shell.solids, ...camp.solids, ...(services.solids || []), fireSolid];
 
   // desc: what E shows when no chapter handles the point (story/world.js); y: the floor the point is on.
   const P = (id, label, x, z, kind, r = 1.6, desc, y = 0) => ({ id, label, x, y, z, r, kind, ...(desc && { desc }) });
@@ -122,10 +122,12 @@ export function buildShelter(kit, people, fx) {
   let fan = 14;
   function update(dt, t, ctx = {}) {
     const grid = state.power === 'grid', rm = !!fx?.reduceMotion, tubes = services.tubes;
-    const s = tubes.A.emissiveIntensity / 3.2;   // the env preset's 'indoor' level (0..1); circuit B and lights follow it
-    tubes.B.emissiveIntensity = grid ? s * 3.2 : 0;
-    tubes.F.emissiveIntensity = s * 3.2 * (rm ? 0.55 : flicker(t));
-    for (const L of services.lights) L.light.intensity = L.base * s * (grid || L.circuit === 'A' ? 1 : 0);
+    const s = services.indoorRef.emissiveIntensity;   // the env preset's 'indoor' level (0..1); every circuit follows it
+    // emergency supply: circuit B and its lights drop out, circuit A runs at 55 %, the faulty tube with it
+    const a = grid ? 1 : 0.55;
+    tubes.A.emissiveIntensity = s * 3.2 * a; tubes.B.emissiveIntensity = grid ? s * 3.2 : 0;
+    tubes.F.emissiveIntensity = s * 3.2 * a * (rm ? 0.55 : flicker(t));
+    for (const L of services.lights) L.light.intensity = L.base * s * (grid ? 1 : L.circuit === 'A' ? a : 0);
     services.emLamp.emissiveIntensity = grid ? 0 : 2.4;
     for (const l of services.emLights) l.intensity = grid ? 0 : 14;
     for (const m of shell.dyn.lift) m.emissiveIntensity = grid ? 1.2 : 0;

@@ -1,6 +1,6 @@
 // 연기 속 대피 (design M7): after choosing to leave the corridor fire, 정민 gets down to 1F through the smoke.
 // A wet towel over nose and mouth and a low body (C) cut what you breathe in (fact fire_big); the screen blurs
-// with the smoke you have breathed (#world.sim-smoke, --smoke 0..1). Health runs out -> dead { why: 'fire' }.
+// with the smoke you have breathed (#world.sim-smoke, --smoke 0..1). Health runs out -> dead { why: 'smoke' }.
 // smokeEscape(ctx, { size, grow }) resolves at the 1F lobby with { exposure, towel, crouch }.
 import { recordEvent, consume } from '../game/state.js';
 import { fact } from '../game/facts.js';
@@ -16,6 +16,7 @@ export async function smokeEscape(ctx, { size = 'large', grow = () => {} } = {})
   const show = () => ctx.objective('연기 속에서 1층까지', '몸을 낮추고(C) 계단으로 내려갑니다. 엘리베이터는 쓰지 않습니다.', [
     { text: '젖은 수건으로 코와 입 막기 (302호 싱크대·베란다, 선택)', done: towel }, { text: '계단으로 1층까지', done: false }]);
   show();
+  if (G.know.gasValve) ctx.payoff('gas', '가스 중간 밸브 위치를 알고 있어 나서기 전에 바로 잠갔다'); // doEquip homeGas
   const wet = async () => {
     if (towel) return void ctx.toast('젖은 수건으로 코와 입을 막고 있다.');
     if (!count(G, 'towel')) return void ctx.toast('수건이 보이지 않는다. 소매로라도 코와 입을 막자.');
@@ -38,9 +39,10 @@ export async function smokeEscape(ctx, { size = 'large', grow = () => {} } = {})
       const r = smokeStep(s, dt, { smoke: air, crouch, towel });
       world?.style.setProperty('--smoke', r.level.toFixed(3));
       hurtShown -= dt;
-      if (r.hurt) { ctx.deathCause = 'fire'; ctx.stat('health', -r.hurt); if (hurtShown <= 0) { hurtShown = 1.5; ctx.hud.hurt?.(0.25); } }
+      if (r.hurt) { ctx.deathCause = 'smoke'; ctx.stat('health', -r.hurt); if (hurtShown <= 0) { hurtShown = 1.5; ctx.hud.hurt?.(0.25); } }
       if (warned === 0 && s.exposure > 4) { warned = 1; ctx.toast(crouch ? '연기가 목을 찌른다. 이대로 낮게 계단까지.' : '연기가 목을 찌른다. 몸을 낮추자 (C).', 'self', 3600); }
       else if (warned === 1 && s.exposure > 14) { warned = 2; ctx.toast('눈앞이 뿌옇다. 계단은 복도 가운데, 비상구 표시등 쪽이다.', 'self', 4200); }
+      if (inApt && P.y < 1 && towel) ctx.payoff('towel', '젖은 수건으로 코와 입을 막고 연기 속을 내려왔다');
       if (inApt && P.y < 1) return { exposure: Math.round(s.exposure * 10) / 10, towel, crouch: total > 0 && low / total > 0.5 };
     }, on: {
       homeExitDoor: async () => { await ctx.goto('apartment', 'corridor3F'); },

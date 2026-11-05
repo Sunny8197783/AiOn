@@ -138,6 +138,7 @@ export function buildFronts(kit) {
   for (const s of [-1, 1]) { stat.add(kit.box(0.2, 3.4, 0.2, steel, { x: -16 + s * 4.3, y: Y, z: -21.2 })); block(-16 + s * 4.3 - 0.15, -16 + s * 4.3 + 0.15, -21.35, -21.05, 3, 'martCanopy'); }
   for (const [x, t] of [[-21.6, ['가을 정기 세일', '생활용품 최대 30%']], [-10.4, ['신선 코너', '오늘의 과일']]]) {
     const ban = kit.sign(t, { w: 0.6, h: 1.6, bg: '#c8312a', single: false }); ban.position.set(x, Y + 1.1, -21.6); stat.add(ban, kit.box(0.5, 0.05, 0.4, dark, { x, y: Y, z: -21.6 }));
+    block(x - 0.3, x + 0.3, -21.8, -21.4, 1.7, 'martBanner');
   }
   const cartM = kit.memo('town:cartWire', () => new THREE.MeshStandardMaterial({ map: kit.texture(kit.canvas(64, 64, (g, w) => { g.strokeStyle = '#d0d4d8'; g.lineWidth = 3; for (let k = 2; k < w; k += 9) { g.beginPath(); g.moveTo(k, 0); g.lineTo(k, w); g.stroke(); g.beginPath(); g.moveTo(0, k); g.lineTo(w, k); g.stroke(); } })), alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.8, roughness: 0.3 }));
   for (let k = 0; k < 5; k++) { const x = -8.2 + k * 0.32; stat.add(kit.box(0.55, 0.45, 0.9, cartM, { x, y: Y + 0.45, z: -21.6, cast: false }), kit.box(0.5, 0.04, 0.1, kit.mat('paint:#c8312a'), { x, y: Y + 1.0, z: -21.15 })); }

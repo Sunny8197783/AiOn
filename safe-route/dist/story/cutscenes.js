@@ -149,10 +149,10 @@ export async function elderScene(ctx) {
 // rows: game/ripples.js ripples(G); path: G.know.path. The level states it sets stay: the run is over after this.
 const CLOSE = {
   bus: { states: { buses: 'on' }, cam: { p: [[-47, 6, -29], [-51, 5, -31]], t: [[-67, 1.6, -41]] }, title: ['행정복지센터 앞 임시 집결지', '버스가 출발한다'] },
-  missed: { states: { buses: 'off' }, cam: { p: [[-47, 6, -29], [-50, 5.5, -30]], t: [[-62, 1, -44]] }, title: ['임시 집결지', '버스가 떠난 뒤'] },
-  volunteer: { states: { waterPoint: 'on' }, cam: { p: [[-67, 5, -7], [-70, 4.5, -9]], t: [[-80, 1.2, -17]] }, title: ['비상급수시설', '자원봉사 조끼를 입고'] },
+  missed: { states: { buses: 'off', crowd: 'sparse' }, cam: { p: [[-47, 6, -29], [-50, 5.5, -30]], t: [[-62, 1, -44]] }, title: ['임시 집결지', '버스가 떠난 뒤'] },
+  volunteer: { states: { waterPoint: 'on', crowd: 'queue' }, cam: { p: [[-67, 5, -7], [-70, 4.5, -9]], t: [[-80, 1.2, -17]] }, title: ['비상급수시설', '자원봉사 조끼를 입고'] },
   stay: { cam: { p: [[80, 2.5, 12], [79, 3.5, 14]], t: [[82, 9, 30], [82, 11, 30]] }, title: ['한빛아파트 103동', '남기로 한 집'] },
-  walk: { cam: { p: [[121, 3, -6], [122, 3.4, -7]], t: [[60, 8, 0], [58, 9, 1]] }, title: ['연무동 동쪽 끝', '통제선 너머 국도'] },
+  walk: { cam: { p: [[121, 3, -6], [122, 3.4, -7]], t: [[60, 8, 0], [58, 9, 1]] }, title: ['연무동 동쪽 끝', '도시를 빠져나가는 길'] },
   // 303's door hangs on its east jamb and opens into the corridor, so the camera looks in past its west side.
   seoyeon: { level: 'apartment', spawn: 'corridor3F', env: 'interiorDark', states: { seoyeonDoor: 'open' }, cam: { p: [[7.95, F3 + 1.52, -1.75], [8.3, F3 + 1.5, -1.65]], t: [[9.5, F3 + 1.2, 0.5]] }, title: ['103동 3층 · 303호 앞', '지원 차량을 함께 기다린다'] },
 };

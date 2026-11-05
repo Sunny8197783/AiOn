@@ -365,3 +365,16 @@ test('fixtures stay at home', () => {
   assert.equal(packable('water_2l'), true);
   assert.throws(() => pack(G, 'blackout_curtain'), /fixture/);
 });
+
+test('a looter given a pocketed food item through consume(bag) keeps a save that loads', () => {
+  const G = createGame({ seed: 3 });
+  G.items.bars = { home: 0, bag: 1, bought: 0, checked: false, used: 0 };
+  setPocket(G, 'bars', 1);
+  const raw = createGame({ seed: 3 }); raw.items.bars = { home: 0, bag: 1, bought: 0, checked: false, used: 0 }; setPocket(raw, 'bars', 1);
+  raw.items.bars.bag -= 1; // the old danger.js give: pocket > bag
+  assert.throws(() => load(save(raw)), /pocket/);
+  consume(G, 'bars', 1, 'bag');
+  assert.ok((G.items.bars.pocket ?? 0) <= G.items.bars.bag);
+  assert.equal(G.items.bars.used, 1);
+  assert.deepEqual(load(save(G)), G);
+});

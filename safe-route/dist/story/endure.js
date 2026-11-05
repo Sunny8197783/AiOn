@@ -170,7 +170,7 @@ async function waterTrip(ctx) {
     G.items.powerbank.home += 1; G.items.powerbank.checked = true;
     G.rel.seoyeon.trust += 2;
     recordEvent(G, 'help', { who: 'seoyeon', what: '급수소에서 물 한 통을 받아 3층까지 날라 주었다' });
-    recordEvent(G, 'help', { who: 'seoyeon', what: '서연이 충전된 보조배터리를 나눠 주었다' });
+    recordEvent(G, 'help', { who: 'seoyeon', what: '서연이 충전된 보조배터리를 나눠 주었다', by: 'other' }); // received, not given
   }
   await ctx.goto('apartment', 'home');
   G.minute = Math.max(G.minute, 13 * 60);
@@ -213,18 +213,20 @@ async function storeEvening(ctx) {
     actions: [{ id: 'ok', label: '둘러본다', primary: true }] });
   const cash = (G.items.cash?.home ?? 0) + (G.items.cash?.bag ?? 0);
   if (cash > 0) {
-    const pick = await ctx.ui.talk({ speaker: '계산대 옆 현금 통', role: '현금만', lines: ['선반에 건전지 한 팩과 작은 생수 몇 병이 남아 있다.'], choices: [{ id: 'buy', label: '건전지 한 팩과 생수 두 병을 챙기고 현금을 넣는다' }, { id: 'no', label: '그냥 둔다' }] });
+    const pick = await ctx.ui.talk({ speaker: '계산대 옆 현금 통', role: '현금만', lines: ['선반에 건전지 한 팩과 작은 생수 몇 병이 남아 있다.'], choices: [{ id: 'buy', label: '건전지 한 팩과 생수 두 병을 챙기고 5만 원을 넣는다 (거스름돈 없음)' }, { id: 'no', label: '그냥 둔다' }] });
     if (pick === 'buy') {
       consume(G, 'cash', 1, G.items.cash.home > 0 ? 'home' : 'bag');
       const cart = { batteries_aa: 1, water_500: 2 };
       for (const [id, n] of Object.entries(cart)) { const e = (G.items[id] ??= { home: 0, bag: 0, bought: 0, checked: false, used: 0 }); e.home += n; e.bought += n; }
-      recordEvent(G, 'buy', { cart, total: STORE_ITEMS.batteries_aa + STORE_ITEMS.water_500 * 2, paid: 'cash' });
+      // The cash is one 5만 원 bundle (game/items.js) and nobody is there to give change: say so.
+      recordEvent(G, 'buy', { cart, total: 50000, goods: STORE_ITEMS.batteries_aa + STORE_ITEMS.water_500 * 2, paid: 'cash', change: 0 });
+      ctx.toast('6,900원어치를 챙기고 5만 원을 통에 넣었다. 거스름돈은 받을 수 없었다.', 'self', 4200);
       ctx.payoff('cash', '카드가 안 되는 편의점에서 현금으로 건전지와 물을 샀다');
     }
   } else await ctx.ui.talk({ speaker: '정민', role: '지갑', lines: ['현금이 없다. 카드뿐이다. 카드로는 아무것도 살 수 없다.'] });
   await storeRumor(ctx); // story/neighbors.js: judge the claim by its source, then spread or check
   await barter(ctx);
-  recordEvent(G, 'help', { who: 'clerk', what: '가게를 닫으며 쪽지와 현금 통을 남겨 이웃이 필요한 물건을 가져가게 했다' });
+  recordEvent(G, 'help', { who: 'clerk', what: '가게를 닫으며 쪽지와 현금 통을 남겨 이웃이 필요한 물건을 가져가게 했다', by: 'other' }); // 이수아's kindness
   G.know.clerkLeft = true;
 }
 

@@ -190,6 +190,8 @@ export function buildCamp(kit, T) {
     { x0: BOARD.x - 0.95, x1: BOARD.x + 0.95, z0: BOARD.z - 0.32, z1: BOARD.z + 0.32, y0: -1, y1: 2.1 },
     { x0: PALLETS.x - 1.3, x1: PALLETS.x + 1.2, z0: PALLETS.z - 1.6, z1: PALLETS.z + 2.0, y0: -1, y1: 1.5 },
     { x0: 7.1, x1: 7.7, z0: -4.7, z1: -3.3, y0: -1, y1: 0.9 },
+    { x0: -14.35, x1: -13.25, z0: 10.82, z1: 11.18, y0: -1, y1: 1.4, id: 'prioritySign' }, // pole, base and the board
+    { x0: RECEPTION.x - 1.92, x1: RECEPTION.x - 1.28, z0: RECEPTION.z - 1.02, z1: RECEPTION.z - 0.5, y0: -1, y1: 0.9, id: 'receptionAFrame' },
     ...carSolids, ...chairBodies,
     ...dressMats(kit, { inst, add, M, mats, seats, spot: SPOT, rowPairs: [[MAT_ROWS[0], MAT_ROWS[1]], [MAT_ROWS[2], MAT_ROWS[3]]], blanketCols, cartonMat: cartonMats[0] }),
   ];

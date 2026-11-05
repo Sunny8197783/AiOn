@@ -32,7 +32,6 @@ h1, h2, h3, h4 { line-height: 1.25; letter-spacing: -.01em; }
 .eyebrow { display: flex; align-items: center; gap: .45em; margin: 0 0 .3em; color: var(--accent); font-size: .8rem; font-weight: 800; letter-spacing: .08em; }
 .muted { color: var(--muted); } .empty { color: var(--muted); padding: 1.2em 0; text-align: center; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); box-shadow: 0 8px 30px rgba(0, 0, 0, .3); }
-
 /* Buttons */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: .5em; min-height: 44px; padding: .6em 1.15em; border-radius: 12px; border: 1px solid var(--line-strong); background: rgba(255, 255, 255, .07); color: var(--text); font-weight: 700; transition: background .15s, transform .15s, border-color .15s; }
 .btn:hover { background: rgba(255, 255, 255, .13); }
@@ -478,6 +477,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: .5em 0; 
 .hud-stamina.winded .stamina-fill { background: #ff8a6a; }
 .hud.cinematic .hud-compass, .hud.cinematic .hud-map, .hud.cinematic .hud-stamina { opacity: 0; }
 @media (max-width: 720px) { .hud-map { width: 128px; height: 128px; top: 54px; } .hud-compass { top: 8px; } }
+@media (min-width: 721px) and (max-width: 1083px) { /* clear of the top-left column (16+330 px) and the battery chip */ .hud-compass { left: max(362px, calc(50% - 180px)); transform: none; width: min(360px, calc(100vw - 482px)); height: auto; } }
 /* experience modes: low vision blurs and darkens the world; the HUD stays readable */
 html.sim-lowvision #world { filter: blur(6px) brightness(.6) contrast(.85) saturate(.6); }
 .lock-hint { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); z-index: 11; padding: .5em 1em; border-radius: 999px; background: rgba(10, 15, 18, .78); border: 1px solid var(--line); color: var(--text); font-weight: 700; font-size: .9rem; pointer-events: none; }

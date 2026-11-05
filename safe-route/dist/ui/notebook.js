@@ -59,8 +59,9 @@ const ORDER = Object.keys(CATEGORY);
 const CHECK = { batteries: '건전지를 넣어 봐야 쓸 수 있음', charge: '충전해 둬야 쓸 수 있음', tune: '주파수를 맞춰 봐야 함' };
 const count = (v, key) => (typeof v === 'number' ? v : Number(v?.[key]) || 0);
 
-// inventory({ home, bag, catalog, load: { weightKg, volumeL, over }, limit: { weightKg, volumeL } }) -> Promise
-export function inventory({ home = {}, bag = {}, catalog = {}, load = null, limit = null } = {}) {
+// inventory({ home, bag, catalog, load: { weightKg, volumeL, over }, limit: { weightKg, volumeL }, cells: { used, total } }) -> Promise
+// The room meter counts bag grid cells (state.bagCells), the same rule the bag screen packs by; without cells it shows litres.
+export function inventory({ home = {}, bag = {}, catalog = {}, load = null, limit = null, cells = null } = {}) {
   const ids = [...new Set([...Object.keys(home || {}), ...Object.keys(bag || {})])];
   const rowsFor = (where, src) => {
     const items = ids.map((id) => ({ id, n: count(src?.[id], where), c: catalog[id] || { name: id, unit: '개', category: 'tool' }, entry: home?.[id] ?? bag?.[id] }))
@@ -79,17 +80,18 @@ export function inventory({ home = {}, bag = {}, catalog = {}, load = null, limi
         tags.length ? el('span', { class: 'inv-tags' }, tags) : null);
     }));
   };
-  const meter = (label, v, max, unit, over) => {
+  const meter = (label, v, max, unit, over, digits = 1) => {
     const pct = max ? Math.min(100, (v / max) * 100) : 0;
     const state = over ? 'over' : pct > 80 ? 'near' : 'ok';
     return el('div', { class: `inv-meter ${state}` },
       el('span', { class: 'inv-meter-label' }, label),
       el('span', { class: 'meter', 'aria-hidden': 'true' }, el('span', { class: 'meter-fill', style: { width: `${pct}%` } })),
-      el('span', { class: 'inv-meter-value' }, `${v.toFixed(1)} / ${max}${unit}`, over ? ' · 초과' : pct > 80 ? ' · 거의 참' : ''));
+      el('span', { class: 'inv-meter-value' }, `${v.toFixed(digits)} / ${max}${unit}`, over ? ' · 초과' : pct > 80 ? ' · 거의 참' : ''));
   };
   const loadBox = load && limit ? el('div', { class: 'inv-load', role: 'group', 'aria-label': '가방 무게와 부피' },
     meter('무게', Number(load.weightKg) || 0, limit.weightKg, 'kg', load.over?.weight),
-    meter('부피', Number(load.volumeL) || 0, limit.volumeL, 'L', load.over?.volume)) : null;
+    cells ? meter('공간', Number(cells.used) || 0, cells.total, '칸', load.over?.volume, 0)
+      : meter('부피', Number(load.volumeL) || 0, limit.volumeL, 'L', load.over?.volume)) : null;
   const content = el('div', { class: 'inv' },
     el('header', { class: 'nb-head' }, el('p', { class: 'eyebrow' }, icon('box'), '소지품'), el('h2', {}, '집 비축과 가방')),
     el('div', { class: 'inv-panes' },

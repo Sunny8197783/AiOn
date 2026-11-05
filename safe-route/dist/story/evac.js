@@ -6,6 +6,7 @@ import { chapterSummary, endingRecord } from '../game/debrief.js';
 import { CLOSURES } from '../game/townmap.js';
 import { BAG_LIMIT } from '../game/items.js';
 import { fact, SOURCES } from '../game/facts.js';
+import { waterLitres } from '../game/endings.js';
 import { posts, verify, misled, lostByRumor, rumor } from '../game/rumors.js';
 import { applyHome, applyBag, bagItems, goHome } from './prep-actions.js';
 import { radioScene, emergencyText, factCard, dayLedger, stockLook, AREA } from './common.js';
@@ -35,11 +36,11 @@ export async function crossroads(ctx) {
       const memo = posts(G, 'camp_food').find(p => p.key === 'seoyeon');
       await ctx.say(memo.from, ['현관문 틈에 서연이 끼워 둔 메모가 있다.', memo.text, '희망하는 주민은 생활문화센터 임시 거처로 옮길 수 있다고 한다. 권고이고, 명령은 아니라고 했다.'], null, memo.meta);
     }
-    const water = stock(G, ['water_2l', 'water_500']), food = stock(G, ['rice_instant', 'canned', 'bars', 'ramen']);
+    const water = waterLitres(G), food = stock(G, ['rice_instant', 'canned', 'bars', 'ramen']);
     const heardLine = misled(G) === 'camp_food' ? '마음에 걸리는 말: "임시 거처 급식이 끊겼다" (SNS 퍼온 글 · 확인하지 않음)'
       : G.events.some(e => e.type === 'rumor_checked' && e.details.id === 'camp_food') ? '확인한 것: 임시 거처는 급수·급식을 지원한다 (공식 안내)' : null;
     G.know.stayMove = await ctx.card({ kind: 'info', title: '지금 내 상황', meta: '판단 재료',
-      body: [`마실 물 ${water}병 · 먹을 것 ${food}개`, `휴대폰 ${G.phone.battery}% · 몸 상태: 피로 ${G.stats.fatigue} · 긴장 ${G.stats.tension}`, heardLine,
+      body: [`마실 물 약 ${water}L · 먹을 것 ${food}개`, `휴대폰 ${G.phone.battery}% · 몸 상태: 피로 ${G.stats.fatigue} · 긴장 ${G.stats.tension}`, heardLine,
         `박 소장: "저는 남아서 건물 봐야죠." · 서연: "저는 주민센터에 이동 지원을 신청해 뒀어요."`, G.know.clerkLeft ? '바로편의점 문에 쪽지: "본가에 다녀옵니다 — 이수아"' : '바로편의점은 문을 닫았다.',
         '어느 쪽도 정답이 정해져 있지 않습니다. 지금의 조건으로 고르세요.'].filter(Boolean),
       actions: [{ id: 'stay', label: '집에 남는다' }, { id: 'move', label: '생활문화센터 임시 거처로 옮긴다' }] });
@@ -82,6 +83,7 @@ async function stayAndSmoke(ctx) {
   G.day = 7; G.minute = 22 * 60 + 10; ctx.outdoorEnv = 'blackout';
   ctx.setLevelState('apartment', 'windowView', 'blackout');
   ctx.setLevelState('apartment', 'smoke', 0.35);
+  ctx.setLevelState('apartment', 'haze', 0); // the smoke is in the corridor; none came into 302호 (the scene's premise)
   await ctx.goto('apartment', 'home', 'interiorDark');
   ctx.refresh();
   await ctx.caption('밤 10시. 위층 어딘가에서 화재경보가 울리고, 복도 쪽에서 연기 냄새가 난다.', null, 3500);
@@ -106,6 +108,7 @@ async function stayAndSmoke(ctx) {
     break;
   }
   ctx.setLevelState('apartment', 'smoke', 0);
+  ctx.setLevelState('apartment', 'haze', 'follow');
   await ctx.say('박영수 소장', ['5층 세대 주방에서 난 불이었대요. 소방대가 껐고 다친 사람은 없대요.'], null, '방송');
 }
 
@@ -201,6 +204,7 @@ export async function depart(ctx) {
   const follow = () => {
     if (followed || misled(G) !== 'evac_shortcut') return false;
     followed = true; recordEvent(G, 'rumor_followed', { id: 'evac_shortcut', road });
+    G.know.evacClosuresKnown = true; // you have stood at one: the objective now lists today's closures
     show(); return true;
   };
   const official = (where) => async () => {
@@ -265,16 +269,17 @@ export async function depart(ctx) {
   if (path !== 'bus') return void await ctx.caption({ missed: missedCaption(ctx), stay: '가방을 내려놓았다. 오늘부터 이 건물이 내 자리다.', seoyeon: '서연의 문 앞에 가방을 내려놓고 앉았다. 지원 차량은 늦어지고 있었다.',
     volunteer: '조끼를 받아 입었다. 급수대 앞 줄이 길다.', walk: '도시의 끝, 통제선을 지나 국도로 들어섰다. 뒤에서 또 포성이 울렸다.' }[path], null, 4000);
   recordEvent(G, 'arrived_assembly', { minute: G.minute });
-  if (G.know.routeChecked) ctx.payoff('route', '동네 길을 미리 알아 둔 덕분에 통제 구간을 돌아 집결지에 닿았다');
+  if (G.know.routeChecked && !followed) ctx.payoff('route', '동네 길을 미리 알아 둔 덕분에 통제 구간을 돌아 집결지에 닿았다');
   const card = (G.items.contact_card?.bag ?? 0) + (G.items.doc_copies?.bag ?? 0) > 0;
   const deep = card && !inPocket(G, 'contact_card') && !inPocket(G, 'doc_copies'); // game rule (M8): the pocket comes out at once
-  const id = (G.items.id_card?.bag ?? 0) + (G.items.id_card?.home ?? 0) > 0; // picked up from the wallet (story/world.js)
+  const id = (G.items.id_card?.bag ?? 0) > 0; // carried in the bag or its front pocket (the pocket is part of bag); left at 집 = not shown
   await ctx.say('집결지 접수', ['이름, 연락처, 복용약을 적어 주세요. 신분증 있으세요?',
     id ? '(지갑에서 신분증을 꺼내 보여 주었다.)' : '(신분증을 집에 두고 나왔다. 이름과 주소, 생년월일로 본인 확인을 하느라 한참 걸렸다.)',
     !card ? '(연락처는 기억나는 대로 적었다.)' : deep ? '(연락처 카드와 서류 사본은 가방 깊숙이 있었다. 꺼내느라 잠깐 걸렸다.)' : '(가방 앞주머니의 연락처 카드와 서류 사본도 함께 건넸다.)'], null, '임시 집결지');
   if (deep) ctx.pass(2);
   if (!id) { ctx.pass(15); ctx.toast(fact('docs_take').text, 'official', 5000); }
-  if (card || id) ctx.payoff('docs', id ? '챙겨 나온 신분증으로 접수를 바로 마쳤다' : `연락처 카드와 서류 사본으로 접수를 ${deep ? '' : '바로 '}마쳤다`);
+  // The docs payoff credits the D-1 card/papers (game/ripples.js CAUSES.docs); the 신분증 is not a D-1 prep.
+  if (card) ctx.payoff('docs', `가방에 챙긴 연락처 카드와 서류 사본으로 접수를 ${deep ? '조금 늦게나마 ' : '바로 '}마쳤다`);
   await ctx.caption('버스 창밖으로 연무동이 멀어진다.', null, 3500);
 }
 

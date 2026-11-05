@@ -268,13 +268,13 @@ export function buildShell(kit, T) {
   lights.push({ pos: [24.6, 2.3, 0], color: 0xfff4e6, base: 5, dist: 8, circuit: 'A' });
 
   // ---- ceilings (camera / headroom only, never solids): the slab, the drop panels, the stair core and top landing,
-  // ramp C's stepped slabs, ramp B's sloped soffit in 2 m steps (each at its lowest point) and the lift hall ----
+  // ramp C's stepped slabs, ramp B's sloped soffit in 0.5 m steps (each at its lowest point, ~0.09 m apart: no camera jumps) and the lift hall ----
   const ceilings = [{ x0: ROOM.x0 - 0.25, x1: ROOM.x1 + 0.25, z0: ROOM.z0 - 0.25, z1: ROOM.z1 + 0.25, y: ROOM.ceil }];
   for (const px of GRID.xs) for (const pz of GRID.zs) ceilings.push({ x0: px - 1.2, x1: px + 1.2, z0: pz - 1.2, z1: pz + 1.2, y: ROOM.drop });
   ceilings.push({ x0: sx0, x1: sx1, z0: zFoot, z1: -16.25, y: 3.4 - 0.22 }, { x0: sx0, x1: sx1, z0: zEnd, z1: zFoot, y: 6.2 }, { x0: sx0, x1: sx1, z0: zFoot, z1: -16.25, y: 6.2 });
   for (const [z0, z1, y] of [[az[1], az[0], 3.0], [az[3], az[1], 3.8], [az[4] - 0.25, az[3], 4.2]]) ceilings.push({ x0: ax0, x1: ax1, z0, z1, y });
   ceilings.push({ x0: ax1, x1: -7.3, z0: az[4], z1: az[3], y: 4.3 });
-  for (let z = rz0; z < bz + 1; z += 2) ceilings.push({ x0: RAMP.x0, x1: RAMP.x1, z0: z, z1: z + 2, y: ry(z) + 2.75 - 0.31 });
+  for (let z = rz0; z < bz + 1; z += 0.5) ceilings.push({ x0: RAMP.x0, x1: RAMP.x1, z0: z, z1: z + 0.5, y: ry(z) + 2.75 - 0.31 });
   ceilings.push({ x0: ROOM.x1, x1: ex1, z0: -4, z1: 4, y: 2.6 });
 
   return { group: g, walk, solids, fixtures, lights, dyn, M, ceilings };

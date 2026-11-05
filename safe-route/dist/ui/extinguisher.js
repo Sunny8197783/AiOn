@@ -196,7 +196,7 @@ export async function extinguisher({ mode = 'guided', fire = 'small', steps = EX
   }
 
   function loop(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;
     if (S.phase === 'act' && !S.ended) {
       S.danger = Math.min(1, S.danger + growPerS * dt);
       S.fireLv = Math.min(1, S.fireLv + growPerS * dt * 0.4);

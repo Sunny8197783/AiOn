@@ -7,6 +7,7 @@ import { el, put, won, fmtKg, meterState, METER_WORD, announce } from './mini-do
 import { goalStatus, itemNote } from './bag.js';
 import { createLayout, addUnit, removeUnit, togglePocket, tidyLayout, sameLayout, pocketLoad, usedCells } from './bag-grid.js';
 import { CATALOG, POCKET_L } from '../game/items.js';
+import { shelfLayout, slotX } from './grab-layout.js';
 
 // [shape, colour, w, h, d] in metres; cylinders use w as the diameter.
 const LOOK = {
@@ -69,10 +70,12 @@ function grabRoom(engine, cfg) {
   }
   const n = f.clone().negate(), right = new THREE.Vector3(-f.z, 0, f.x);
   const base = new THREE.Vector3(P.x, P.y, P.z).addScaledVector(f, reach - 0.12);
-  const rows = cfg.kind === 'shop' ? [1.42, 1.02, 0.62] : [0.82, 0.5];
-  const perRow = Math.ceil(cfg.items.length / (cfg.items.length > 10 ? 3 : cfg.items.length > 5 ? 2 : 1));
-  const used = rows.slice(0, Math.ceil(cfg.items.length / perRow)), midY = P.y + used.reduce((a, b) => a + b, 0) / used.length; // middle of the rows in use
-  const camPos = base.clone().addScaledVector(n, cfg.kind === 'shop' ? 1.15 : 1.1).setY(midY + 0.3);
+  // Rows and spacing (ui/grab-layout.js): a big home stock gets three shelf heights, and a long row closes up
+  // (items and tags scaled with it) so every tag stays on screen.
+  const dist = cfg.kind === 'shop' ? 1.15 : 1.1, N = cfg.items.length;
+  const lay = shelfLayout({ kind: cfg.kind, n: N, fov: camera.fov, aspect: camera.aspect || innerWidth / innerHeight, dist });
+  const midY = P.y + lay.rows.reduce((a, b) => a + b, 0) / lay.rows.length; // middle of the rows in use
+  const camPos = base.clone().addScaledVector(n, dist).setY(midY + 0.3);
   const lookAt = base.clone().setY(midY - 0.12);
   const root = new THREE.Group(); scene.add(root);
   const fwd = lookAt.clone().sub(camPos).normalize(), camUp = new THREE.Vector3().crossVectors(right, fwd).normalize();
@@ -80,11 +83,11 @@ function grabRoom(engine, cfg) {
   box.lookAt(box.position.clone().add(n)); root.add(box);
 
   const slots = cfg.items.map((it, i) => {
-    const r = Math.floor(i / perRow), k = i % perRow, cols = Math.min(perRow, cfg.items.length - r * perRow);
-    const pos = base.clone().addScaledVector(right, (k - (cols - 1) / 2) * 0.36).setY(P.y + rows[Math.min(r, rows.length - 1)]);
+    const { row, x } = slotX(lay, i, N);
+    const pos = base.clone().addScaledVector(right, x).setY(P.y + lay.rows[Math.min(row, lay.rows.length - 1)]);
     const mat = new THREE.MeshStandardMaterial({ color: (LOOK[it.id] || [, 0xb9a27f])[1], roughness: 0.55, emissive: 0xffc04d, emissiveIntensity: 0 });
-    const g = new THREE.Group(); g.position.copy(pos); g.lookAt(pos.clone().add(n)); root.add(g);
-    const tag = label(it.name, it.sub); tag.position.copy(pos).setY(pos.y - 0.06).addScaledVector(n, 0.12); root.add(tag);
+    const g = new THREE.Group(); g.position.copy(pos); g.lookAt(pos.clone().add(n)); g.scale.setScalar(lay.scale); root.add(g);
+    const tag = label(it.name, it.sub); tag.scale.multiplyScalar(lay.scale); tag.position.copy(pos).setY(pos.y - 0.06).addScaledVector(n, 0.12); root.add(tag);
     return { it, g, mat, tag, copies: [] };
   });
   const inBox = [];
@@ -180,6 +183,14 @@ function grabRoom(engine, cfg) {
   addEventListener('keydown', onKey, true);
 
   // ---- camera + per frame ----
+  // The lowest tags stay above the panel: drop the camera (and the basket with it) until they clear its top edge.
+  {
+    const footEl = ui.querySelector('.grab3d-foot'), top = footEl ? 1 - (2 * footEl.getBoundingClientRect().top) / innerHeight : -1;
+    const c = new THREE.PerspectiveCamera(camera.fov, camera.aspect || innerWidth / innerHeight, 0.05, 50); c.position.copy(camPos); c.lookAt(lookAt); c.updateMatrixWorld();
+    const low = Math.min(...slots.map((s) => s.tag.position.clone().setY(s.tag.position.y - s.tag.scale.y / 2).project(c).y));
+    const lift = Math.min(0.6, Math.max(0, top + 0.05 - low)) * Math.tan((camera.fov * Math.PI) / 360) * dist; // NDC -> metres at the shelf
+    if (lift > 0) { camPos.y -= lift; lookAt.y -= lift; box.position.y -= lift; }
+  }
   const view = engine.view; engine.setView('first'); // hide the player's own body while the camera stands at the shelf
   const from = { p: camera.position.clone(), q: camera.quaternion.clone() }, aim = new THREE.PerspectiveCamera(); aim.position.copy(camPos); aim.lookAt(lookAt); // a camera looks down -z
   let k = 0;

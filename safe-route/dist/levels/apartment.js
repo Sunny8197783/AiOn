@@ -23,6 +23,7 @@ const STATES = {
   radio: ['none', 'off', 'on'],
   hallFire: ['none', 'small', 'large', 'out'],
   smoke: [0, 0.25, 0.5, 0.75, 1],
+  haze: ['follow', 0, 0.1, 0.2, 0.35, 0.5], // in-flat (302호) haze: 'follow' = half the corridor smoke (3장 escape), or its own density
   seoyeonDoor: ['closed', 'open'],
   candles: ['none', 'lit'],
   windowView: ['day', 'dusk', 'night', 'blackout'],
@@ -152,15 +153,16 @@ export async function buildApartment(kit, people, fx) {
     stairWell: { x: 5.0, y: F3 + 2.2, z: 4.6, target: { x: 5.0, y: 1.0, z: 1.0 } },
   });
 
-  const S = { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day', elder304: 'off', curtain: 'none' };
+  const S = { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, haze: 'follow', seoyeonDoor: 'closed', candles: 'none', windowView: 'day', elder304: 'off', curtain: 'none' };
   const apply = {
     power: setPower, stock: (v) => stock.setStock(v), bag: props.setBag, radio: props.setRadio, hallFire: setFire,
-    smoke: (v) => { smoke.setDensity(v); haze.setDensity(v * 0.5); }, seoyeonDoor: (v) => { seoyeon.group.visible = v === 'open'; },
+    smoke: (v) => { smoke.setDensity(v); if (S.haze === 'follow') haze.setDensity(v * 0.5); },
+    haze: (v) => { haze.setDensity(v === 'follow' ? smoke.density * 0.5 : Number(v) || 0); }, seoyeonDoor: (v) => { seoyeon.group.visible = v === 'open'; },
     candles: props.setCandle, windowView: view.setView, wallet: props.setWallet, elder304: elder.setElder, curtain: H.setCurtain,
   };
   function setState(key, value) {
     if (!apply[key]) { console.warn(`[apartment] unknown state "${key}"; known: ${Object.keys(apply).join(', ')}`); return; }
-    if (key === 'smoke') value = Math.min(1, Math.max(0, Number(value) || 0));
+    if (key === 'smoke' || (key === 'haze' && value !== 'follow')) value = Math.min(1, Math.max(0, Number(value) || 0));
     else if (key === 'stock') { if (!value || typeof value !== 'object') { console.error('[apartment] stock needs { itemId: count }', value); return; } }
     else if (!STATES[key].includes(value)) { console.error(`[apartment] bad value for ${key}:`, value, 'allowed:', STATES[key]); return; }
     S[key] = value; apply[key](value);

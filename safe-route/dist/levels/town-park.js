@@ -3,7 +3,7 @@
 // outdoor exercise frames, park lamps and fallen leaves. treeSpots() is pure so props can avoid trees.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CROSSWALKS } from '../game/townmap.js';
+import { CROSSWALKS, ROADS } from '../game/townmap.js';
 import { CURB } from './town-plan.js';
 import { sway, yawTo } from './town-util.js';
 import { strip } from './town-ground.js';
@@ -156,10 +156,14 @@ export function buildPark(kit, { spots } = {}) {
     alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -3,
   }));
   const fallen = [], fcol = [], LT = ['#e9b628', '#d9a325', '#c7802c', '#b5582a', '#8a6a3a', '#e5c84a'];
-  const drop = (x, y, z) => { fallen.push({ x, y, z, ry: rand() * 6.28, rz: (rand() - 0.5) * 0.3, s: 0.7 + rand() * 0.7 }); fcol.push(LT[(rand() * LT.length) | 0]); };
+  const drop = (x, y, z, keep = true) => {
+    const f = { x, y, z, ry: rand() * 6.28, rz: (rand() - 0.5) * 0.3, s: 0.7 + rand() * 0.7 }, c = LT[(rand() * LT.length) | 0];
+    if (keep) { fallen.push(f); fcol.push(c); }
+  };
+  const onRoad = (x, z) => ROADS.some(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1); // carriageway: no sidewalk-height leaves
   for (const s of spots) {
     const n = s.type === 'shrub' ? 0 : s.type === 'ginkgo' ? 14 : 18;
-    for (let i = 0; i < n; i++) { const a = rand() * 6.28, d = Math.sqrt(rand()) * 3.2; drop(s.x + Math.cos(a) * d, Y + 0.008, s.z + Math.sin(a) * d * (s.type === 'ginkgo' ? 0.55 : 1)); }
+    for (let i = 0; i < n; i++) { const a = rand() * 6.28, d = Math.sqrt(rand()) * 3.2; const x = s.x + Math.cos(a) * d, z = s.z + Math.sin(a) * d * (s.type === 'ginkgo' ? 0.55 : 1); drop(x, Y + 0.008, z, !onRoad(x, z)); }
   }
   for (let i = 0; i < 260; i++) { const x = -128 + rand() * 256, side = rand() < 0.5 ? -1 : 1; drop(x, 0.006, side * (5.3 + rand() * 0.6)); }
   for (let i = 0; i < 380; i++) drop(-41 + rand() * 52, Y + 0.008, 13 + rand() * 38);
@@ -208,7 +212,10 @@ export function buildPark(kit, { spots } = {}) {
     for (const dx of [-0.22, 0.22]) stat.add(kit.cyl(0.012, 0.012, 1.95, steel, { x: x + dx, y: Y + 0.47, z: 23.6 }, 4));
     stat.add(kit.box(0.5, 0.04, 0.2, kit.mat('rubber'), { x, y: Y + 0.44, z: 23.6 }));
   }
-  for (const [x, z, m] of [[-24.8, 23.2, red], [-24.8, 21.4, blue]]) stat.add(kit.cyl(0.08, 0.08, 0.35, steel, { x, y: Y, z }, 8), kit.rbox(0.7, 0.4, 0.3, 0.12, m, { x, y: Y + 0.35, z }));
+  for (const [x, z, m] of [[-24.8, 23.2, red], [-24.8, 21.4, blue]]) {
+    stat.add(kit.cyl(0.08, 0.08, 0.35, steel, { x, y: Y, z }, 8), kit.rbox(0.7, 0.4, 0.3, 0.12, m, { x, y: Y + 0.35, z }));
+    solids.push({ x0: x - 0.36, x1: x + 0.36, z0: z - 0.2, z1: z + 0.2, y0: -0.5, y1: 0.8, noClimb: true, id: 'rider' });
+  }
   solids.push({ x0: -34.3, x1: -24.2, z0: 17.6, z1: 19.6, y0: -0.5, y1: 3, id: 'play' }, { x0: -32.8, x1: -27.2, z0: 22.9, z1: 24.3, y0: -0.5, y1: 3, id: 'swing' });
 
   // ---- 정자 pavilion: raised wooden floor you can step onto, round columns, hipped tile roof ----
@@ -264,6 +271,7 @@ export function buildPark(kit, { spots } = {}) {
   }
   const gymSign = kit.sign(['야외 운동기구', '바른 자세로 천천히 이용하세요'], { w: 0.9, h: 0.5, bg: '#2f6fb5', single: true });
   gymSign.position.set(gx + 4.3, Y + 1.25, gz + 3.2); gymSign.rotation.y = -Math.PI / 4; stat.add(gymSign, kit.box(0.06, 1.0, 0.06, steel, { x: gx + 4.3, y: Y, z: gz + 3.24 }));
+  solids.push({ x0: gx + 4.2, x1: gx + 4.4, z0: gz + 3.14, z1: gz + 3.34, y0: -0.5, y1: 2.0, noClimb: true, id: 'gymSign' });
 
   // ---- park lamps (short, globe heads, light group 'street'), bins, fountain, the gate stone ----
   const lampMat = kit.memo('town:parkLamp', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0xfff3dc, emissive: 0xffe2b0, emissiveIntensity: 2, roughness: 0.3 }), 2));
@@ -271,7 +279,11 @@ export function buildPark(kit, { spots } = {}) {
   group.add(kit.instanced(new THREE.CylinderGeometry(0.05, 0.07, 3.6, 8).translate(0, 1.8, 0), kit.mat('darkMetal'), lamps));
   group.add(kit.instanced(new THREE.SphereGeometry(0.2, 14, 10).translate(0, 3.75, 0), lampMat, lamps, { cast: false }));
   for (const p of lamps) solids.push({ x0: p.x - 0.15, x1: p.x + 0.15, z0: p.z - 0.15, z1: p.z + 0.15, y0: -0.5, y1: 3, id: 'lamp' });
-  for (const [x, z] of [[-12.8, 27.6], [-16.8, 39], [-31, 41.5], [2, 15]]) stat.add(kit.cyl(0.24, 0.22, 0.85, kit.mat('paint:#3f6b4a', { roughness: 0.5 }), { x, y: Y, z }, 14), kit.cyl(0.26, 0.26, 0.06, kit.mat('darkMetal'), { x, y: Y + 0.85, z }, 14));
+  for (const [x, z] of [[-12.8, 27.6], [-16.8, 39], [-31, 41.5], [2, 15]]) { // (-12.8, 27.6) stands inside a bench solid
+    if (z !== 27.6) solids.push({ x0: x - 0.27, x1: x + 0.27, z0: z - 0.27, z1: z + 0.27, y0: -0.5, y1: 0.95, noClimb: true, id: 'bin' });
+    stat.add(kit.cyl(0.24, 0.22, 0.85, kit.mat('paint:#3f6b4a', { roughness: 0.5 }), { x, y: Y, z }, 14), kit.cyl(0.26, 0.26, 0.06, kit.mat('darkMetal'), { x, y: Y + 0.85, z }, 14));
+  }
+  solids.push({ x0: -17.07, x1: -16.53, z0: 20.23, z1: 20.77, y0: -0.5, y1: 1.05, noClimb: true, id: 'fountain' });
   stat.add(kit.cyl(0.22, 0.26, 0.9, kit.mat('curb'), { x: -16.8, y: Y, z: 20.5 }, 10), kit.cyl(0.03, 0.03, 0.12, kit.mat('metal'), { x: -16.8, y: Y + 0.9, z: 20.5 }, 6));
   stat.add(kit.rbox(1.7, 0.8, 0.45, 0.06, kit.surface('concrete', { color: 0xb9b2a5 }), { x: 5.2, y: Y, z: 13.4 }));
   const name = kit.sign(['연무공원'], { w: 1.4, h: 0.36, bg: '#6c665c', fg: '#f4efe4', single: true }); name.position.set(5.2, Y + 0.5, 13.17); name.rotation.y = Math.PI; stat.add(name);

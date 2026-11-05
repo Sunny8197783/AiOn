@@ -172,6 +172,10 @@ export function buildProps(kit, { avoid = [] } = {}) {
   stat.add(kit.cyl(0.05, 0.05, 2.9, steel, { x: bx + 3.2, y: Y, z: -6.9 }, 8));
   const stopSign = kit.sign(['버스', '연무동 행정복지센터'], { w: 0.7, h: 0.6, bg: '#1f5fa8', single: false }); stopSign.position.set(bx + 3.2, Y + 2.6, -6.9); stopSign.rotation.y = Math.PI / 2; stat.add(stopSign);
   box(bx - 2.1, bx + 2.1, bz - 0.72, bz - 0.56, 2.6, 'busStop'); box(bx + 1.9, bx + 2.1, bz - 0.7, bz + 0.7, 2.6, 'busStop');
+  box(bx - 1.8, bx + 1.0, bz - 0.56, bz - 0.12, 0.6, 'busStop'); // bench seat
+  box(bx - 2.09, bx - 1.91, bz + 0.51, bz + 0.69, 2.6, 'busStop'); box(bx + 3.12, bx + 3.28, -6.98, -6.82, 2.9, 'busStop'); // front-west post, stop pole
+  // Hedges along 103동's back face and the 생활문화센터 west wall (shrubSpots): low, but not walked through.
+  for (const [x0, x1, z0, z1] of [[65.2, 110.8, 42, 43.5], [-114.1, -112, 17.3, 44.7]]) { box(x0, x1, z0, z1, 1.0, 'hedge'); Object.assign(solids.at(-1), { noClimb: true, noVault: true }); }
 
   // ---- bollards at the crossings, hydrants ----
   const bol = [];
@@ -247,6 +251,7 @@ export function buildProps(kit, { avoid = [] } = {}) {
   }
   for (let i = 0; i < 9; i++) parcels.push({ x: 89 + rand() * 3, y: Y + 0.15, z: -21.4 + rand() * 0.8, ry: rand(), sx: 0.4, sy: 0.3, sz: 0.35 });
   group.add(kit.instanced(new THREE.BoxGeometry(1, 1, 1), card, parcels));
+  box(88.8, 92.2, -21.6, -20.4, 0.5, 'parcels'); // the loose row by the door
   group.add(kit.instanced(mergeAll([new THREE.BoxGeometry(1.1, 0.04, 1.1).translate(0, 0.13, 0), ...[-0.45, 0, 0.45].map(x => new THREE.BoxGeometry(0.1, 0.1, 1.1).translate(x, 0.06, 0))]), kit.surface('wood', { color: 0xa8865c }), pallets));
   box(96.3, 103, -19.3, -16.2, 2.2, 'parcels');
   const cage = kit.memo('town:cageMesh', () => new THREE.MeshStandardMaterial({ map: kit.texture(kit.canvas(64, 128, (g, w, h) => { g.strokeStyle = '#c9ced2'; g.lineWidth = 3; for (let x = 2; x < w; x += 12) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke(); } for (let y = 2; y < h; y += 14) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); } })), alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.7, roughness: 0.4 }));
@@ -335,6 +340,7 @@ export function buildProps(kit, { avoid = [] } = {}) {
   const tags = kit.sign([bins.map(([l]) => l).join('     ')], { w: 5.2, h: 0.24, bg: '#ffffff', fg: '#2f3a44', single: true }); tags.position.set(shx, Y + 1.32, shz - 0.99); stat.add(tags);
   const shedSign = kit.sign(['분리수거장', '수요일 · 일요일 배출'], { w: 1.6, h: 0.45, bg: '#2f5a3e', single: true }); shedSign.position.set(shx, Y + 1.95, shz - 0.99); stat.add(shedSign);
   box(shx - 2.7, shx + 2.7, shz - 1.1, shz + 0.05, 2.4, 'recycling');
+  for (const dx of [-2.6, 2.6]) box(shx + dx - 0.1, shx + dx + 0.1, shz + 0.9, shz + 1.1, 2.7, 'recyclingPost'); // front posts
 
   kit.merge(stat);
   return { group, solids, lights };

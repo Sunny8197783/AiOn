@@ -13,19 +13,19 @@ export const PRESETS = {
   day: { // clear autumn 13:00
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [195, 50], key: [195, 50], keyColor: '#fff2df', keyI: 4.6,
-    hemi: ['#c9d6ea', '#6e6250', 0.28], envI: 0.5,
+    hemi: ['#c9d6ea', '#7a6e5c', 0.5], envI: 0.7, // fill: the lot in 103동's shadow reads as noon, not dusk
     fog: ['#b9c4cf', 0.0026], exposure: 0.84, bloom: [0.22, 0.35, 0.95],
     sky: { turbidity: 2.2, rayleigh: 1.0, mie: 0.004, mieG: 0.8, gain: 1.0 },
     night: NIGHT_OFF,
     clouds: { cover: 0.32, opacity: 0.95, lit: '#ffffff', shade: '#a3adbd', gain: 0.95 },
     hills: '#8c9fae',
-    grade: { saturation: 0.92, contrast: 1.14, exposure: 0, vignette: 0.22, grain: 0.025, tint: [1, 0.98, 0.95], tintAmount: 0.06, split: 0.6 },
+    grade: { saturation: 0.92, contrast: 1.08, exposure: 0, vignette: 0.22, grain: 0.025, tint: [1, 0.98, 0.95], tintAmount: 0.06, split: 0.6 },
     lit: { street: 0, windows: 0, shops: 0.5, signs: 0.4, indoor: 1, emergency: 1 },
   },
   afternoon: { // 17:30, low warm sun from the west-southwest, long shadows
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [248, 8], key: [248, 8], keyColor: '#ffb36a', keyI: 4.0,
-    hemi: ['#aebbd4', '#7a5236', 0.25], envI: 0.45,
+    hemi: ['#aebbd4', '#7a5236', 0.42], envI: 0.62,
     fog: ['#e3bf9f', 0.0028], exposure: 0.9, bloom: [0.35, 0.5, 0.9],
     sky: { turbidity: 4.5, rayleigh: 2.0, mie: 0.006, mieG: 0.86, gain: 1.0 },
     night: NIGHT_OFF,
@@ -86,12 +86,12 @@ export const PRESETS = {
     outdoor: false, env: 'room', shadowBox: 24,
     sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.15,
     hemi: ['#3a342e', '#16130f', 0.22], envI: 0.38,
-    fog: ['#141821', 0.006], exposure: 1.1, bloom: [0.4, 0.45, 1.0],
+    fog: ['#141821', 0.006], exposure: 0.75, bloom: [0.3, 0.45, 1.3], // no brighter than by day; the ceiling panel does not bloom out
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#04070f', horizon: '#1a1c28', glow: 0.55, glowColor: '#ff9a55', stars: 0.15, moon: 1 },
     clouds: { cover: 0.35, opacity: 0.9, lit: '#6b5a52', shade: '#1a1c26', gain: 0.12 },
     hills: '#0b0d14',
-    grade: { saturation: 1.0, contrast: 1.06, exposure: 0.05, vignette: 0.3, grain: 0.04, tint: [1, 0.93, 0.84], tintAmount: 0.18 },
+    grade: { saturation: 1.0, contrast: 1.06, exposure: 0, vignette: 0.3, grain: 0.04, tint: [1, 0.93, 0.84], tintAmount: 0.18 },
     lit: { indoor: 1, windows: 1, street: 1, shops: 1, signs: 1, emergency: 1 },
   },
   interiorDark: { // indoor lights off, cold moonlight through the windows

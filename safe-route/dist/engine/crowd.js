@@ -2,7 +2,9 @@
 // simple separation steering, a keep-right lane on sidewalks, player avoidance and distance LOD. Members collide
 // with the level's solids (the same circle-vs-box push-out as the player, through the engine/space.js grid, cars
 // included), slide along them and side-step what they meet head-on. The player bumps into them (engine/bodies.js).
-// createCrowd({ count, seed, people, quality|kit, heightAt, player, solids, holds })
+// createCrowd({ count, seed, people, quality|kit, heightAt, player, solids, holds, peers })
+//   peers: an array several crowds of one level share: each adds its members and separates from all of them
+//   (members of a hidden crowd group are skipped), so a queue's leavers do not walk through another crowd's standers.
 //   solids: the level's solids (an array or a function returning it); default ctx.solids, else the solids of the
 //   level the player is in.
 //   holds: [{ x0, x1, z0, z1, open }] (e.g. the carriageway at a signalled zebra; the level keeps `open` current):
@@ -73,7 +75,7 @@ function project(paths, x, z) {
   return best;
 }
 
-export function createCrowd({ count = 24, seed = 1, people = null, quality, kit, heightAt = null, player = null, solids = null, holds = null } = {}) {
+export function createCrowd({ count = 24, seed = 1, people = null, quality, kit, heightAt = null, player = null, solids = null, holds = null, peers = null } = {}) {
   const P0 = profileOf(quality ?? kit?.quality ?? live.tier); // build-time tier: how many members, how detailed
   const cap = P0.crowdCap;
   const make = typeof people?.createPerson === 'function' ? people.createPerson : basePerson;
@@ -305,8 +307,8 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     let wx = 0, wz = 0;
     if (d > 0.04) { const k = Math.min(v, d * 1.8) / d; wx = dx * k; wz = dz * k; }
     if (a.detour > 0) { a.detour -= dt; wx += -a.nz * a.side * v + a.nx * 0.3 * v; wz += a.nx * a.side * v + a.nz * 0.3 * v; } else { a.calm += dt; if (a.calm > 3) a.stuck = 0; }
-    for (const b of agents) {
-      if (b === a || !b.on || b.state === 'gone') continue;
+    for (const b of sepList) {
+      if (b === a || !b.on || b.state === 'gone' || !b.g.visible) continue;
       const ex = a.x - b.x, ez = a.z - b.z, e2 = ex * ex + ez * ez;
       if (e2 < SEP * SEP && e2 > 1e-6) { const e = Math.sqrt(e2), f = ((SEP - e) / SEP) * 1.5 / e; wx += ex * f; wz += ez * f; }
     }
@@ -437,6 +439,9 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     if (reapply && (mode === 'sit' || ((mode === 'stroll' || mode === 'idle') && !paths.length))) apply();
   }
 
+  for (const a of agents) a.g = group;
+  if (peers) peers.push(...agents);
+  const sepList = peers || agents; // who steer() separates from
   const members = agents.map(a => a.p), unbody = addBodies(members);
   return {
     group, update, setMode, setPaths, setArea,
@@ -446,6 +451,6 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     // Where the active, shown members are ([{ x, z }], `out` reused): for traffic that yields to people.
     // Shown members' { x, z } (one object per member, reused: read them this frame).
     positions(out = []) { out.length = 0; for (const a of agents) if (a.on && a.state !== 'gone') { const q = (a.pt ??= { x: 0, z: 0 }); q.x = a.x; q.z = a.z; out.push(q); } return out; },
-    dispose() { unbody(); for (const a of agents) a.p.dispose?.(); group.removeFromParent(); },
+    dispose() { unbody(); for (const a of agents) a.p.dispose?.(); if (peers) for (let i = peers.length - 1; i >= 0; i--) if (peers[i].g === group) peers.splice(i, 1); group.removeFromParent(); },
   };
 }

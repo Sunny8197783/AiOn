@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { FAIL_TYPES, failDebrief, chapterSummary, endingRecord, PREP, PEOPLE } from '../dist/game/debrief.js';
 import { simulateDays, applyLedger } from '../dist/game/ledger.js';
-import { createGame, recordEvent, buy, pack, check, consume, note, spendSlot, adjust, hhmm, trade, drainCharge } from '../dist/game/state.js';
+import { createGame, recordEvent, buy, pack, check, consume, note, spendSlot, adjust, trade, drainCharge } from '../dist/game/state.js';
 import { recordEncounter, evalExtinguisher, evalBag } from '../dist/game/drills.js';
 import { CATALOG, BAG_LIMIT } from '../dist/game/items.js';
 import { SOURCES, FACTS, fact } from '../dist/game/facts.js';
@@ -103,11 +103,11 @@ test('fire: the last extinguisher encounter picks the FACTS line', () => {
   assert.match(failDebrief(G, 'fire').seen, /알고 있었습니다/);
 });
 
-test('lostWay uses the seed times', () => {
+test('lostWay: the map app fails from the blackout, not a seeded clock', () => {
   let d;
   const L = createGame({ seed: 11 });
   d = failDebrief(L, 'lostWay');
-  assert.ok(d.seen.includes(hhmm(L.cond.commsWeakAt)));
+  assert.match(d.seen, /정전 뒤부터/);
   assert.equal(d.missed, fact('shelter_signs').text);
   L.know.routeChecked = true;
   assert.match(failDebrief(L, 'lostWay').next, /두 번째 경로/);
@@ -200,9 +200,8 @@ test('endingRecord follows payoffs, unused items, know flags and people', () => 
   assert.ok(!(CATALOG.water_500.name in why) && !(CATALOG.batteries_aa.name in why), 'used items are not unused');
   assert.ok(!r.unchecked.includes('가까운 대피소 위치'));
   assert.deepEqual(r.people, [
-    { who: '오서연', what: '계단에서 보행기를 옆에서 들어 주었다' },
+    { who: '오서연', what: '계단에서 보행기를 옆에서 들어 주었다 · 비상 연락 방법을 정했습니다 (문자)' },
     { who: '박영수 소장', what: '비상 연락 방법을 정했습니다 (문자·문에 쪽지)' },
-    { who: '오서연', what: '비상 연락 방법을 정했습니다 (문자)' },
   ]);
   assert.deepEqual(r.practice, { text: fact('shelter_signs').text, sourceId: 'law_sign' }, 'next unchecked flag');
 

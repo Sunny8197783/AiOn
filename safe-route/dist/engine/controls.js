@@ -31,7 +31,6 @@ const editable = (t) => !!t && (t.isContentEditable || /^(INPUT|SELECT|TEXTAREA)
 const minYs = new WeakMap(), npcLists = new WeakMap(), NONE = [];
 const minY = (L) => { let m = minYs.get(L); if (m === undefined) { m = Infinity; for (const w of L.walk || []) m = Math.min(m, w.y ?? 0, w.ramp?.y0 ?? Infinity, w.ramp?.y1 ?? Infinity); minYs.set(L, m); } return m; };
 const npcsOf = (L) => { if (!L?.npcs) return null; let l = npcLists.get(L); if (!l) npcLists.set(L, l = Object.values(L.npcs)); return l; };
-
 export { groundAt, collide } from './geom.js';
 
 function makeBeam() {
@@ -327,7 +326,10 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
       } else if (g) {
         climb = g.y - lastGround; lastGround = g.y;
         if ((safeT -= dt) <= 0 && groundNear(walk, px, pz, g.y)) { safeT = 0.5; safe.x = px; safe.y = g.y; safe.z = pz; safe.L = L; }
-        position.y = snap || Math.abs(g.y - position.y) < 0.002 ? g.y : position.y + (g.y - position.y) * damp(g.y > position.y ? 22 : 15, dt);
+        // On a ramp (stair flight) take its height directly: a damp trails it by v_y/k (0.13–0.22 m, feet float or
+        // sink on the treads). Steps between surfaces (curbs, landing edges) keep the damp; the camera smooths itself.
+        const onRamp = g.slope > 0.02 && Math.abs(g.y - position.y) < 0.25;
+        position.y = snap || onRamp || Math.abs(g.y - position.y) < 0.002 ? g.y : position.y + (g.y - position.y) * damp(g.y > position.y ? 22 : 15, dt);
       }
     }
     const hs = Math.hypot(vel.x, vel.y);

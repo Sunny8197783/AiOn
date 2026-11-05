@@ -24,7 +24,7 @@ const OUTDOOR = new Set(['town']);
 // chapter set and a retry or a new run no longer lists goes back to this value on the next enter.
 // A level may publish its own `defaults`, which win. (stock and noticeText are re-set by their chapters.)
 export const LEVEL_DEFAULTS = {
-  apartment: { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, seoyeonDoor: 'closed', candles: 'none', windowView: 'day', elder304: 'off', curtain: 'none' },
+  apartment: { wallet: 'home', power: 'on', stock: {}, bag: 'empty', radio: 'none', hallFire: 'none', smoke: 0, haze: 'follow', seoyeonDoor: 'closed', candles: 'none', windowView: 'day', elder304: 'off', curtain: 'none' },
   town: { traffic: 'normal', crowd: 'normal', closures: [], gates: { east: 'open', stairs: 'open', ramp: 'open', access: 'closed' }, waterPoint: 'off', buses: 'off', notices: 'none', strike: 'none' },
   shelter: { crowd: 'settled', phase: 'calm', power: 'grid', fire: 'none', ways: ['stairs', 'ramp', 'access', 'east'], elder: 'off', seoyeon: 'hidden' },
   store: { soldOut: [], power: 'on', clerk: 'in' },
@@ -149,12 +149,14 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   // deadline: { minute, day, type } -> Fail(type) when the clock passes it (type may be a function of the moment)
   ctx.roam = ({ on = {}, doors = true, deadline = null, rate = ctx.rate, tick = null, shelter = null } = {}) => new Promise((resolve, reject) => {
     const prevRate = ctx.rate; ctx.rate = rate; ctx.roaming = true;
-    let busy = false, done = false, armed = new Set();
+    let busy = false, done = false, armed = new Set(), lastL = null;
     const finish = (fnRes, value) => { if (done) return; done = true; offI(); offF(); ctx.rate = prevRate; ctx.roaming = false; fnRes(value); };
     // Walk-through doors: stepping into a plain door (no handler of the chapter's own) goes through it, no key.
-    // A door arms only once you have been more than 1.6 m from it, so arriving next to one never bounces you back.
+    // A door arms only once you have been more than 1.6 m from it in the current level, so arriving next to one
+    // never bounces you back (armed resets on every level change: E on a door, or a handler's own ctx.goto).
     const walkDoor = () => {
       const L = engine.level; if (!doors || busy || !L) return;
+      if (L !== lastL) { lastL = L; armed = new Set(); }
       for (const p of L.points || []) {
         const key = `${L.id}:${p.id}`;
         if (!DOORS[key] || on[p.id] || on[key] || p.enabled === false) continue;
@@ -171,7 +173,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
         if (on[point.id]) value = await modal(() => on[point.id](point));
         else if (on[key]) value = await modal(() => on[key](point));
         else if (shelter && point.kind === 'shelter' && engine.level.id === 'town') value = await modal(() => shelter(point));
-        else if (doors && DOORS[key]) { const [lv, sp] = DOORS[key]; await ctx.goto(lv, sp); }
+        else if (doors && DOORS[key]) { const [lv, sp] = DOORS[key]; armed = new Set(); await ctx.goto(lv, sp); }
         // The chapter's '*' sees every other point first; undefined means "not mine" and the common text runs.
         else if (on['*'] && (value = await modal(() => on['*'](point))) !== undefined) { /* handled */ }
         else if (isCommon(ctx, point)) await modal(() => common(ctx, point));
