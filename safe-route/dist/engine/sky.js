@@ -6,6 +6,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PRESETS, MOON, envState } from './presets.js';
+import { profileOf } from './quality.js';
 
 const D2R = Math.PI / 180;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -51,7 +52,7 @@ function makeSky() { // Sky addon with an extra brightness uniform so presets ca
   return sky;
 }
 
-const shell = (r, fs, uniforms, order, defines) => {
+const shell = (r, fs, uniforms, order, defines = {}) => {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.ShaderMaterial({
     uniforms, vertexShader: FAR_VS, fragmentShader: fs, defines, side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
   }));
@@ -173,7 +174,7 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
   const domeU = { uZenith: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uGlowColor: { value: new THREE.Color() }, uGlow: { value: 0 }, uNight: { value: 0 } };
   const dome = shell(1900, DOME_FS, domeU, -4);
   const cloudU = { uCover: { value: 0.3 }, uOpacity: { value: 1 }, uTime: { value: 0 }, uLit: { value: new THREE.Color() }, uShade: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) } };
-  const clouds = shell(1700, CLOUD_FS, cloudU, -2, { OCT: quality === 'high' ? 5 : 4 });
+  const clouds = shell(1700, CLOUD_FS, cloudU, -2, { OCT: profileOf(quality).clouds });
   const stars = makeStars(kit), moon = makeMoon(kit);
   group.add(skyMesh, dome, stars, moon, clouds);
   // Fixed distant world: city ring, aviation beacons, near and far hills (광교산 rises to the north).
@@ -182,14 +183,14 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
   const hillsNear = hillRing(kit, 760, 25, 110, 5, [[Math.PI * 1.5, 0.35, 0.9], [0.4, 0.25, 0.4]]);
   const hillsFar = hillRing(kit, 1100, 50, 150, 11, [[Math.PI * 1.35, 0.5, 0.6], [2.6, 0.4, 0.5]]);
   world.add(city, beacons, hillsNear, hillsFar);
-  group.userData.noAO = world.userData.noAO = true; // post.js keeps these out of the AO G-buffer
+  group.userData.noAO = world.userData.noAO = true; // a tag only now: GTAO reads the scene depth (no G-buffer pass), where the far shells sit behind everything
   scene.add(group, world);
 
-  let shadowBox = 70, cur = null;
+  let shadowBox = 70, cur = null, dim = false, every = 1, everyDim = 1, sf = 0, shadowOn = false;
   function apply(S) {
     cur = S;
     dirFrom(S.keyAz, S.keyEl, keyDir); dirFrom(S.sunAz, S.sunEl, sunDir);
-    sun.color.fromArray(S.keyColor); sun.intensity = S.keyI > 0.01 ? S.keyI : 0; sun.shadow.autoUpdate = sun.intensity > 0;
+    sun.color.fromArray(S.keyColor); sun.intensity = S.keyI > 0.01 ? S.keyI : 0; dim = S.keyI < 0.3;
     hemi.color.fromArray(S.hemiSky); hemi.groundColor.fromArray(S.hemiGround); hemi.intensity = S.hemiI;
     scene.fog.color.fromArray(S.fogColor); scene.fog.density = S.fogDensity; scene.background.copy(scene.fog.color);
     scene.environmentIntensity = S.envI; renderer.toneMappingExposure = S.exposure;
@@ -217,6 +218,13 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
     if (!reduceMotion) time += dt;
     cloudU.uTime.value = time;
     beacons.visible = kit.isLit('windows') && (reduceMotion || (time % 1.6) < 0.8);
+    // Shadow map redraws: every frame, or every n-th on the lower tiers (n larger under a dim moon / room light).
+    // n = 0: no sun shadow under a dim key light. The map is kept and its intensity set to 0, so the faint moon
+    // shadow fades out without recompiling every material mid-play; it is redrawn when it shows again.
+    const n = dim ? everyDim : every, on = !!sun.intensity && n > 0;
+    if (on !== shadowOn) { shadowOn = on; sun.shadow.intensity = on ? 1 : 0; if (on) sun.shadow.needsUpdate = true; }
+    sun.shadow.autoUpdate = on && n <= 1;
+    if (on && n > 1 && ++sf % n === 0) sun.shadow.needsUpdate = true;
     if (!sun.intensity) return;
     const half = shadowBox / 2, cam = sun.shadow.camera;
     if (cam.right !== half) { cam.left = cam.bottom = -half; cam.right = cam.top = half; cam.updateProjectionMatrix(); }
@@ -258,10 +266,13 @@ export function createSky({ renderer, scene, kit, quality = 'high' }) {
     return tex;
   }
 
+  // Tier knobs (engine/quality.js): shadow on/off and size (castShadow toggles recompile the materials once), redraw
+  // cadence, cloud octaves.
   function setQuality(q) {
-    const n = q === 'high' ? 2048 : q === 'medium' ? 1024 : 512;
+    const P = profileOf(q), n = P.sun || 512;
+    sun.castShadow = P.sun > 0; every = P.shadowEvery; everyDim = P.darkEvery;
     if (sun.shadow.mapSize.x !== n) { sun.shadow.mapSize.set(n, n); sun.shadow.map?.dispose(); sun.shadow.map = null; }
-    const oct = q === 'high' ? 5 : 4;
+    const oct = P.clouds;
     if (clouds.material.defines.OCT !== oct) { clouds.material.defines.OCT = oct; clouds.material.needsUpdate = true; }
   }
   setQuality(quality);

@@ -130,7 +130,7 @@ async function waterTrip(ctx) {
   ctx.outdoorEnv = 'day';
   await goOut(ctx, '비상급수시설로', '행정복지센터 마당의 비상급수시설로 갑니다.');
   ctx.objective('물 받기', '행정복지센터 마당 급수대에서 줄을 섭니다.', []);
-  await ctx.roam({ rate: 2, tick: bodyCheck(ctx, 'carry'), on: { water: async () => 'queue' } });
+  await ctx.roam({ rate: 2, tick: bodyCheck(ctx), on: { water: async () => 'queue' } });
   await factCard(ctx, '비상급수시설', ['water_point', 'water_sphere', 'water_hands']);
   ctx.pass(25);
   let carry;
@@ -140,7 +140,7 @@ async function waterTrip(ctx) {
   recordEvent(G, 'water_fetched', { litres: carry, forSeoyeon });
   ctx.speedOverride = carry > 12 ? 0.62 : 0.78;
   ctx.engine.player.carrying = 'water';
-  adjust(G, 'fatigue', carry > 12 ? 14 : 8);
+  adjust(G, 'fatigue', Math.min(carry > 12 ? 14 : 8, Math.max(0, CARRY.warn + 5 - G.stats.fatigue))); // never past the warning at pick-up
   ctx.refresh();
   ctx.objective('집으로', `물 ${carry}리터를 들고 103동 3층까지 돌아갑니다. 무겁다. 지치면 멈춰 서서 숨을 고르세요.`, []);
   // Effort: walking with the load tires (running more), standing still lets you catch your breath (story/strain.js).

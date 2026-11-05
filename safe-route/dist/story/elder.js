@@ -8,6 +8,7 @@
 import { recordEvent } from '../game/state.js';
 import { groundAt } from '../engine/geom.js';
 import { fact } from '../game/facts.js';
+import { elderScene } from './cutscenes.js';
 
 const CALL_R = 11, BEHIND = 1.1, PACE = 0.5;
 const SPOT = new WeakMap(); // her model -> where the level put her (the follower moves her; a retry puts her back)
@@ -34,7 +35,9 @@ export function createElderDilemma(ctx) {
   async function ask() {
     asking = true;
     try {
-      await ctx.caption('계단 옆 304호 앞에서 어르신이 벽 손잡이를 붙들고 서 있다.', null, 2600);
+      // C1: two shots of her at the rail; the plain caption if the cutscene cannot play.
+      const shown = await elderScene(ctx).catch((err) => { console.error('[cine] elder scene failed; the story goes on', err); return 'failed'; });
+      if (shown !== 'done' && shown !== 'skipped') await ctx.caption('계단 옆 304호 앞에서 어르신이 벽 손잡이를 붙들고 서 있다.', null, 2600);
       const pick = await ctx.say('304호 어르신', ['"302호 정민 씨예요? 사이렌이 울리는데 계단이 캄캄해서… 혼자 내려가기가 겁나네요."'], [
         { id: 'help', label: '부축해서 같이 내려간다 (시간이 더 걸린다)' },
         { id: 'manager', label: '1층 관리사무소에 알리고 먼저 간다' },

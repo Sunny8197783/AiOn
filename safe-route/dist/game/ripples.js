@@ -32,7 +32,8 @@ export const CAUSES = {
   cash: [{ type: 'cash', text: '현금을 찾아 두었다' }, { type: 'buy', when: has('cash'), text: '현금을 찾아 두었다' }],
   extinguisher: [{ type: 'encounter', when: (d) => d.tool === 'extinguisher' && d.result === 'practice', text: '복도 소화기 사용 순서를 익혀 두었다' }],
   curtain: [{ type: 'home_ready', text: '창문에 암막 커튼을 달아 두었다' }],
-  elder: [{ type: 'help', when: (d) => d.who === 'elder', text: '304호 어르신과 함께 계단을 내려갔다' }],
+  elder: [{ type: 'help', when: (d) => d.who === 'elder', text: '304호 어르신과 함께 계단을 내려갔다' },
+    { type: 'help', when: (d) => d.who === 'manager' && /304호/.test(d.what ?? ''), text: '박 소장에게 304호 어르신을 알렸다' }],
   towel: [{ type: 'tub_filled', text: '큰 통에 물을 받아 두었다' }],
 };
 

@@ -1,5 +1,6 @@
 // Landing screen, pause menu, settings and the about/sources page.
 import { el, modal, icon, btn, uiSound, reduceMotion } from './dom.js';
+import { TIERS, TIER_LABELS } from '../engine/quality.js';
 
 export const CHAPTERS = [
   ['프롤로그', '평소와 다른 화요일', 'D-3 화 17:30 · 한결물류 사무실', '확인된 사실, 추정, 소문을 나눕니다.'],
@@ -203,11 +204,12 @@ export function pause() {
 // settings(current) -> Promise<{ quality, volume, mute, captions, reduceMotion, textScale, view, sensitivity, minimap,
 //   volAmbience, volEffects, volUi, profile }>
 export function settings(current = {}) {
-  const cur = { quality: 'high', volume: 0.7, mute: false, captions: true, reduceMotion: false, textScale: 1, view: 'third',
+  const cur = { quality: 'medium', volume: 0.7, mute: false, captions: true, reduceMotion: false, textScale: 1, view: 'third',
     sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', ...current };
   const root = document.documentElement, scale0 = root.style.getPropertyValue('--text-scale');
-  const radios = (name, legend, options, value, note) => el('fieldset', { class: 'set-group' }, el('legend', {}, legend),
-    el('div', { class: 'seg' }, options.map(([v, label, sub]) => el('label', {},
+  // cols: a fixed number per row (the five graphics tiers sit 3 + 2 instead of 4 + one stretched)
+  const radios = (name, legend, options, value, note, cols = 0) => el('fieldset', { class: 'set-group' }, el('legend', {}, legend),
+    el('div', { class: 'seg' }, options.map(([v, label, sub]) => el('label', cols ? { style: { flex: `0 0 calc((100% - ${(cols - 1) * 6}px) / ${cols})` } } : {},
       el('input', { type: 'radio', name, value: String(v), checked: String(v) === String(value) || null }),
       el('span', {}, el('b', {}, label), sub ? el('small', {}, sub) : null)))),
     note ? el('p', { class: 'set-note' }, note) : null);
@@ -227,7 +229,8 @@ export function settings(current = {}) {
   const form = el('form', { class: 'settings-form' },
     el('div', { class: 'set-cols' },
       el('div', {},
-        radios('quality', '그래픽 품질', [['low', '낮음', '가벼운 노트북'], ['medium', '보통', '대부분의 PC'], ['high', '높음', '그림자·주변광']], cur.quality, '느려지면 게임이 한 번 자동으로 품질을 낮춥니다.'),
+        radios('quality', '그래픽 품질', TIERS.map((q) => [q, ...TIER_LABELS[q]]), cur.quality,
+          `${cur.qualityAuto ? '처음 실행할 때 이 컴퓨터에 맞춰 골랐어요. ' : ''}화면이 자주 멈추면 한 단계씩 자동으로 낮춥니다. 사람 수·조명 수·텍스처는 다음 장소로 이동할 때부터 바뀝니다.`, 3),
         radios('view', '시점', [['third', '3인칭', '어깨 너머'], ['first', '1인칭', '정민의 눈']], cur.view),
         radios('textScale', '글자 크기', [[0.9, '작게'], [1, '보통'], [1.15, '크게'], [1.3, '아주 크게']], cur.textScale),
         radios('profile', '체험 모드', [['none', '기본'], ['mobility', '보행 장애', '달리기 불가 · 느린 걸음'], ['wheelchair', '휠체어', '앉은 눈높이 · 계단 불가'],
@@ -250,7 +253,8 @@ export function settings(current = {}) {
     e.preventDefault();
     const f = new FormData(form);
     uiSound('confirm');
-    m.close({ ...cur, quality: f.get('quality') || cur.quality, view: f.get('view') || cur.view, textScale: Number(f.get('textScale')) || 1,
+    const quality = f.get('quality') || cur.quality;
+    m.close({ ...cur, quality, qualityAuto: quality === cur.quality && !!cur.qualityAuto, view: f.get('view') || cur.view, textScale: Number(f.get('textScale')) || 1,
       volume: Number(vol.value) / 100, mute: f.has('mute'), captions: f.has('captions'), reduceMotion: f.has('reduceMotion'),
       sensitivity: Number(f.get('sensitivity')) / 100 || 1, minimap: f.has('minimap'), profile: f.get('profile') || 'none',
       volAmbience: Number(f.get('volAmbience')) / 100, volEffects: Number(f.get('volEffects')) / 100, volUi: Number(f.get('volUi')) / 100 });

@@ -149,7 +149,8 @@ export function buildMart(kit, people, fx) {
       for (let k = 0; k < n; k++) { produce.push({ x: x + (r() - 0.5) * 0.4, y: 0.84 + s * 0.8 + (k > n * 0.6 ? s * 1.2 : 0), z: z + (r() - 0.5) * 0.36, s, sy: s * (c === '#e9e6d8' ? 3 : 0.92), rx: r() * 3 }); col.push(c); }
     }
   }
-  const prodMesh = kit.instanced(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ roughness: 0.55 }), produce, { cast: false });
+  // 80 triangles a fruit, 20 on the lighter graphics tiers (1.2k of them: 96k vs 24k triangles)
+  const prodMesh = kit.instanced(new THREE.IcosahedronGeometry(1, (kit.Q?.goodsSeg ?? 10) >= 8 ? 1 : 0), new THREE.MeshStandardMaterial({ roughness: 0.55 }), produce, { cast: false });
   const tc = new THREE.Color(); col.forEach((c, i) => prodMesh.setColorAt(i, tc.set(c).multiplyScalar(0.85 + r() * 0.3))); dyn.add(prodMesh);
 
   // ---- travelator to the 2nd floor (east wall) ----
@@ -207,17 +208,17 @@ export function buildMart(kit, people, fx) {
   });
 
   // ---- people: shoppers wander the aisles, a queue forms when busy ----
-  const q = kit.quality === 'low' ? 0.5 : kit.quality === 'medium' ? 0.75 : 1;
+  const q = kit.Q?.shop ?? 1; // share of the shoppers the graphics tier keeps
   const nNormal = Math.round(6 * q), nBusy = Math.round(12 * q);
   const shoppers = Array.from({ length: nBusy }, (_, i) => {
     const cart = i % 3 === 0, x = AISLES[(r() * AISLES.length) | 0], z = r() < 0.5 ? FRONT : BACK;
-    const p = npc(people, 'crowd', 300 + i, { x, z, ry: r() * 6, props: [cart ? 'cart' : 'basket'] });
+    const p = npc(people, 'crowd', 300 + i, { x, z, ry: r() * 6, props: [cart ? 'cart' : 'basket'], detail: kit.Q?.people });
     // 'walk' for everyone: the 'walker' anim would auto-show a rollator; the cart prop alone sets the grip.
     const s = { p, cart, walk: 'walk', speed: (cart ? 0.75 : 0.85) + r() * 0.35, off: (r() - 0.5) * 0.6, path: [], wait: r() * 3, blocked: false };
     p.setSpeed(s.speed); p.setAnim('idle'); dyn.add(p.group); return s;
   });
   const queue = [[4.25, -3.8, -Math.PI / 2], [4.25, -5.4, Math.PI], [4.3, -6.0, Math.PI], [4.2, -6.6, Math.PI], [0.85, -2.2, Math.PI], [0.75, -5.8, Math.PI]]
-    .slice(0, Math.round(6 * q)).map(([x, z, ry], i) => { const p = npc(people, 'crowd', 400 + i, { x, z, ry, anim: i === 2 ? 'phone' : 'idle', props: ['basket'] }); dyn.add(p.group); return p; });
+    .slice(0, Math.round(6 * q)).map(([x, z, ry], i) => { const p = npc(people, 'crowd', 400 + i, { x, z, ry, anim: i === 2 ? 'phone' : 'idle', props: ['basket'], detail: kit.Q?.people }); dyn.add(p.group); return p; });
   function plan(s) {
     const g = s.p.group, atFront = Math.abs(g.position.z - FRONT) < Math.abs(g.position.z - BACK);
     const ax = AISLES[(r() * AISLES.length) | 0] + s.off, z0 = atFront ? FRONT : BACK, z1 = atFront ? BACK : FRONT;

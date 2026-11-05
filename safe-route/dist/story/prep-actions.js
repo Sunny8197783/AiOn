@@ -4,6 +4,7 @@ import { routeOptions } from '../game/routes.js';
 import { evalBag, recordEncounter, ladderStage, BAG_GOALS } from '../game/drills.js';
 import { CATALOG, MART_SECTIONS, BAG_LIMIT, packable } from '../game/items.js';
 import { fact } from '../game/facts.js';
+import { bagInfo, applyPocket } from '../ui/bag.js';
 
 export const SEOYEON_CARD = ['보행 보조기를 씁니다', '평지와 완만한 경사로는 혼자 갑니다', '계단과 가파른 내리막은 혼자 내려가지 않습니다', '보조기와 떨어지지 않습니다', '도움이 필요하면 제가 말합니다'];
 export const RADIO_FREQ = 102.1; // game frequency of the disaster-broadcast station (fictional)
@@ -364,10 +365,11 @@ export async function doBag(ctx) {
   ctx.objective('비상가방 꾸리기', '현관의 배낭에 들고 나갈 물건을 담습니다.', []);
   await ctx.roam({ on: { homeBag: async () => 'go' } });
   const mode = ladderStage(G, 'bag');
-  const items = bagItems(G, true);
+  const items = bagInfo(G, bagItems(G, true));
   const goals = BAG_GOALS.alert;
   const res = await ctx.modal(() => ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals, tips: tips('bag_days', 'bag_nocook', 'bag_copies', 'bag_foil', 'bag_door') }));
   applyBag(G, res?.bag || {});
+  applyPocket(G, res?.pocket);
   const ev = evalBag(G, 'alert');
   recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
   G.know.bagPacked = Object.values(G.items).some(e => e.bag > 0);

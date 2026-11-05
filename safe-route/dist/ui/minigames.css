@@ -187,7 +187,7 @@
 .reduce-motion .mg-panel *, .reduce-motion .mg-backdrop { transition: none !important; animation: none !important; }
 
 /* ---- grab3d: taking things by hand (ui/grab3d.js) ---- */
-.grab3d { --mg-amber: #ffb23f; --mg-text: #f2f2f2; position: fixed; inset: 0; z-index: 40; pointer-events: none; color: var(--mg-text); font-size: calc(15px * var(--text-scale, 1)); }
+.grab3d { --mg-amber: #ffb23f; --mg-red: #e5484d; --mg-text: #f2f2f2; position: fixed; inset: 0; z-index: 40; pointer-events: none; color: var(--mg-text); font-size: calc(15px * var(--text-scale, 1)); }
 .grab3d-top { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: min(720px, calc(100% - 32px)); padding: 10px 18px; border-radius: 12px; background: rgba(16, 18, 22, .78); text-align: center; }
 .grab3d-top ul { margin: 6px 0 0; padding: 0; list-style: none; font-size: .9em; opacity: .85; }
 .grab3d-foot { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(880px, calc(100% - 32px)); padding: 12px 16px; border-radius: 14px; background: rgba(16, 18, 22, .84); pointer-events: auto; display: grid; gap: 8px; }
@@ -205,3 +205,24 @@
 html.grab3d-open .hud, html.grab3d-open .lock-hint { visibility: hidden; }
 .grab3d-foot .mg-keys { margin: 0; font-size: .8em; opacity: .7; }
 @media (max-width: 600px) { .grab3d-foot .mg-keys { display: none; } }
+/* grab3d bag: the backpack's 10x5 cells and front pocket (ui/bag-grid.js) beside what you hold */
+.grab3d-foot.has-pack { grid-template-columns: auto minmax(0, 1fr); align-items: start; column-gap: 18px; }
+.grab3d-main { display: grid; gap: 8px; min-width: 0; }
+.grab3d-pack { display: grid; gap: 5px; width: 190px; font-size: .84em; }
+.bagpack-head { display: flex; align-items: center; gap: 8px; } .bagpack-head small { opacity: .7; margin-right: auto; }
+.bagpack-tidy { min-height: 28px; padding: 2px 10px; border-radius: 8px; font-size: .95em; }
+.bagpack-tidy.is-hint { border-color: var(--mg-amber); color: #ffd58a; }
+.bagpack-grid { display: grid; grid-template-columns: repeat(var(--cols), 1fr); grid-template-rows: repeat(var(--rows), 19px); width: 190px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, .18); background-color: rgba(255, 255, 255, .03); overflow: hidden;
+  background-image: linear-gradient(rgba(255, 255, 255, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .06) 1px, transparent 1px); background-size: calc(100% / var(--cols)) calc(100% / var(--rows)); }
+.bagpack-piece { margin: 1px; border-radius: 3px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .28), inset 0 0 0 1px rgba(0, 0, 0, .2); opacity: .88; transition: opacity .15s; }
+.bagpack-piece.is-sel { opacity: 1; outline: 2px solid var(--mg-amber); outline-offset: -1px; }
+.bagpack-pocket { margin: -3px 0 0; padding: 3px 8px 4px; border: 1px dashed rgba(255, 255, 255, .22); border-top: 0; border-radius: 0 0 8px 8px; line-height: 1.35; opacity: .9; }
+.bagpack-pocket b, .grab3d-pocket-tag { color: #ffd58a; }
+.bagpack-weight { display: grid; gap: 3px; min-width: 200px; } .bagpack-weight .mg-bar { height: 6px; }
+.bagpack-weight[data-state="warn"] > span:first-child { color: #ffc04d; } .bagpack-weight[data-state="over"] > span:first-child { color: #ff6b5a; }
+.bagpack-note { margin: 0; flex-basis: 100%; font-weight: 400; color: #d9e0e2; font-size: .92em; }
+.grab3d-pair { display: inline-flex; }
+.grab3d-pair .grab3d-chip:first-child { border-radius: 99px 0 0 99px; } .grab3d-pair .grab3d-chip:first-child:hover { background: rgba(255, 178, 63, .22); }
+.grab3d-chip-x { border-radius: 0 99px 99px 0; border-left: 0; padding: 4px 9px; }
+@media (max-width: 600px) { .grab3d-foot.has-pack { grid-template-columns: 1fr; } }
+@media (max-height: 520px) { .grab3d-foot .mg-keys { display: none; } .bagpack-grid { grid-template-rows: repeat(var(--rows), 13px); } .grab3d-foot { padding: 8px 12px; gap: 6px; } }

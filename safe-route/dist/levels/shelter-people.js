@@ -21,7 +21,6 @@ const IN = ['stairs', 'stairs', 'stairs', 'east', 'ramp', 'access'], OUT = ['sta
 export const ENTRANCES = ['stairs', 'ramp', 'access', 'east'];
 const DESK = { x: 2.55, z: -9.5, wait: 2.6, anim: 'talk', face: Math.PI };   // arrivals by stair A write in the roster
 const COLS = [-19.3, -17.1, -14.9, -12.7, -10.5, -3.9, -1.7, 2.7, 4.9];      // gaps between mats clear of pillars, radio table, bins
-const QUOTA = { high: { seats: 26, walk: 4 }, medium: { seats: 16, walk: 3 }, low: { seats: 8, walk: 2 } };
 const FIRE_CLEAR = 6.5;   // seats this close to a fire are left (their people moved away)
 
 // Walk-zone height at (x, z); the lowest zone wins where zones overlap (stair foot under the top landing).
@@ -47,11 +46,11 @@ function seatPath(way, s, desk = false) {
 export function buildPeople(kit, people, { seats, walk }) {
   const { THREE } = kit;
   const group = new THREE.Group(); group.name = 'shelter-people';
-  const Q = QUOTA[kit.quality] || QUOTA.high, r = kit.rng(733);
+  const [qs, qw] = kit.Q?.shelterPeople ?? [26, 4], Q = { seats: qs, walk: qw }, r = kit.rng(733); // residents by graphics tier
   const pick = (list) => list[(r() * list.length) | 0];
   function at(preset, seed, x, z, yaw, anim, y = 0) {
     let p = null;
-    try { p = people?.createPerson?.({ preset, seed }); } catch (err) { console.error('[shelter] createPerson failed', preset, err); }
+    try { p = people?.createPerson?.({ preset, seed, detail: kit.Q?.people ?? 1 }); } catch (err) { console.error('[shelter] createPerson failed', preset, err); } // detail: the tier's
     if (!p?.group) p = { group: new THREE.Group(), setAnim() {}, setSpeed() {}, setProp() {}, lookAt() {}, update() {} };
     p.group.position.set(x, y, z); p.group.rotation.y = yaw; p.setAnim(anim, { instant: true });
     group.add(p.group);

@@ -7,9 +7,9 @@ import { createSky } from './sky.js';
 import { createPost } from './post.js';
 import { createControls } from './controls.js';
 import { PRESETS, envState, gradeFor, mixState } from './presets.js';
+import { normQ, rankQ, lowerQ, profileOf, pixelRatioFor, setLive, autoTier, gpuInfo, createGovernor } from './quality.js';
+import { applyTier, disposeLevel } from './tier-apply.js';
 
-const QUALITIES = ['low', 'medium', 'high'];
-const PIXEL_RATIO = { high: () => Math.min(globalThis.devicePixelRatio || 1, 2), medium: () => Math.min(globalThis.devicePixelRatio || 1, 1.25), low: () => 1 };
 const ease = (k) => k * k * (3 - 2 * k);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -37,17 +37,25 @@ function normalizeLevel(L, id) {
   return L;
 }
 
-export function createEngine({ canvas, quality = 'high', reduceMotion = false, levels = {}, onQualityChange = null } = {}) {
+// quality: a tier id (engine/quality.js TIERS; 'low' | 'medium' | 'high' as before) or 'auto' (detect one from the GPU,
+// cores, memory and screen). onQualityChange(tier, { auto: true, from }) fires when the frame-rate governor steps down.
+export function createEngine({ canvas, quality = 'auto', reduceMotion = false, levels = {}, onQualityChange = null } = {}) {
   if (!canvas) throw new Error('[engine] createEngine needs a canvas');
-  if (!QUALITIES.includes(quality)) { console.warn(`[engine] unknown quality "${quality}", using high`); quality = 'high'; }
   let RM = !!reduceMotion;
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; // fixed: a type change recompiles everything
   renderer.localClippingEnabled = true; // the first-person body cuts its own head (engine/controls.js)
-  renderer.setPixelRatio(PIXEL_RATIO[quality]());
+  const asked = normQ(quality, null);
+  if (!asked && quality !== 'auto') console.warn(`[engine] unknown quality "${quality}"; detecting one`);
+  quality = asked ?? autoTier(gpuInfo(renderer));
+  const detected = !asked;
+  setLive(quality);
+  const pixelRatio = () => pixelRatioFor(quality, globalThis.devicePixelRatio || 1);
+  const gov = createGovernor();
+  renderer.setPixelRatio(pixelRatio());
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(70, 1, 0.08, 3000);
   const kit = createKit(renderer, { quality });
@@ -71,7 +79,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     controls.setModel(playerModel('jeongmin'));
   }).catch((err) => console.error('[engine] people setup failed', err)); // never blocks level loading
   let fx = stubFx();
-  const fxReady = import('./fx.js').then((m) => { fx = m.createFx(THREE, kit, { reduceMotion: RM }); })
+  const fxReady = import('./fx.js').then((m) => { fx = m.createFx(THREE, kit, { reduceMotion: RM, renderer }); })
     .catch((err) => console.error('[engine] engine/fx.js unavailable; fire, smoke and rain are disabled', err));
   const ready = Promise.all([peopleReady, fxReady]);
   // One cached model per preset; the 서연 interlude swaps the model the same controller drives.
@@ -116,7 +124,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     envName = preset;
     try { scene.environment = sky.environment(preset, rain); } catch (err) { console.error('[engine] PMREM environment failed', err); }
     post.setGrade(gradeFor(preset, rain), envDur);
-    if (outdoorRain && !rainFx) { try { rainFx = fx.rain(scene, camera); } catch (err) { console.error('[engine] rain fx failed', err); } }
+    if (outdoorRain && !rainFx) { try { rainFx = fx.rain(scene, camera); rainFx.setDensity?.(profileOf(quality).fx); } catch (err) { console.error('[engine] rain fx failed', err); } }
     rainFx?.setOn(outdoorRain);
     if (!envDur) stepEnv(0);
   }
@@ -127,7 +135,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   // reflection. The dry values are kept in material.userData.dry and restored when the rain stops.
   let wetList = null, wetNow = 0;
   function collectWet(root) {
-    const srcs = new Set(['asphalt', 'sidewalk', 'concrete'].map((n) => kit.surface(n).map?.source));
+    const srcs = new Set(['asphalt', 'sidewalk', 'concrete'].flatMap((n) => { kit.surface(n); return kit.surfaceMaps(n); })); // every tier's texture
     const out = new Set();
     root.traverse((o) => { for (const m of [].concat(o.material || [])) if (m?.isMeshStandardMaterial && (m.userData.wet || srcs.has(m.map?.source))) out.add(m); });
     for (const m of out) m.userData.dry ??= { roughness: m.roughness, color: m.color.clone(), env: m.envMapIntensity };
@@ -154,16 +162,18 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
       if (typeof make !== 'function') return Promise.reject(new Error(`[engine] unknown level "${id}"; known: ${Object.keys(levels).join(', ')}`));
       const p = (async () => { await ready; return normalizeLevel(await make(kit, people, fx), id); })();
       built.set(id, p);
-      p.then(() => done.add(id), () => built.delete(id)); // a failed build may be retried
+      // a failed build may be retried; a build dropped meanwhile (tier change, rebuildOthers) touches nothing
+      p.then(() => { if (built.get(id) === p) done.add(id); }, () => { if (built.get(id) === p) built.delete(id); });
     }
     return built.get(id);
   }
-  let queue = Promise.resolve(), busy = false;
+  let queue = Promise.resolve(), busy = false, entering = null;
+  const stale = new Set(); // built levels still shown at an older tier: dropped once the player leaves them
   // Fade out, swap level.group into the scene, place the player, run prepare(level) (level states, setEnv:
   // the level is already current), precompile shaders for that final setup, fade in.
   function enter(levelId, spawn, { prepare } = {}) {
     const run = queue.catch(() => {}).then(async () => {
-      busy = true;
+      busy = true; entering = levelId;
       const fadeS = RM ? 0 : done.has(levelId) ? 0.1 : 0.35; // a level already built swaps in a blink
       try {
         await post.fadeTo(0, fadeS);
@@ -173,6 +183,9 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
         if (L !== level) {
           if (wetList) { setWet(wetList, 0); wetList = null; }
           if (level) scene.remove(level.group);
+          if (level && stale.delete(level.id) && built.get(level.id) !== undefined) { // built at an older tier: rebuild next time
+            const old = level; built.delete(old.id); done.delete(old.id); tried.delete(old.id); disposeLevel(old, persons);
+          }
           scene.add(L.group); level = L; reapplyLit(); applyWet(wetNow);
         }
         const names = Object.keys(L.spawns);
@@ -180,13 +193,14 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
         if (!controls.player.teleport(want) && names.length) controls.player.teleport(names[0]);
         controls.snap(); controls.update(0);
         if (prepare) { try { await prepare(L); } catch (err) { console.error(`[engine] prepare for level "${levelId}" failed (continuing)`, err); } }
+        applyTier(L.group, quality); // shadow casters and shadowed lights for this tier, before the shaders compile
         try { await Promise.race([renderer.compileAsync(scene, camera), new Promise((r) => setTimeout(r, 4000))]); }
         catch (err) { console.warn('[engine] shader precompile failed (continuing)', err); }
         prewarm();
         return L;
       } finally {
         await post.fadeTo(1, fadeS);
-        busy = false;
+        busy = false; entering = null; gov.hold(3); // the first frames after a swap upload textures: do not judge them
       }
     });
     queue = run;
@@ -195,17 +209,20 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
 
   // Build and precompile the other levels while the player is busy elsewhere, so a door never waits on a
   // build. Idle callbacks keep each build between frames; one level at a time.
-  let warming = false; const tried = new Set();
+  // Off on the lowest tier (memory and long build frames): levels then build at the door.
+  let warming = false, building = false; const tried = new Set(); // building: a prewarm build is between frames
   function prewarm() {
-    if (warming) return; warming = true;
+    if (warming || !profileOf(quality).prewarm) return; warming = true;
     const idle = (fn) => (globalThis.requestIdleCallback ? requestIdleCallback(fn, { timeout: 8000 }) : setTimeout(fn, 1500));
     const next = () => {
-      const id = Object.keys(levels).find((k) => !built.has(k) && !tried.has(k));
-      if (!id) return;
+      const id = profileOf(quality).prewarm && Object.keys(levels).find((k) => !built.has(k) && !tried.has(k));
+      if (!id) { warming = false; return; }
       tried.add(id);
       idle(async () => {
+        building = true;
         try { const L = await getLevel(id); await renderer.compileAsync(L.group, camera, scene); }
         catch (err) { console.warn(`[engine] prewarm of "${id}" failed (it loads at the door instead)`, err); }
+        building = false; gov.hold(1.5); // a build's long frames are not the game running slow
         setTimeout(next, 800);
       });
     };
@@ -220,12 +237,28 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     camera.aspect = w / h; camera.updateProjectionMatrix();
     post.setSize(w, h);
   }
+  // A tier change applies the runtime knobs at once (pixel ratio, post, shadows, crowd distances and caps, rain) and
+  // drops the other built levels, so they rebuild with this tier's build-time knobs (lights, people, textures) at the
+  // next door. The level the player is in (or is entering) keeps its build until the player leaves it.
   function setQuality(q) {
-    if (!QUALITIES.includes(q)) { console.error(`[engine] unknown quality "${q}"`); return; }
-    quality = q;
-    renderer.setPixelRatio(PIXEL_RATIO[q]());
-    sky.setQuality(q); post.setQuality(q); controls.setQuality(q);
+    const t = normQ(q, null);
+    if (!t) { console.error(`[engine] unknown quality "${q}"`); return; }
+    const changed = t !== quality;
+    quality = t; setLive(t); kit.setQuality(t);
+    renderer.setPixelRatio(pixelRatio());
+    sky.setQuality(t); post.setQuality(t); controls.setQuality(t);
+    rainFx?.setDensity?.(profileOf(t).fx);
+    if (level) applyTier(level.group, t);
+    if (changed) { rebuildOthers(); gov.hold(4); }
     resize();
+  }
+  function rebuildOthers() {
+    for (const [id, p] of [...built]) {
+      if (id === entering || (level && id === level.id)) { stale.add(id); continue; }
+      built.delete(id); done.delete(id); tried.delete(id);
+      p.then((L) => { if (L !== level) disposeLevel(L, persons); }, () => {});
+    }
+    if (level) prewarm();
   }
   function setReduceMotion(v) { RM = !!v; post.setReduceMotion(RM); controls.setReduceMotion(RM); fx.setReduceMotion?.(RM); }
   if (typeof ResizeObserver === 'function') new ResizeObserver(resize).observe(canvas); else addEventListener('resize', resize);
@@ -235,31 +268,29 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
   const frameFns = new Set(), logged = new Set();
   const logOnce = (key, err) => { if (!logged.has(key)) { logged.add(key); console.error(`[engine] ${key}`, err); } };
   let timeScale = 1; // slow motion (cutscenes); 1 = real time
-  let t = 0, last = performance.now(), fps = 60, acc = 0, frames = 0, slow = 0, downgraded = false;
+  let t = 0, last = performance.now();
+  // Frame-rate governor (gov, created at the top): below 30 fps for 4 s of real time steps down one tier, then waits
+  // 6 s before judging again; never below the lowest tier, never while a level loads or the tab is hidden.
+  const gopt = { busy: false, floor: false }; // reused every frame
   function measure(raw) {
-    if (raw > 0.5) { acc = 0; frames = 0; return; } // tab was hidden
-    acc += raw; frames++;
-    if (acc < 0.5) return;
-    fps = frames / acc; acc = 0; frames = 0;
-    if (downgraded || busy || quality === 'low' || t < 3) { slow = 0; return; }
-    slow = fps < 30 ? slow + 0.5 : 0;
-    if (slow >= 4) {
-      downgraded = true;
-      const q = quality === 'high' ? 'medium' : 'low';
-      console.warn(`[engine] fps ${fps.toFixed(1)} < 30 for 4 s; quality ${quality} -> ${q}`);
-      setQuality(q);
-      try { onQualityChange?.(q); } catch (err) { console.error('[engine] onQualityChange failed', err); }
-    }
+    gopt.busy = busy || building || globalThis.document?.visibilityState === 'hidden'; gopt.floor = rankQ(quality) === 0;
+    if (!gov.sample(raw, gopt)) return;
+    const from = quality, q = lowerQ(quality);
+    console.warn(`[engine] fps ${gov.fps.toFixed(1)} < 30 for 4 s; quality ${from} -> ${q}`);
+    setQuality(q);
+    try { onQualityChange?.(q, { auto: true, from }); } catch (err) { console.error('[engine] onQualityChange failed', err); }
   }
+  const fctx = { camera, player: controls.player, env: 'day', power: true };
   function frame(now) {
     const raw = Math.max(0, (now - last) / 1000); last = now;
     const dt = Math.min(raw, 0.1) * timeScale; t += dt;
     try { controls.update(dt); } catch (err) { logOnce('player update failed', err); }
     if (envK < 1) stepEnv(dt);
-    if (level?.update) { try { level.update(dt, t, { camera, player: controls.player, env: envName, power }); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
+    fctx.env = envName; fctx.power = power; // one object reused every frame (levels spread it when they add to it)
+    if (level?.update) { try { level.update(dt, t, fctx); } catch (err) { logOnce(`level "${level.id}" update failed`, err); } }
     sky.update(dt, camera, controls.player.position, RM);
     if (rainFx) { try { rainFx.update(dt, camera); } catch (err) { logOnce('rain update failed', err); } }
-    for (const fn of [...frameFns]) { try { fn(dt, t); } catch (err) { logOnce('onFrame listener failed', err); } }
+    for (const fn of frameFns) { try { fn(dt, t); } catch (err) { logOnce('onFrame listener failed', err); } }
     post.render(dt);
     measure(raw);
   }
@@ -270,6 +301,7 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     THREE, renderer, scene, camera, kit, people, persons, ready, post,
     get fx() { return fx; },
     get quality() { return quality; },
+    get qualityDetected() { return detected; }, // the tier was guessed (createEngine quality 'auto')
     get level() { return level; },
     get player() { return controls.player; },
     get view() { return controls.view; },
@@ -306,7 +338,8 @@ export function createEngine({ canvas, quality = 'high', reduceMotion = false, l
     onFrame: (fn) => { frameFns.add(fn); return () => frameFns.delete(fn); },
     setQuality, setReduceMotion,
     get timeScale() { return timeScale; }, set timeScale(v) { timeScale = Math.min(2, Math.max(0, Number(v) || 0)); },
-    stats: () => ({ fps: Math.round(fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles, adapt: +post.adaptValue().toFixed(2) }),
+    // { adapt: true } also reads back the eye adaptation (a GPU stall: tests only, not every frame).
+    stats: ({ adapt = false } = {}) => ({ fps: Math.round(gov.fps), drawCalls: post.sceneStats.calls, triangles: post.sceneStats.triangles, ...(adapt ? { adapt: +post.adaptValue().toFixed(2) } : {}) }),
     dispose() { renderer.setAnimationLoop(null); controls.dispose(); renderer.dispose(); },
   };
 }

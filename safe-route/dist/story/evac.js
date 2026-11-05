@@ -1,6 +1,6 @@
 // 4장 남을까 떠날까 (D+6) and 5장 공식 대피 (D+12). Both choices in 4장 are valid under different
 // conditions; the fire in 4장 is the third encounter, where stepping back is the success.
-import { recordEvent, adjust, hhmm, bagLoad } from '../game/state.js';
+import { recordEvent, adjust, hhmm, bagLoad, inPocket } from '../game/state.js';
 import { ladderStage, recordEncounter, evalBag, evalExtinguisher, BAG_GOALS } from '../game/drills.js';
 import { chapterSummary, endingRecord } from '../game/debrief.js';
 import { CLOSURES } from '../game/townmap.js';
@@ -10,6 +10,9 @@ import { posts, verify, misled, lostByRumor, rumor } from '../game/rumors.js';
 import { applyHome, applyBag, bagItems, goHome } from './prep-actions.js';
 import { radioScene, emergencyText, factCard, dayLedger, stockLook, AREA } from './common.js';
 import { hearClaim, boardWalk } from './rumor-scene.js';
+import { bagInfo, applyPocket } from '../ui/bag.js';
+import { ripples } from '../game/ripples.js';
+import { rippleMontage } from './cutscenes.js';
 
 const stock = (G, ids) => ids.reduce((s, id) => s + (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0), 0);
 
@@ -45,7 +48,7 @@ export async function crossroads(ctx) {
   }
   if (G.know.stayMove === 'move') await moveAndFire(ctx); else await stayAndSmoke(ctx);
   const sum = chapterSummary(G, 'crossroads');
-  await ctx.modal(() => ctx.ui.chapterCard({ chapter: '4장', title: '남을까, 떠날까', lines: sum.lines, payoffs: sum.payoffs }));
+  await ctx.modal(() => ctx.ui.chapterCard({ chapter: '4장', title: '남을까, 떠날까', lines: sum.lines, payoffs: sum.payoffs, ripples: ripples(G) }));
 }
 
 // "임시 거처 급식 끊김" (game/rumors.js camp_food) arrives before the stay/move choice. Returns how it was
@@ -151,10 +154,11 @@ export async function evacuation(ctx) {
     const heard = await ctx.modal(() => radioScene(ctx, 'evac'));
     G.know.evacClosuresKnown = !!heard;
     // One bag, third encounter: no tips unless the ladder says so.
-    const items = bagItems(G);
+    const items = bagInfo(G, bagItems(G));
     const mode = ladderStage(G, 'bag');
     const res = await ctx.modal(() => ctx.ui.bag({ mode, context: 'evac', limit: BAG_LIMIT, items, goals: BAG_GOALS.evac, tips: [] }));
     applyBag(G, res?.bag || {});
+    applyPocket(G, res?.pocket);
     const ev = evalBag(G, 'evac');
     recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
     G.know.bagOn = true;
@@ -263,12 +267,14 @@ export async function depart(ctx) {
   recordEvent(G, 'arrived_assembly', { minute: G.minute });
   if (G.know.routeChecked) ctx.payoff('route', '동네 길을 미리 알아 둔 덕분에 통제 구간을 돌아 집결지에 닿았다');
   const card = (G.items.contact_card?.bag ?? 0) + (G.items.doc_copies?.bag ?? 0) > 0;
+  const deep = card && !inPocket(G, 'contact_card') && !inPocket(G, 'doc_copies'); // game rule (M8): the pocket comes out at once
   const id = (G.items.id_card?.bag ?? 0) + (G.items.id_card?.home ?? 0) > 0; // picked up from the wallet (story/world.js)
   await ctx.say('집결지 접수', ['이름, 연락처, 복용약을 적어 주세요. 신분증 있으세요?',
     id ? '(지갑에서 신분증을 꺼내 보여 주었다.)' : '(신분증을 집에 두고 나왔다. 이름과 주소, 생년월일로 본인 확인을 하느라 한참 걸렸다.)',
-    card ? '(가방 앞주머니의 연락처 카드와 서류 사본도 함께 건넸다.)' : '(연락처는 기억나는 대로 적었다.)'], null, '임시 집결지');
+    !card ? '(연락처는 기억나는 대로 적었다.)' : deep ? '(연락처 카드와 서류 사본은 가방 깊숙이 있었다. 꺼내느라 잠깐 걸렸다.)' : '(가방 앞주머니의 연락처 카드와 서류 사본도 함께 건넸다.)'], null, '임시 집결지');
+  if (deep) ctx.pass(2);
   if (!id) { ctx.pass(15); ctx.toast(fact('docs_take').text, 'official', 5000); }
-  if (card || id) ctx.payoff('docs', id ? '챙겨 나온 신분증으로 접수를 바로 마쳤다' : '연락처 카드와 서류 사본으로 접수를 바로 마쳤다');
+  if (card || id) ctx.payoff('docs', id ? '챙겨 나온 신분증으로 접수를 바로 마쳤다' : `연락처 카드와 서류 사본으로 접수를 ${deep ? '' : '바로 '}마쳤다`);
   await ctx.caption('버스 창밖으로 연무동이 멀어진다.', null, 3500);
 }
 
@@ -283,5 +289,7 @@ export async function ending(ctx) {
   const G = ctx.G;
   G.chapter = 'ending';
   recordEvent(G, 'ending', { load: bagLoad(G).weightKg });
+  // C2: what the early choices led to, over the town at dusk, then where 정민 is now. Never blocks the ending.
+  try { await rippleMontage(ctx, ripples(G), G.know.path); } catch (err) { console.error('[cine] ripple montage failed; the story goes on', err); }
   return ctx.modal(() => ctx.ui.ending(endingRecord(G), SOURCES));
 }

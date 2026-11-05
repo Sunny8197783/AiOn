@@ -62,9 +62,12 @@ export function createCine(ctx) {
       const look = new THREE.Vector3(), hand = shot.cam?.hand ?? 0.04, RM = engine.reduceMotion;
       let s = 0, done = false;
       const t0 = performance.now();
+      let last = t0, posed = t0;
       const finish = () => { if (done) return; done = true; off(); fill.intensity = 0; try { cleanup?.(); } catch (err) { console.error('[cine] shot cleanup failed', err); } resolve(); };
       engine.setCameraOverride((camera) => {
-        s = (performance.now() - t0) / 1000; // real seconds, whatever the world's time scale or frame rate
+        // Real seconds, whatever the world's time scale or frame rate; a hitch (a level's first frame, a shader
+        // compile) counts as at most a quarter second, so a slow machine still sees the whole shot.
+        const now = performance.now(); s += Math.min(0.25, (now - last) / 1000); last = posed = now;
         while (events.length && events[0][0] <= s) { try { events.shift()[1](); } catch (err) { console.error('[cine] event failed', err); } }
         const P = pose(shot.cam, Math.min(1, s / shot.dur), s);
         camera.position.set(...P.p);
@@ -77,7 +80,7 @@ export function createCine(ctx) {
       });
       const off = engine.onFrame(() => { // ends a shot even when the camera override is not running
         if (skipped()) finish();
-        else if ((performance.now() - t0) / 1000 > shot.dur + 2) { console.warn(`[cine] shot overran (camera override lost?) after ${s.toFixed(2)} of ${shot.dur} s`); finish(); }
+        else if (performance.now() - posed > 2000 && (performance.now() - t0) / 1000 > shot.dur + 2) { console.warn(`[cine] shot overran (camera override lost?) after ${s.toFixed(2)} of ${shot.dur} s`); finish(); }
       });
     });
   }
@@ -99,7 +102,7 @@ export function createCine(ctx) {
       engine.setCameraOverride(null); engine.timeScale = 1; engine.post.fadeTo(1, 0); engine.post.setGrade({ exposure: baseExp }, 0.6);
       for (const o of live) o.dispose(); live.clear();
       ui.el.classList.remove('on'); setTimeout(() => { if (!busy) ui.el.hidden = true; }, 700);
-      title(null); hud.setCinematic(false); engine.setModelHidden(false); engine.setControls(true);
+      title(null); if (skipped) hud.clearCaption?.(); hud.setCinematic(false); engine.setModelHidden(false); engine.setControls(true);
       busy = false;
     }
     return skipped ? 'skipped' : 'done';

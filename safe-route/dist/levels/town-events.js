@@ -60,8 +60,10 @@ export function buildEvents(kit, people, walk) {
       const tx = gp.x + gp.face[1] * 1.6, tz = gp.z - gp.face[0] * 1.6;
       g.add(kit.cyl(0.04, 0.05, 3.2, steel, { x: tx, y: hy(tx, tz), z: tz }, 8), kit.box(0.9, 0.5, 0.5, kit.mat('paint:#f2c230'), { x: tx, y: hy(tx, tz), z: tz }));
       const head = kit.box(0.7, 0.35, 0.12, towerHead, { x: tx, y: hy(tx, tz) + 3.1, z: tz, ry: yawTo(-gp.face[0], -gp.face[1]), cast: false }); g.add(head);
-      const L = new THREE.SpotLight(0xf4f8ff, 0, 26, 0.7, 0.6, 1.6); L.position.set(tx, hy(tx, tz) + 3.2, tz); L.target.position.set(tx - gp.face[0] * 6, 0, tz - gp.face[1] * 6);
-      kit.lit('emergency', L, 120); kit.gateLit(L, false); group.add(L, L.target); light = L; // outside g: lights never hide
+      if (kit.Q?.towerLights !== false) { // the two lightest graphics tiers keep only the glowing head (a spot light less per pixel)
+        const L = new THREE.SpotLight(0xf4f8ff, 0, 26, 0.7, 0.6, 1.6); L.position.set(tx, hy(tx, tz) + 3.2, tz); L.target.position.set(tx - gp.face[0] * 6, 0, tz - gp.face[1] * 6);
+        kit.lit('emergency', L, 120); kit.gateLit(L, false); group.add(L, L.target); light = L; // outside g: lights never hide
+      }
       sol.push({ x0: tx - 0.5, x1: tx + 0.5, z0: tz - 0.3, z1: tz + 0.3, y0: -1, y1: 3, id: `closure:${id}`, off: true, ...SEAL });
     }
     const um = kit.instanced(barrierGeo, kit.mat('paint:#ffffff', { roughness: 0.55 }), units); const c = new THREE.Color();

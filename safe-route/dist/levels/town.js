@@ -168,6 +168,7 @@ export async function buildTown(kit, people, fx) {
   // ---- per frame ----
   let rmT = 0, reduced = false, nt = 0; const peds = [];
   const localNpcs = ['guideEast', 'guideC', 'clerkOutside'].map(k => npcs[k]).filter(Boolean);
+  const fctx = {};
   function update(dt, t, ctx = {}) {
     if ((rmT -= dt) <= 0) {
       rmT = 1;
@@ -176,9 +177,11 @@ export async function buildTown(kit, people, fx) {
     WIND.uTime.value = t; WIND.uWind.value = reduced ? 0 : 1;
     // No grid power after the blackout: dead signals, and nobody drives through town any more.
     if (ctx.power === false && traffic.mode !== 'none') setState('traffic', 'none');
-    traffic.update(dt, t, { ...ctx, peds: crowd.positions(peds) }); // cars give way to people on the road
-    strike.update(dt, t, ctx.camera, ['night', 'blackout', 'dusk'].includes(ctx.env));
-    events.update(dt, t, { ...ctx, reduced });
+    const c2 = Object.assign(fctx, ctx); c2.peds = crowd.positions(peds); c2.reduced = reduced; // one object, reused
+    traffic.update(dt, t, c2); // cars give way to people on the road
+    strike.update(dt, t, ctx.camera, ctx.env === 'night' || ctx.env === 'blackout' || ctx.env === 'dusk');
+    events.update(dt, t, c2);
+    crowd.setSignals(t, ctx.power !== false && ctx.env !== 'blackout' && traffic.mode !== 'none'); // strollers wait for the green man
     crowd.update(dt, ctx);
     nt += dt;
     const pl = ctx.player;

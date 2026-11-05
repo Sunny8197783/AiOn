@@ -1,5 +1,5 @@
 // People: procedural, skinned, clothed adults and elders with blended procedural animation and props.
-// createPerson({ preset, seed }) -> Person; createCrowd lives in crowd.js (re-exported here).
+// createPerson({ preset, seed, detail }) -> Person; createCrowd lives in crowd.js (re-exported here).
 // One SkinnedMesh per person (1 draw call); each visible prop adds one. Feet at the origin, facing -z.
 // Origin rule: standing/crouch keep the feet at the origin; 'sit' and 'sitChair' put the hips there.
 import * as THREE from 'three';
@@ -31,9 +31,10 @@ const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _S = new THREE.Vector3
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 let autoSeed = 1;
 
-export function createPerson({ preset = 'crowd', seed } = {}) {
+// detail (0..1, default 1): mesh detail, from the graphics tier for crowd members (engine/quality.js people).
+export function createPerson({ preset = 'crowd', seed, detail = 1 } = {}) {
   const spec = presetSpec(preset, seed ?? autoSeed++);
-  const { b, d, J, rows, chestF } = buildBody(spec);
+  const { b, d, J, rows, chestF } = buildBody(spec, Math.min(1, Math.max(0.3, Number(detail) || 1)));
   const back = (y) => { const r = rows.reduce((a, q) => (Math.abs(q.y - y) < Math.abs(a.y - y) ? q : a)); return r.z + r.rz + (spec.outer ? 0.012 * d.H : 0.004 * d.H); };
   const P0 = { d, front: chestF, back };
   if (spec.bake?.backpack) PR.backpack(b, { ...P0, c: spec.bake.backpack, skin: B.chest });
@@ -258,7 +259,7 @@ export function createPerson({ preset = 'crowd', seed } = {}) {
     // Play a one-shot clip (engine/people-clips.js: punch, throw, pickup, vault, climb, land, hurt) over the
     // current animation. seconds overrides its length; power (0..1) scales clips that have a strength (land).
     play(name, { seconds, power = 0.5 } = {}) {
-      const info = clipInfo(name); if (!info) { console.error(`people: unknown clip "${name}" for ${preset}`); return false; }
+      const info = clipInfo(name); if (!info) { if (!ANIMS.includes(name)) console.error(`people: unknown clip "${name}" for ${preset}`); return false; }
       act = { name, t: 0, dur: Math.max(0.1, seconds ?? info.dur), power }; return true;
     },
     get playing() { return act?.name ?? null; },

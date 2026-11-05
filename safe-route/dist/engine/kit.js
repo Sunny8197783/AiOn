@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { normQ, PROFILES } from './quality.js';
 
 export const FONT = "'Pretendard','Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif";
 
@@ -17,9 +18,12 @@ export function rng(seed = 1) {
   };
 }
 
+// The tier is live (kit.setQuality): what a level builds from here on (texture sizes, filtering, the levels' own
+// kit.Q knobs) follows it; what is already built keeps its tier until it is rebuilt.
 export function createKit(renderer, { quality = 'high' } = {}) {
-  const aniso = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() || 1);
-  const S = quality === 'low' ? 256 : 512;
+  let tier = normQ(quality, 'high');
+  const maxAniso = renderer?.capabilities?.getMaxAnisotropy?.() || 1;
+  let S = PROFILES[tier].tex; // surface texture size, read when a surface is first made at this tier
   const cache = new Map();
   const memo = (key, make) => { if (!cache.has(key)) cache.set(key, make()); return cache.get(key); };
 
@@ -32,7 +36,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(repeat[0], repeat[1]);
-    t.anisotropy = aniso;
+    t.anisotropy = Math.min(maxAniso, PROFILES[tier].aniso);
     if (color) t.colorSpace = THREE.SRGBColorSpace;
     return t;
   }
@@ -149,12 +153,17 @@ export function createKit(renderer, { quality = 'high' } = {}) {
   };
 
   // Material for a named surface. tile = metres per texture repeat; pass { repeat } to override.
+  const surfaceSrc = new Map(); // name -> every texture source made for it (one per tier size), for the wet look
   function surface(name, { repeat, color, roughness } = {}) {
-    const key = `surface:${name}:${repeat}:${color}:${roughness}`;
+    const size = PROFILES[tier].tex, key = `surface:${name}:${repeat}:${color}:${roughness}:${size}`;
     return memo(key, () => {
-      const base = memo(`surfaceTex:${name}`, () => {
+      const base = memo(`surfaceTex:${name}:${size}`, () => {
+        S = size;
         const s = SURFACES[name](rng(name.length * 977 + 13));
-        return { map: texture(s.color), normalMap: texture(normalFrom(s.height, name === 'sidewalk' || name === 'tile' || name === 'brick' ? 4 : 2), { color: false }), tile: s.tile, rough: s.rough };
+        const map = texture(s.color);
+        if (!surfaceSrc.has(name)) surfaceSrc.set(name, new Set());
+        surfaceSrc.get(name).add(map.source);
+        return { map, normalMap: texture(normalFrom(s.height, name === 'sidewalk' || name === 'tile' || name === 'brick' ? 4 : 2), { color: false }), tile: s.tile, rough: s.rough };
       });
       const map = base.map.clone(), normalMap = base.normalMap.clone();
       const rep = repeat || [1 / base.tile, 1 / base.tile];
@@ -391,13 +400,17 @@ export function createKit(renderer, { quality = 'high' } = {}) {
     for (const o of victims) o.parent.remove(o);
     for (const { material, cast, receive, geoms } of byMat.values()) {
       const merged = new THREE.Mesh(mergeGeometries(geoms, false), material);
-      merged.castShadow = cast; merged.receiveShadow = receive; root.add(merged);
+      merged.castShadow = cast; merged.receiveShadow = receive; merged.matrixAutoUpdate = false; root.add(merged); // identity, never moves itself
     }
     return root;
   }
 
   return {
-    THREE, quality, rng, memo, canvas, texture, normalFrom, surface, worldUV, mat, facade,
+    get quality() { return tier; },
+    get Q() { return PROFILES[tier]; }, // this tier's knobs (engine/quality.js PROFILES)
+    setQuality(q) { tier = normQ(q, tier); },
+    surfaceMaps: (name) => [...(surfaceSrc.get(name) || [])],
+    THREE, rng, memo, canvas, texture, normalFrom, surface, worldUV, mat, facade,
     signTexture, sign, shelterSign, guideSign, lit, setLit, gateLit, isLit,
     place, box, rbox, cyl, plane, slab, instanced, merge,
   };

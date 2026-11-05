@@ -1,17 +1,28 @@
 // Crowd wiring for the town: which people.createCrowd groups exist for each `crowd` state, the
 // sidewalk and evacuation paths they use (cut by active closures), queue lines at the water point and
-// the assembly bay. Crowds are created lazily and every call is guarded, so a missing or failing
-// crowd module only empties the streets.
-import { SIDEWALKS, BARRICADES, EVAC, ENTRY, clipPaths } from './town-plan.js';
+// the assembly bay, and the walk signals strollers wait for at the signalled zebras. Crowds are created lazily
+// and every call is guarded, so a missing or failing crowd module only empties the streets.
+import { SIDEWALKS, BARRICADES, EVAC, ENTRY, clipPaths, signalAt } from './town-plan.js';
 import { heightAt } from './town-util.js';
 import { WATER, ASSEMBLY } from './town-events.js';
+import { zebraZones } from './town-geo.js';
+import { CROSSWALKS, ROADS } from '../game/townmap.js';
 
 const SIZES = { main: 26, extra: 14, few: 8, line: 14 };
 export const CROWD_MODES = ['none', 'normal', 'busy', 'evacuating', 'sparse', 'queue', 'assembly'];
 const toPts = (paths) => paths.map(p => p.map(([x, z]) => ({ x, z })));
+// The carriageway of every zebra with pedestrian signals (town-traffic draws them on these three roads); crossing an
+// east-west road is allowed while north-south traffic has green, and the other way round.
+const SIGNALLED = ['yeonmu', 'munhwa', 'hanbit'];
+function signalHolds() {
+  return zebraZones(CROSSWALKS, ROADS).map((z, k) => {
+    const r = ROADS.find(q => q.id === CROSSWALKS[k].road);
+    return SIGNALLED.includes(r.id) ? { ...z, group: r.z1 - r.z0 < r.x1 - r.x0 ? 'NS' : 'EW', open: true } : null;
+  }).filter(Boolean);
+}
 
 export function createTownCrowd({ people, group, walk, solids = null, quality = 'high' }) {
-  const crowds = {}, failed = new Set(), tmp = [];
+  const crowds = {}, failed = new Set(), tmp = [], holds = signalHolds();
   let mode = 'none', closures = [], gates = { east: 'open', stairs: 'open', ramp: 'open', access: 'closed' };
   const heightFn = (x, z) => heightAt(walk, x, z);
   const guard = (what, fn) => { try { return fn(); } catch (err) { if (!failed.has(what)) { failed.add(what); console.error(`[town] crowd ${what} failed`, err); } return undefined; } };
@@ -19,7 +30,7 @@ export function createTownCrowd({ people, group, walk, solids = null, quality = 
   function get(name) {
     if (name in crowds) return crowds[name];
     crowds[name] = guard(`create ${name}`, () => {
-      const c = people.createCrowd({ count: SIZES[name], seed: 900 + Object.keys(crowds).length * 17, people, heightAt: heightFn, quality, solids });
+      const c = people.createCrowd({ count: SIZES[name], seed: 900 + Object.keys(crowds).length * 17, people, heightAt: heightFn, quality, solids, holds });
       if (!c?.group) throw new Error('createCrowd returned no group');
       c.group.name = `crowd:${name}`; group.add(c.group); return c;
     }) || null;
@@ -63,11 +74,17 @@ export function createTownCrowd({ people, group, walk, solids = null, quality = 
   return {
     setMode(m) { if (!CROWD_MODES.includes(m)) { console.error(`[town] crowd "${m}" unknown; use ${CROWD_MODES.join(' | ')}`); return mode; } mode = m; apply(); return mode; },
     setContext(o = {}) { if (o.closures) closures = o.closures; if (o.gates) gates = { ...gates, ...o.gates }; if (mode === 'normal' || mode === 'busy' || mode === 'sparse' || mode === 'evacuating' || mode === 'queue') apply(); },
-    update(dt, ctx) { for (const [n, c] of Object.entries(crowds)) if (c?.group.visible) guard(`${n}.update`, () => c.update(dt, ctx)); },
+    update(dt, ctx) { for (const n in crowds) { const c = crowds[n]; if (c?.group.visible) guard(`${n}.update`, () => c.update(dt, ctx)); } },
+    // Walk signals at time t (town-plan CYCLE); on = the signals have power and run. A steady green man opens a
+    // crossing; it closes again when the green starts to blink (5 s left), so nobody starts across too late.
+    setSignals(t, on) {
+      const s = on ? signalAt(t) : null;
+      for (const h of holds) h.open = !s || (s[h.group] === 'green' && s.left > 5);
+    },
     // Where the shown crowd members are ({x, z}), for cars that give way (town-traffic). `out` is reused.
     positions(out = []) {
       out.length = 0;
-      for (const c of Object.values(crowds)) if (c?.group.visible && c.positions) for (const p of c.positions(tmp)) out.push(p);
+      for (const n in crowds) { const c = crowds[n]; if (c?.group.visible && c.positions) for (const p of c.positions(tmp)) out.push(p); }
       return out;
     },
     get mode() { return mode; },

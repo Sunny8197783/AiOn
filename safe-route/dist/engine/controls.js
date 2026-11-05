@@ -13,6 +13,7 @@ import { gridOf, segHit, camTop, headroomAt, setActiveLevel } from './space.js';
 import { createPicker } from './reach.js';
 import { planVault } from './vault.js';
 import { bodiesNear, pushOut } from './bodies.js';
+import { profileOf } from './quality.js';
 
 export const PLAYER = { radius: 0.32, height: 1.72, eye: 1.62, walk: 3.0, run: 5.2 };
 const TP = { dist: 3.4, height: 1.7, shoulder: 0.45 };
@@ -78,7 +79,12 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
   // never recompiles shaders, plus a faint additive cone for the beam.
   const spot = new THREE.SpotLight(0xfff1dc, 0, 28, 0.42, 0.6, 1.6);
   spot.shadow.mapSize.set(512, 512); spot.shadow.camera.near = 0.4; spot.shadow.bias = -0.0006; spot.shadow.autoUpdate = false;
-  spot.castShadow = quality === 'high';
+  const flashShadow = (q) => { // the tier's flashlight shadow (castShadow changes recompile once, never per toggle)
+    const n = profileOf(q).flash;
+    spot.castShadow = n > 0;
+    if (n && spot.shadow.mapSize.x !== n) { spot.shadow.mapSize.set(n, n); spot.shadow.map?.dispose(); spot.shadow.map = null; }
+  };
+  flashShadow(quality);
   const beam = makeBeam(), aim = new THREE.Vector3();
   scene.add(spot, spot.target, beam);
 
@@ -483,7 +489,7 @@ export function createControls({ camera, canvas, scene, getLevel, reduceMotion =
     shake,
     setSensitivity(v) { sens = clamp(Number(v) || 1, 0.3, 3); },
     setBeamStrength(v) { beamStrength = v; },
-    setQuality(q) { spot.castShadow = q === 'high'; spot.shadow.autoUpdate = flashOn && spot.castShadow; },
+    setQuality(q) { flashShadow(q); spot.shadow.autoUpdate = flashOn && spot.castShadow; },
     setReduceMotion(v) { RM = !!v; },
     snap() { snap = true; },
   };

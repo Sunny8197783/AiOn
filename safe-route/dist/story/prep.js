@@ -2,6 +2,7 @@
 import { spendSlot, usable, adjust } from '../game/state.js';
 import { doMart, doShelterCheck, doEquip, doDocs, doNeighbors, doBag, doHome, fillWater, goHome, applyHome } from './prep-actions.js';
 import { stockLook, lookAlbum } from './common.js';
+import { townTour } from './cutscenes.js';
 
 // Slot start times: [day, minute]. Slot 0 is tonight; slots 1-5 are tomorrow.
 const SLOT_AT = [[-2, 18 * 60 + 30], [-1, 9 * 60], [-1, 11 * 60], [-1, 13 * 60 + 30], [-1, 15 * 60 + 30], [-1, 17 * 60 + 30], [-1, 19 * 60 + 30]];
@@ -28,6 +29,10 @@ export async function prep(ctx) {
   ctx.hud.setChapter('1장', '준비 — 남은 시간 여섯 칸');
   ctx.objective(null);
   applyHome(ctx);
+  if (!G.know.toured) { // C0: where the shop, the mart, the 행정복지센터 and the shelter are, before the first plan
+    try { await townTour(ctx); } catch (err) { console.error('[cine] town tour failed; the story goes on', err); }
+    G.know.toured = true;
+  }
   await ctx.goto('apartment', 'home');
   ctx.refresh();
   await ctx.card({ kind: 'info', title: '103동 302호', meta: 'D-2 수요일 18:30',

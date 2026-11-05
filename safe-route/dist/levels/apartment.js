@@ -71,7 +71,7 @@ export async function buildApartment(kit, people, fx) {
   const LINKS = [['home', 'corridor', H.door302], ['corridor', 'stairs', stairDoor(F3)], ['stairs', 'lobby', stairDoor(0)]];
   const linked = (a, b) => LINKS.some(([u, v, D]) => ((u === a && v === b) || (u === b && v === a)) && D && D.k > 0.1);
   for (const f of fixtures) { f.w = 0; f.on = false; f.zone = zoneOf(f.x, f.y, f.z); }
-  const POOL = kit.quality === 'low' ? 3 : 5;
+  const POOL = kit.Q?.pool ?? 5; // lights the fixtures share, by graphics tier (engine/quality.js)
   const LIGHT_SCALE = 0.75; // the fixtures' candela, toned down so night rooms do not glare (sensor/backup lamps are set low above)
   const pool = Array.from({ length: POOL }, () => { const l = new THREE.PointLight(0xffffff, 0, 8, 2); l.castShadow = false; dyn.add(l); return l; });
   // sensor lamp diffusers: an "off" plastic dome for every lamp, a glowing dome shown over it while lit

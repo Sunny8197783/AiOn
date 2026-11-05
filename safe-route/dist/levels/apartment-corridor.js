@@ -62,7 +62,7 @@ export function buildCorridor(B, g, dyn, H) {
   B.exitSign(g, 5.0, Y + 2.25, -0.13, Math.PI, 'exit');
   B.exitSign(g, -6.5, Y + 0.9, -0.12, Math.PI, 'pass', 'left');
   B.exitSign(g, 14.5, Y + 0.9, -0.12, Math.PI, 'pass', 'right');
-  if (kit.quality !== 'low') { const gl = kit.lit('emergency', new THREE.PointLight(0x35ff7a, 1.2, 5, 2), 1.2); gl.position.set(5.0, Y + 2.0, -0.5); dyn.add(gl); }
+  if (kit.Q?.accentLights !== false) { const gl = kit.lit('emergency', new THREE.PointLight(0x35ff7a, 1.2, 5, 2), 1.2); gl.position.set(5.0, Y + 2.0, -0.5); dyn.add(gl); }
   for (const x of [-14, -10, -6, -2, 2, 6, 10, 14, 18]) B.sensors.push({ x, y: CY - 0.02, z: -0.95, kind: 'sensor', floor: 3 });
 
   // 옥내소화전 cabinet (with bell and the always-lit red location lamp) and a 분말소화기 beside it.

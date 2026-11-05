@@ -9,8 +9,9 @@ export const ZONES = [
 ];
 
 export function shelterTextures(kit) {
-  const { THREE, canvas, texture, normalFrom, memo, rng } = kit;
-  const S = kit.quality === 'low' ? 512 : 1024;
+  const { THREE, canvas, texture, normalFrom, rng } = kit;
+  const S = kit.Q?.shelterTex ?? 1024; // texture size of the graphics tier; cached per size, so a rebuild at another tier gets its own
+  const memo = (key, make) => kit.memo(`${key}:${S}`, make);
 
   function scribble(g, r, x, y, w, color = 'rgba(40,44,52,0.55)', lw = 2) { // handwriting-like line
     g.strokeStyle = color; g.lineWidth = lw; g.beginPath(); g.moveTo(x, y);

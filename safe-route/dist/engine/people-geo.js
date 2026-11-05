@@ -62,8 +62,10 @@ function pushSkin(out, sk, bone) {
 }
 
 // Accumulates lofted parts into one indexed BufferGeometry (with skin attributes when skinned).
-export function builder(skinned = false) {
+// detail (0..1): share of the around-segments each loft and pipe keeps (crowd members on the lower graphics tiers).
+export function builder(skinned = false, { detail = 1 } = {}) {
   const P = [], N = [], C = [], U = [], R = [], SI = [], SW = [], I = [];
+  const segs = (n, min) => (detail >= 1 ? n : Math.min(n, Math.max(min, Math.round(n * detail))));
 
   function addPart(pos, cols, uvs, pbrs, skin, idx, m) {
     const base = P.length / 3, n = pos.length / 3, nrm = new Float32Array(pos.length);
@@ -102,7 +104,7 @@ export function builder(skinned = false) {
       const f = rings[0], l = rings[rings.length - 1];
       rings = [{ ...f, rx: 0.0006, rz: 0.0006 }, ...rings, { ...l, rx: 0.0006, rz: 0.0006 }];
     }
-    const seg = o.seg ?? 12, arc = rings.some(r => r.a != null), n = arc ? seg + 1 : seg;
+    const arc = rings.some(r => r.a != null), seg = segs(o.seg ?? 12, arc ? 4 : 6), n = arc ? seg + 1 : seg;
     const desc = rings[rings.length - 1].y < rings[0].y;
     const pos = [], cols = [], uvs = [], pbrs = [], skin = [], idx = [];
     let v = 0;
@@ -132,7 +134,7 @@ export function builder(skinned = false) {
 
   // Tube through 3D points [[x,y,z],...]; r: number or per-point array. Ends are capped.
   function pipe(pts, r, o = {}) {
-    const seg = o.seg ?? 8, V = pts.map(p => new THREE.Vector3(...p)), n = V.length;
+    const seg = segs(o.seg ?? 8, 3), V = pts.map(p => new THREE.Vector3(...p)), n = V.length;
     const T = V.map((p, i) => V[Math.min(n - 1, i + 1)].clone().sub(V[Math.max(0, i - 1)]).normalize());
     let nr = Math.abs(T[0].y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
     const rad = (i) => (Array.isArray(r) ? r[i] : r);

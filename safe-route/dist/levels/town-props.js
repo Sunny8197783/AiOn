@@ -74,7 +74,7 @@ export function buildProps(kit, { avoid = [] } = {}) {
   group.add(kit.instanced(new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2), poolMat, pools, { cast: false, receive: false }));
   // A few real lights at the places the story stops (others glow only).
   const keyLights = [[78, 25.5], [-95, 10.5], [36, 8.4], [-80, -15], [-63, 31], [-61, -34], [0, 9]];
-  for (const [x, z] of keyLights.slice(0, { low: 2, medium: 4 }[kit.quality] ?? keyLights.length)) {
+  for (const [x, z] of keyLights.slice(0, kit.Q?.keyLights ?? keyLights.length)) { // how many: the graphics tier (engine/quality.js)
     const L = new THREE.PointLight(0xffd9a8, 260, 30, 2); L.position.set(x, 7.6, z);
     kit.lit('street', L, 260); group.add(L);
   }

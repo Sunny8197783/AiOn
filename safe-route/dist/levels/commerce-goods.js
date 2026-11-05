@@ -150,8 +150,8 @@ function lathe(profile, seg) {
   return g.rotateY(Math.PI);
 }
 const cylG = (rt, rb, h, seg) => new THREE.CylinderGeometry(rt, rb, h, seg).translate(0, h / 2, 0).rotateY(Math.PI);
-function makeGeoms(hi) {
-  const s = hi ? 10 : 7;
+function makeGeoms(seg) { // lathe and can segments: the graphics tier's goodsSeg
+  const s = seg;
   return {
     bottle2: lathe([[0, 0], [0.047, 0.003], [0.054, 0.03], [0.053, 0.08], [0.054, 0.15], [0.054, 0.2], [0.05, 0.235], [0.03, 0.27], [0.016, 0.288], [0.017, 0.3], [0.017, 0.32], [0, 0.32]], s),
     bottle5: lathe([[0, 0], [0.03, 0.003], [0.033, 0.02], [0.032, 0.07], [0.033, 0.13], [0.028, 0.16], [0.014, 0.185], [0.014, 0.21], [0, 0.21]], s),
@@ -173,10 +173,11 @@ function pillow() {
 }
 const FIXED = new Set(['bottle2', 'bottle5', 'can', 'tin', 'butane', 'cup', 'cupS']);
 
-// Atlas + materials, built once per kit.
+// Atlas + materials, built once per kit and graphics tier (atlas size, segments and shelf depth: engine/quality.js).
 function shared(kit) {
-  return kit.memo('commerce:goods', () => {
-    const hi = kit.quality !== 'low', S = hi ? 2048 : 1024, c = S / GRID, pad = 3 / S;
+  const seg = kit.Q?.goodsSeg ?? 10, S = kit.Q?.atlas ?? 2048;
+  return kit.memo(`commerce:goods:${seg}:${S}`, () => {
+    const c = S / GRID, pad = 3 / S;
     const atlas = kit.texture(kit.canvas(S, S, (g) => {
       Object.values(LABELS).forEach((L, i) => {
         g.save(); g.translate((i % GRID) * c, Math.floor(i / GRID) * c);
@@ -207,7 +208,7 @@ function shared(kit) {
       }
     }));
     const tagMat = new THREE.MeshStandardMaterial({ map: kit.signTexture(['품절'], { w: 256, h: 128, bg: '#d7262d', fg: '#ffffff', border: '#ffffff' }), roughness: 0.5, emissive: 0x330000 });
-    return { geoms: makeGeoms(hi), mats, cellUV, stripMat: new THREE.MeshStandardMaterial({ map: strip, roughness: 0.4 }), tagMat, deep: hi ? 2 : 1 };
+    return { geoms: makeGeoms(seg), mats, cellUV, stripMat: new THREE.MeshStandardMaterial({ map: strip, roughness: 0.4 }), tagMat, deep: seg >= 8 ? 2 : 1 };
   });
 }
 
@@ -332,8 +333,18 @@ export function panels(kit, list, { w = 1.2, d = 0.3, color = '#f3f6ff', on = 2.
   kit.lit(group, m, on);
   return kit.instanced(new THREE.BoxGeometry(w, 0.035, d), m, list, { cast: false, receive: false });
 }
+// The lower graphics tiers (kit.Q.roomLights < 1) merge a long row of lamps in pairs: half the lights per pixel, each
+// one between the two it replaces, as bright as both and reaching a little further.
 export function lamps(kit, list, { color = 0xf2f4ff, intensity = 14, distance = 16, group = 'indoor' } = {}) {
   const g = new THREE.Group();
+  if ((kit.Q?.roomLights ?? 1) < 1 && list.length >= 6) {
+    const pairs = [];
+    for (let i = 0; i < list.length; i += 2) {
+      const a = list[i], b = list[i + 1] ?? a;
+      pairs.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 });
+    }
+    list = pairs; intensity *= 2; distance *= 1.3;
+  }
   for (const p of list) { const l = new THREE.PointLight(color, intensity, distance, 2); l.position.set(p.x, p.y, p.z); kit.lit(group, l, intensity); g.add(l); }
   return g;
 }
@@ -381,10 +392,11 @@ export function windowView(kit, { w, h, kind = 'street', seed = 3 }) {
 export const moodFor = (env, fallback) => ({ day: 'day', afternoon: 'day', dusk: 'dusk', night: 'night', blackout: 'blackout', interiorDark: 'blackout' }[env] || fallback);
 
 // A Person from people.createPerson, or an invisible stand-in that logs once, so levels never crash.
+// at.detail: mesh detail for background shoppers on the lighter graphics tiers (kit.Q.people).
 let warned = false;
 export function npc(people, preset, seed, at = {}) {
   let p = null;
-  try { p = people?.createPerson?.({ preset, seed }) ?? null; } catch (e) { console.error('[commerce] createPerson failed', preset, e); }
+  try { p = people?.createPerson?.({ preset, seed, detail: at.detail ?? 1 }) ?? null; } catch (e) { console.error('[commerce] createPerson failed', preset, e); }
   if (!p) {
     if (!warned) { warned = true; console.error('[commerce] people.createPerson unavailable; NPCs are invisible stand-ins'); }
     p = { group: new THREE.Group(), anim: 'idle', height: 1.7, setAnim(a) { this.anim = a; }, setSpeed() {}, setProp() {}, lookAt() {}, update() {} };

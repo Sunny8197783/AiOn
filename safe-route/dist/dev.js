@@ -2,6 +2,7 @@
 // A level module that fails to import or build shows an error tile; the other levels stay usable.
 import { createEngine } from './engine/core.js';
 import { PRESETS } from './engine/presets.js';
+import { TIERS, TIER_LABELS, normQ } from './engine/quality.js';
 
 // Same registry the director uses.
 export const REGISTRY = {
@@ -14,7 +15,7 @@ const MULTI = new Set(['closures', 'soldOut', 'ways']); // array-valued states: 
 const QS = new URLSearchParams(location.search);
 const opt = {
   level: REGISTRY[QS.get('level')] ? QS.get('level') : 'town', spawn: QS.get('spawn') || null,
-  env: PRESETS[QS.get('env')] ? QS.get('env') : null, q: ['high', 'medium', 'low'].includes(QS.get('q')) ? QS.get('q') : 'high',
+  env: PRESETS[QS.get('env')] ? QS.get('env') : null, q: normQ(QS.get('q'), 'high'), // any of the five tiers (engine/quality.js); q=auto is not offered here
   view: QS.get('view') === 'first' ? 'first' : 'third', rain: QS.get('rain') === '1',
 };
 
@@ -50,7 +51,7 @@ const canvas = document.getElementById('world');
 const panel = document.getElementById('panel');
 let engine;
 try {
-  engine = createEngine({ canvas, quality: opt.q, levels, onQualityChange: (q) => { opt.q = q; qualitySel.value = q; toast(`프레임이 낮아 품질을 ${q}(으)로 낮췄습니다`); syncUrl(); } });
+  engine = createEngine({ canvas, quality: opt.q, levels, onQualityChange: (q) => { opt.q = q; qualitySel.value = q; toast(`프레임이 낮아 품질을 ${TIER_LABELS[q][0]}(${q})(으)로 낮췄습니다`); syncUrl(); } });
 } catch (err) {
   console.error('[dev] engine failed to start', err);
   panel.append(h('div', { class: 'tile error', role: 'alert' }, `엔진을 시작하지 못했습니다 (WebGL 확인).\n${err.message}`));
@@ -69,7 +70,7 @@ const envSel = h('select', { id: 'env', onchange: () => { opt.env = envSel.value
   Object.keys(PRESETS).map((id) => h('option', { value: id }, `${id} · ${ENV_NAMES[id] ?? id}`)));
 const rainBtn = h('button', { type: 'button', 'aria-pressed': String(opt.rain), onclick: () => { opt.rain = !opt.rain; rainBtn.setAttribute('aria-pressed', String(opt.rain)); applyEnv(1.5); } }, '비');
 const qualitySel = h('select', { id: 'q', onchange: () => { opt.q = qualitySel.value; engine.setQuality(opt.q); syncUrl(); } },
-  ['high', 'medium', 'low'].map((q) => h('option', { value: q }, q)));
+  TIERS.map((q) => h('option', { value: q }, `${q} · ${TIER_LABELS[q][0]}`)));
 qualitySel.value = opt.q;
 const viewBtn = h('button', { type: 'button', onclick: () => { opt.view = engine.view === 'first' ? 'third' : 'first'; engine.setView(opt.view); syncUrl(); } }, '시점 전환 (V)');
 const flashBtn = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => { const on = !engine.player.flashlight; engine.player.setFlashlight(on); flashBtn.setAttribute('aria-pressed', String(on)); } }, '손전등');
@@ -184,7 +185,7 @@ async function load(id, spawn, env = null) {
 
 setInterval(() => {
   const s = engine.stats(), p = engine.player, n = engine.nearest;
-  statsBox.textContent = `${s.fps} fps · 품질 ${engine.quality}\n드로우콜 ${s.drawCalls} · 삼각형 ${(s.triangles / 1000).toFixed(0)}k\n위치 ${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)} · 방향 ${(p.yaw * 180 / Math.PI).toFixed(0)}°\n가까운 지점 ${n ? n.id : '없음'} · 환경 ${engine.env}${opt.rain ? ' + 비' : ''}`;
+  statsBox.textContent = `${s.fps} fps · 품질 ${TIER_LABELS[engine.quality]?.[0] ?? engine.quality}\n드로우콜 ${s.drawCalls} · 삼각형 ${(s.triangles / 1000).toFixed(0)}k\n위치 ${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)} · 방향 ${(p.yaw * 180 / Math.PI).toFixed(0)}°\n가까운 지점 ${n ? n.id : '없음'} · 환경 ${engine.env}${opt.rain ? ' + 비' : ''}`;
 }, 500);
 
 envSel.value = opt.env || 'day';

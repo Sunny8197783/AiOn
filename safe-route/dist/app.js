@@ -1,5 +1,6 @@
 // 〈경보 이전〉 shell: boot, settings, save/continue, the chapter runner with soft-fail retries, global keys.
 import { createEngine } from './engine/core.js';
+import { savedQuality, TIER_LABELS } from './engine/quality.js';
 import { createActions } from './engine/actions.js';
 import { shop3d, bag3d } from './ui/grab3d.js';
 import { createDanger } from './story/danger.js';
@@ -45,9 +46,13 @@ const store = {
 };
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const settings = { quality: 'high', volume: 0.7, mute: false, captions: true, reduceMotion: reduced, textScale: 1, view: 'third',
-  sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', ...safeParse(store.get(SETTINGS_KEY)) };
-function safeParse(s) { try { return JSON.parse(s) || {}; } catch { return {}; } }
+const savedSettings = safeParse(store.get(SETTINGS_KEY));
+const settings = { quality: 'auto', volume: 0.7, mute: false, captions: true, reduceMotion: reduced, textScale: 1, view: 'third',
+  sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', ...savedSettings };
+// Graphics tier: a saved 'low' | 'medium' | 'high' keeps its meaning; nothing (or anything unknown) is detected once
+// (createEngine 'auto') and remembered with qualityAuto, until the player picks a tier in the settings.
+Object.assign(settings, (({ quality, auto }) => ({ quality, qualityAuto: auto }))(savedQuality(savedSettings)));
+function safeParse(s) { try { const v = JSON.parse(s); return v && typeof v === 'object' ? v : {}; } catch { return {}; } }
 
 // Experience modes (체험 모드): how the body moves and what the senses get. speed multiplies the story's speed.
 const PROFILES = {
@@ -95,7 +100,11 @@ if (DEBUG) {
 
 const audio = createAudio();
 const engine = createEngine({ canvas: document.getElementById('world'), quality: settings.quality, reduceMotion: settings.reduceMotion, levels: LEVELS,
-  onQualityChange: (q) => { settings.quality = q; store.set(SETTINGS_KEY, JSON.stringify(settings)); } });
+  onQualityChange: (q, o) => { // the frame-rate governor stepped down one tier: keep it, and say so once, calmly
+    settings.quality = q; store.set(SETTINGS_KEY, JSON.stringify(settings));
+    if (o?.auto) hud.toast(`화면이 자주 멈춰서 그래픽을 '${TIER_LABELS[q]?.[0] ?? q}'(으)로 낮췄어요. 설정에서 다시 바꿀 수 있어요.`, { label: 'self', ms: 6000 });
+  } });
+settings.quality = engine.quality; // 'auto' resolved to the detected tier
 const hud = createHud(document.getElementById('ui'));
 
 // 청각 장애 mode: the sound is off, so loud sounds also arrive as on-screen cues.

@@ -8,7 +8,14 @@ const KIND = {
   safety: ['안전안내문자', 'info'],
   sms: ['문자', 'sms'],
   me: ['나', 'sms'],
+  sns: ['SNS', 'rumor'],
 };
+// A share count for a fictional post, steady for the same text (so rereading shows the same number).
+export function shareCount(text = '') {
+  let h = 7;
+  for (const ch of String(text)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return 40 + (h % 260);
+}
 
 function statusBar(time, signal, battery) {
   const [sigText, bars] = SIGNAL[signal] || SIGNAL.ok;
@@ -35,7 +42,17 @@ function mapApp(state) {
     el('div', { class: 'map-state', role: state === 'ok' ? null : 'status' }, ...body));
 }
 
+// An SNS post someone passed on: handle, what it says about itself (no author, no time...), the share count.
+function post(m) {
+  return el('li', { class: 'msg msg-sns' },
+    el('div', { class: 'msg-head' }, el('span', { class: 'sns-avatar', 'aria-hidden': 'true' }, icon('rumor')),
+      el('b', { class: 'msg-from' }, m.from || 'SNS'), el('time', { class: 'msg-time' }, m.time || '')),
+    el('p', { class: 'msg-text' }, m.text || ''),
+    el('p', { class: 'sns-foot' }, el('span', {}, `공유 ${shareCount(m.text)}`)));
+}
+
 function bubble(m) {
+  if (m.kind === 'sns') return post(m);
   const [kindLabel, ic] = KIND[m.kind] || KIND.sms;
   const official = m.kind === 'emergency' || m.kind === 'safety';
   return el('li', { class: `msg msg-${m.kind || 'sms'}` },
@@ -49,7 +66,7 @@ function bubble(m) {
 // phone({ battery, signal, messages, mapApp, actions }) -> Promise<actionId>
 export function phone({ battery = 50, signal = 'ok', messages = [], mapApp: map = null, actions = null } = {}) {
   const acts = (actions?.length ? actions : [{ id: 'close', label: '닫기' }]).map((a) => (typeof a === 'string' ? { id: a, label: a } : a));
-  const msgs = [].concat(messages || []);
+  const all = [].concat(messages || []), msgs = all.filter((m) => m?.kind !== 'sns'), posts = all.filter((m) => m?.kind === 'sns');
   const time = msgs.at(-1)?.time || '';
   const low = Number(battery) <= 15;
   const t0 = performance.now();
@@ -61,7 +78,9 @@ export function phone({ battery = 50, signal = 'ok', messages = [], mapApp: map 
       map ? mapApp(map) : null,
       el('section', { class: 'app-msgs', 'aria-label': '메시지' },
         el('h3', {}, icon('sms'), '메시지'),
-        msgs.length ? el('ol', { class: 'msg-list' }, msgs.map(bubble)) : el('p', { class: 'empty' }, '새 메시지가 없습니다.'))),
+        msgs.length ? el('ol', { class: 'msg-list' }, msgs.map(bubble)) : el('p', { class: 'empty' }, '새 메시지가 없습니다.')),
+      posts.length ? el('section', { class: 'app-msgs app-sns', 'aria-label': '동네 단체방·SNS' },
+        el('h3', {}, icon('rumor'), '동네 단체방 · SNS'), el('ol', { class: 'msg-list' }, posts.map(bubble))) : null),
     el('div', { class: 'phone-actions' }, acts.map((a, n) => btn(a.label ?? a.id, { primary: !!a.primary, ghost: !a.primary, 'data-autofocus': n === 0 || null,
       onclick: () => { if (performance.now() - t0 > 200) { uiSound('click'); m.close(a.id); } } }))),
     el('div', { class: 'phone-home', 'aria-hidden': 'true' }));

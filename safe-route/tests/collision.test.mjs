@@ -126,7 +126,10 @@ test('prompts: reach at least 1.6 m, wide view cone, walls hide, own solid does 
   const wall = { solids: [box(-3, 3, -0.8, -0.6, 2.9)] };
   assert.equal(hidden(p, pos, gridOf(wall.solids)), true);
   const gate = { solids: [box(-3, 3, -1.4, -1.0, 3, -3, { id: 'gateEast' })] }; // the barrier the prompt belongs to
-  assert.equal(hidden(p, pos, gridOf(gate.solids)), false); // abuts the point (0.1 m away)
+  assert.equal(hidden(p, pos, gridOf(gate.solids)), true); // abuts the point (0.1 m) but the player is on its far side
+  assert.equal(hidden({ ...p, host: 'gateEast' }, pos, gridOf(gate.solids)), false); // unless it is the point's host
+  const atm = { solids: [box(-3, 3, -1.8, -1.6, 3)] }; // a machine just behind the point, as seen from the player
+  assert.equal(hidden(p, pos, gridOf(atm.solids)), false);
   const far = { x: 0, y: 0, z: -2.4, r: 2.6 }, bar = [box(-3, 3, -1.4, -1.0, 3, -3, { id: 'gateEast' })];
   assert.equal(hidden(far, pos, gridOf(bar)), true);
   assert.equal(hidden({ ...far, host: 'gateEast' }, pos, gridOf(bar)), false);

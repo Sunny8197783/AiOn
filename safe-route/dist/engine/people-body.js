@@ -108,8 +108,9 @@ const HAND = [[0, 0.0105, 0.015, 0], [-0.017, 0.0125, 0.0225, -0.001], [-0.046, 
 const LEN = { hip: 0.515, waist: 0.56, thigh: 0.45, knee: 0.3, calf: 0.2 };
 
 // Build the body into a skinned builder; returns { b, d, J, rows } so props can be baked in before b.build().
-export function buildBody(spec) {
-  const d = dims(spec), J = joints(d), H = d.H, hh = d.hh, b = builder(true);
+// detail < 1 thins every loft (engine/people-geo.js builder) for crowd members on the lower graphics tiers.
+export function buildBody(spec, detail = 1) {
+  const d = dims(spec), J = joints(d), H = d.H, hh = d.hh, b = builder(true, { detail });
   const skin = col(spec.skin), hairC = col(spec.hair?.c ?? '#1c1814');
   const top = spec.top, outer = spec.outer, bot = spec.bottom, ex = spec.extras ?? {};
   const pb = (n) => (Array.isArray(n) ? n : PBR[n] ?? PBR.fabric);

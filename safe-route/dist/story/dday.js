@@ -3,10 +3,12 @@
 import { recordEvent, hhmm, use } from '../game/state.js';
 import { chapterSummary } from '../game/debrief.js';
 import { ladderStage, recordEncounter, evalBag, BAG_GOALS } from '../game/drills.js';
-import { CLOSURES } from '../game/townmap.js';
+import { CLOSURES, graph } from '../game/townmap.js';
+import { shortestPath } from '../game/routes.js';
 import { BAG_LIMIT } from '../game/items.js';
 import { fact } from '../game/facts.js';
 import { applyHome, applyBag, bagItems } from './prep-actions.js';
+import { bagInfo, applyPocket } from '../ui/bag.js';
 import { radioScene, emergencyText, factCard, lightSource, drainBattery, has, AREA, BROADCASTS } from './common.js';
 import { seoyeonRelay } from './seoyeon.js';
 import { createElderDilemma } from './elder.js';
@@ -156,6 +158,9 @@ async function alert(ctx) {
   let left = false, inStairs = false, outT = 0;
   const blasts = farBlasts(ctx);
   const trail = ctx.trail = [];
+  // A long wander, not a long route: the trail (a point per 1.5 m in town) is compared with tonight's shortest way.
+  const direct = shortestPath(graph({ closures, gates: { east: false, stairs: true, ramp: true, access: false } }), 'home', 'shelter')?.length ?? 205;
+  const wandered = () => trail.length * 1.5 > direct * 1.4 + 30;
   const elder = createElderDilemma(ctx);
   const steps = () => [{ text: '배낭 챙기기', done: !!G.know.bagOn || left }, { text: '계단으로 1층까지', done: inStairs }, { text: '가까운 대피소로', done: false }];
   const show = () => ctx.objective('대피하기', '지하시설이나 유리창 없는 건물 안으로. 엘리베이터는 쓰지 않습니다.', steps());
@@ -167,10 +172,11 @@ async function alert(ctx) {
     if (G.know.bagPacked && Object.values(G.items).some(e => e.bag > 0)) { G.know.bagOn = true; ctx.setLevelState('apartment', 'bag', 'none'); ctx.payoff('bag', '현관에 둔 배낭을 메고 바로 나섰다'); recordEvent(G, 'departure', { bag: 'packed' }); return; }
     const pick = await ctx.ui.talk({ speaker: '현관', role: '배낭이 비어 있다', lines: ['지금 챙길까, 그냥 나갈까?'], choices: [{ id: 'pack', label: '급히 챙긴다 (시간이 든다)' }, { id: 'go', label: '휴대폰만 들고 나간다' }] });
     if (pick !== 'pack') { recordEvent(G, 'departure', { bag: 'none' }); return; }
-    const items = bagItems(G);
+    const items = bagInfo(G, bagItems(G));
     const mode = ladderStage(G, 'bag');
-    const res = await ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals: BAG_GOALS.alert, tips: [] });
+    const res = await ctx.ui.bag({ mode, context: 'alert', limit: BAG_LIMIT, items, goals: BAG_GOALS.alert, tips: [], tidy: { cost: '1분', run: () => ctx.pass(1) } });
     applyBag(G, res?.bag || {});
+    applyPocket(G, res?.pocket);
     const ev = evalBag(G, 'alert');
     recordEncounter(G, 'bag', ev.missing?.length ? 'partial' : 'complete');
     ctx.pass(4);
@@ -181,7 +187,7 @@ async function alert(ctx) {
 
   await ctx.roam({
     // Out in town after meeting a closure or a long walk: lost the way; otherwise the time ran out before leaving.
-    rate: 3, deadline: { day: 0, minute: LATE, type: () => (ctx.engine.level?.id === 'town' && (G.know.closureSeen || trail.length > 60) && !G.know.closureHeard ? 'lostWay' : 'late') },
+    rate: 3, deadline: { day: 0, minute: LATE, type: () => (ctx.engine.level?.id === 'town' && (G.know.closureSeen || wandered()) && !G.know.closureHeard ? 'lostWay' : 'late') },
     tick: (dt) => {
       const p = ctx.engine.player;
       if (left) elder.tick(dt);
@@ -210,7 +216,7 @@ async function alert(ctx) {
       },
       elevator: async () => { ctx.toast(`정전으로 멈춰 있다. ${fact('alert_stairs').text}`, 'official', 5000); recordEvent(G, 'elevator_tried', {}); },
       managerWindow: async () => {
-        if (await elder.managerLine()) return;
+        await elder.managerLine(); // 어르신 first, then the detour in the same visit
         if (G.rel.manager.contact) {
           await ctx.ui.talk({ speaker: '박영수 소장', role: '1층 현관', lines: [`정민 씨! 생활문화센터로 가요. 연무로 가운데는 통제한대요. ${detour}로 돌아가요!`] });
           G.know.closureHeard = true; ctx.note(`박 소장: 연무로 중앙 구간 통제, ${detour}로 우회`, 'neighbor');

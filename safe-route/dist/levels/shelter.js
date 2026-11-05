@@ -76,7 +76,7 @@ export function buildShelter(kit, people, fx) {
   // desc: what E shows when no chapter handles the point (story/world.js); y: the floor the point is on.
   const P = (id, label, x, z, kind, r = 1.6, desc, y = 0) => ({ id, label, x, y, z, r, kind, ...(desc && { desc }) });
   const points = [
-    P('fromStairs', '출입구 A · 계단', 2.9, -15.2, 'entrance', 1.3, ['출입구 A 계단. 지상으로 나가는 문은 계단을 올라간 위층참에 있다.']),
+    P('fromStairs', '출입구 A · 계단', 2.9, -15.2, 'entrance', 1.3, ['출입구 A 계단. 지상으로 나가는 문은 계단을 올라간 계단참에 있다.']),
     P('shelterExit', '계단으로 나가기 · 지상', 5.9, -16.85, 'door', 1.3, undefined, 3.4),   // at the exit door on the top landing
     P('fromRamp', '출입구 B · 차량 진출입로', 11, 15.0, 'entrance', 1.8, ['출입구 B 차량 진출입로. 경사로를 올라가면 차단기 너머가 도로다.']),
     P('fromAccess', '출입구 C · 경사로', -13, -15.2, 'entrance', 1.6, ['출입구 C 경사로. 계단 없이 오르내릴 수 있는 완만한 길이다.']),

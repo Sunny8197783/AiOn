@@ -1,12 +1,14 @@
 // Soft-fail card, chapter summary card and the printable "생존 기록" ending document.
 import { el, modal, icon, btn, uiSound } from './dom.js';
+import { PREP } from '../game/ripples.js';
 
-const PREP = {
-  bag: '비상가방', cash: '현금', docs: '비상연락카드·서류 사본', entrances: '대피소 출입구 확인', extinguisher: '소화기 위치 확인',
-  flashlight: '손전등 점검', judgement: '정보를 가려 듣기', powerbank: '보조배터리 충전', radio: '라디오 점검', route: '경로 확인',
-  tub: '물 받아 두기', water_jug: '물통 준비',
-};
+// Payoffs arrive with Korean labels already (game/debrief.js); a bare prep id still gets its name.
 const prepName = (id) => PREP[id] || id || '준비';
+// 나비효과 (game/ripples.js rows): "D-1 오전 · cause → D-day 저녁 · effect".
+const MAX_RIPPLES = 5;
+const sameMoment = (r, p) => r.prep === (p.id ?? p.prep) && r.effect.text === p.moment;
+const rippleText = (r) => [el('span', { class: 'ripple-when' }, r.cause.when), ` ${r.cause.text}`, el('span', { class: 'ripple-arrow', 'aria-label': ', 그래서' }, ' → '),
+  el('span', { class: 'ripple-when' }, r.effect.when), ` ${r.effect.text}`];
 const lines = (v) => [].concat(v ?? []).filter((x) => x != null && x !== '');
 const sourceList = (sources) => {
   const list = lines(sources);
@@ -35,16 +37,18 @@ export function failCard({ title = '', seen = '', missed = '', next = '', source
   return m.done;
 }
 
-// chapterCard({ chapter, title, lines, payoffs: [{ prep, moment }] }) -> Promise
-export function chapterCard({ chapter = '', title = '', lines: ls = [], payoffs = [] } = {}) {
+// chapterCard({ chapter, title, lines, payoffs: [{ prep, moment, id }], ripples? }) -> Promise
+// ripples (game/ripples.js, optional): a payoff that has one shows the earlier moment that set it up.
+export function chapterCard({ chapter = '', title = '', lines: ls = [], payoffs = [], ripples = [] } = {}) {
   const t0 = performance.now();
-  const pays = lines(payoffs);
+  const pays = lines(payoffs), rows = lines(ripples);
+  const cause = (p) => { const r = rows.find((x) => sameMoment(x, p)); return r ? el('small', { class: 'payoff-cause' }, `${r.cause.when} · ${r.cause.text}`) : null; };
   const content = el('article', { class: 'chapter-card' },
     el('p', { class: 'eyebrow' }, icon('check'), `${chapter} 끝`),
     el('h2', {}, title),
     pays.length ? el('section', { class: 'payoffs' },
       el('h3', {}, icon('spark'), '준비가 도움이 된 순간'),
-      el('ul', {}, pays.map((p) => el('li', {}, el('b', {}, prepName(p.prep)), el('span', {}, p.moment || ''))))) : null,
+      el('ul', {}, pays.map((p) => el('li', {}, el('b', {}, prepName(p.prep)), el('span', {}, p.moment || ''), cause(p))))) : null,
     el('section', { class: 'chapter-lines' },
       el('h3', {}, icon('book'), '이번 장의 기록'),
       lines(ls).length ? el('ul', {}, lines(ls).map((t) => el('li', {}, t))) : el('p', { class: 'muted' }, '기록할 것이 많지 않았습니다.')),
@@ -54,9 +58,10 @@ export function chapterCard({ chapter = '', title = '', lines: ls = [], payoffs 
   return m.done;
 }
 
-// ending(record: { helped, unused, unchecked, people, practice }, sources) -> Promise<'restart'|'menu'>
+// ending(record: { fate, helped, unused, unchecked, people, ripples, practice }, sources) -> Promise<'restart'|'menu'>
 export function ending(record = {}, sources = []) {
-  const { fate = null, helped = [], unused = [], unchecked = [], people = [], practice = null } = record || {};
+  const { fate = null, helped = [], unused = [], unchecked = [], people = [], ripples = [], practice = null } = record || {};
+  const chain = lines(ripples).slice(0, MAX_RIPPLES), rest = lines(helped).filter((h) => !chain.some((r) => sameMoment(r, h)));
   const src = practice?.sourceId ? lines(sources).find((s) => s.id === practice.sourceId) : null;
   const section = (ic, title, items, render, empty) => el('section', { class: 'doc-section' },
     el('h3', {}, icon(ic), title),
@@ -69,7 +74,8 @@ export function ending(record = {}, sources = []) {
       el('h2', {}, fate ? `엔딩 · ${fate.title}` : '생존 기록'),
       el('p', { class: 'doc-sub' }, '전쟁 직전의 준비가 전쟁 이후의 선택지를 어떻게 바꾸었는지 돌아봅니다.')),
     fate ? el('section', { class: 'doc-section doc-fate' }, lines(fate.lines).map((t) => el('p', {}, t))) : null,
-    section('spark', '도움이 된 준비', helped, (h) => [el('b', {}, prepName(h.prep)), el('span', {}, h.moment || '')], '이번에는 미리 해 둔 준비가 큰 역할을 하지 못했습니다. 다음에는 하나만 먼저 해 보세요.'),
+    chain.length ? section('clock', '나비효과 · 작은 선택이 남긴 것', chain, (r) => [el('b', {}, r.label), el('span', {}, rippleText(r))], '') : null,
+    chain.length && !rest.length ? null : section('spark', chain.length ? '그 밖에 도움이 된 준비' : '도움이 된 준비', rest, (h) => [el('b', {}, prepName(h.prep)), el('span', {}, h.moment || '')], '이번에는 미리 해 둔 준비가 큰 역할을 하지 못했습니다. 다음에는 하나만 먼저 해 보세요.'),
     section('box', '쓰지 못한 물건과 그 이유', unused, (u) => [el('b', {}, u.item), el('span', {}, u.why || '')], '가진 물건을 모두 쓸 수 있었습니다.'),
     section('rumor', '확인하지 못한 정보', unchecked, (t) => el('span', {}, t), '필요한 정보를 대부분 확인했습니다.'),
     section('people', '함께 버틴 사람들', people, (p) => [el('b', {}, p.who), el('span', {}, p.what || '')], '이번에는 혼자 버텼습니다. 이웃과의 연락 한 가지가 선택지를 넓힙니다.'),

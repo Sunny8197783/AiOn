@@ -52,7 +52,7 @@ export const RUMORS = [
       { key: 'claim', channel: 'sns', from: 'SNS 단체방', meta: '누가 확인했는지 없음', label: 'rumor', truth: false,
         text: (G) => `${road(G)} 풀림! 그쪽으로 가면 집결지까지 지름길이래요.` },
       { key: 'manager', channel: 'neighbor', from: '박영수 소장', meta: '1층 관리사무소 · 방금 보고 옴', label: 'site', truth: true,
-        text: (G) => `${road(G)} 쪽은 아직 바리케이드가 있어요. 안내 요원 있는 큰길로 가세요.` },
+        text: (G) => `${road(G).replace(/ 통제$/, '')} 쪽은 아직 바리케이드가 있어요. 안내 요원 있는 큰길로 가세요.` },
       { key: 'official', channel: 'notice', from: '연무구 대피 안내 (가상)', meta: 'D+12 · 재난문자·게시판', label: 'official', truth: true,
         text: () => '임시 집결지까지는 안내 요원이 있는 권고 경로로 이동하십시오. 통제 구간은 지나갈 수 없습니다.' },
     ],

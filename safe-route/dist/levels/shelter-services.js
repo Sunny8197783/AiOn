@@ -17,7 +17,7 @@ export function buildServices(kit, T, shell) {
     im.castShadow = cast; im.receiveShadow = false; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
     return add(im);
   }
-  const low = kit.quality === 'low';
+  const low = (kit.Q?.shelterLights ?? 6) < 6; // fewer, brighter area lights on the lower graphics tiers
   const M = {
     housing: kit.mat('paint:#e7e7e2', { roughness: 0.4, metalness: 0.3 }), red: kit.mat('paint:#c4302b', { roughness: 0.45, metalness: 0.2 }),
     galv: kit.mat('metal', { color: 0xb9bdc0, roughness: 0.5 }), grey: kit.mat('paint:#9da2a6', { roughness: 0.6 }), dark: kit.mat('darkMetal'),
@@ -58,7 +58,7 @@ export function buildServices(kit, T, shell) {
   for (const l of shell.lights) point(l.pos, l.color, l.base, l.dist, l.circuit);
   const spot = new THREE.SpotLight(0xedf3ff, 0, 15, 1.15, 0.75, 2);
   spot.position.set(-7, 2.85, 0); spot.target.position.set(-7, 0, 0.4);
-  spot.castShadow = !low; spot.shadow.mapSize.set(kit.quality === 'high' ? 1024 : 512, kit.quality === 'high' ? 1024 : 512);
+  spot.castShadow = true; spot.shadow.mapSize.set(1024, 1024); // the tier caps it (engine/tier-apply.js): 512 on 중간, none below
   spot.shadow.camera.near = 0.5; spot.shadow.camera.far = 15; spot.shadow.bias = -0.0005; spot.shadow.normalBias = 0.02;
   add(spot, live); add(spot.target, live);
   lights.push({ light: spot, base: 34, circuit: 'A' });

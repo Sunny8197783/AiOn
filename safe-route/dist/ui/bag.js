@@ -2,10 +2,41 @@
 // checklist. guided shows item tips inline, hint behind a button, free shows nothing extra.
 import { el, put, modal, header, ladderHelp, meterState, METER_WORD, fmtKg, announce } from './mini-dom.js';
 import { goalMet } from '../game/drills.js';
+import { CATALOG } from '../game/items.js';
+import { setPocket } from '../game/state.js';
+import { canAdd } from '../game/pack.js';
 
 const TITLE = { alert: '비상가방 꾸리기', water: '물 받으러 갈 준비', evac: '대피 가방 하나' };
-const TAG = { water: '물', food: '식품', info: '정보', power: '전원', light: '빛', health: '건강', hygiene: '위생', warmth: '보온', tool: '도구', docs: '서류', fire: '화기 주의', spoil: '상하기 쉬움' };
-const WARN = new Set(['fire', 'spoil']);
+const TAG = { water: '물', food: '식품', info: '정보', power: '전원', light: '빛', health: '건강', hygiene: '위생', warmth: '보온', tool: '도구', docs: '서류', fire: '화기 주의', spoil: '상하기 쉬움',
+  expired: '기한 지남', keepsake: '추억', home: '집에 두는 것' };
+const WARN = new Set(['fire', 'spoil', 'expired']);
+
+// The story's bag items plus what the bag UIs show about them: the front-pocket count, a loaded device's battery
+// charge (no charge field = a full pack), and whether the old bars' date was read (G.know.expiryChecked).
+export function bagInfo(G, items) {
+  return items.map((i) => {
+    const c = CATALOG[i.id], e = G.items?.[i.id] ?? {};
+    return { ...i, pocket: i.pocket ?? e.pocket ?? 0,
+      charge: i.charge ?? (c?.needsCheck === 'batteries' && e.checked ? e.charge ?? 100 : c?.charge < 100 ? c.charge : undefined), // a half-used pack too
+      expiry: i.expiry ?? (c?.risk === 'expired' ? (G.know?.expiryChecked ? 'past' : 'check') : undefined) };
+  });
+}
+// The bag UI's { pocket } back into G, after applyBag set the counts: empty the pocket, then fill it, so the
+// 0.5 L check never trips over what was there before. Anything that no longer fits stays in the main part.
+export function applyPocket(G, pocket) {
+  if (!pocket || typeof pocket !== 'object') return;
+  for (const [id, e] of Object.entries(G.items)) if (e.pocket) setPocket(G, id, 0);
+  for (const [id, n] of Object.entries(pocket)) {
+    const e = G.items[id];
+    if (!e || !CATALOG[id]?.pocket || !(n > 0)) continue;
+    try { setPocket(G, id, Math.min(Math.floor(n), e.bag)); } catch { /* over 0.5 L: stays in the main part */ }
+  }
+}
+// One short status for an item: battery left, or the old bars' date. '' when there is nothing to say.
+export const itemNote = (it) => typeof it.charge === 'number' ? `건전지 ${Math.round(it.charge)}%`
+  : it.expiry === 'check' || (!it.expiry && it.tags?.includes('expired')) ? '기한 확인 필요' : it.expiry === 'past' ? '기한 지남' : '';
+// Badge tags: the expired badge only once the date was read.
+const shownTags = (it) => (it.tags || []).filter((t, i, a) => TAG[t] && a.indexOf(t) === i && (t !== 'expired' || it.expiry === 'past'));
 
 // Which items tick a goal line, matched on the director's wording. A line ticks when every group it
 // mentions has something in the bag. ponytail: keyword match; pass goal objects if wording drifts.
@@ -38,11 +69,13 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
   const meters = ['w', 'v'].map(k => ({ k, bar: el('span', { class: 'mg-bar-fill' }), text: el('b') }));
   const goalList = el('ul', { class: 'mg-goals', 'aria-label': '챙길 것' });
 
+  // Into the bag one unit at a time while the 10x5 grid still has room (game/pack.js, same rule as ui/grab3d.js).
+  const packed = () => items.filter(i => CATALOG[i.id] && st[i.id].bag > 0).map(i => ({ id: i.id, n: st[i.id].bag }));
   const move = (id, from, n) => {
-    const to = from === 'home' ? 'bag' : 'home', k = Math.min(n, st[id][from]);
-    if (!k) return;
-    st[id][from] -= k; st[id][to] += k;
-    const it = items.find(i => i.id === id);
+    const to = from === 'home' ? 'bag' : 'home', it = items.find(i => i.id === id);
+    let k = 0;
+    while (k < n && st[id][from] > 0 && (to === 'home' || !CATALOG[id] || canAdd(packed(), id))) { st[id][from]--; st[id][to]++; k++; }
+    if (!k) { if (to === 'bag' && st[id].home > 0) announce(`${it.name}: 가방에 더 들어가지 않는다. 다른 것을 꺼내면 자리가 생긴다.`); return; }
     render(from, id);
     const { w } = load();
     announce(`${it.name} ${k}개를 ${to === 'bag' ? '가방에 넣었다' : '집에 두었다'}. 가방 ${fmtKg(w)}`);
@@ -50,12 +83,12 @@ export async function bag({ mode = 'guided', context = 'alert', limit = { weight
 
   function row(it, where) {
     const n = st[it.id][where];
-    const tags = (it.tags || []).filter((t, i, a) => TAG[t] && a.indexOf(t) === i);
+    const tags = shownTags(it), note = itemNote(it);
     const btn = el('button', { type: 'button', class: 'mg-row', 'data-id': it.id, 'aria-label': `${it.name} ${n}개 · ${fmtKg(it.weightKg || 0)}씩 · ${where === 'home' ? '가방에 하나 넣기' : '하나 꺼내 두기'}` },
       where === 'bag' ? el('span', { class: 'mg-arrow', 'aria-hidden': 'true' }, '←') : null,
       el('span', { class: 'mg-row-main' },
         el('b', {}, it.name, el('span', { class: 'mg-count' }, ` ×${n}`)),
-        el('span', { class: 'mg-badges' }, el('small', { class: 'mg-spec' }, `${fmtKg(it.weightKg || 0)} · ${it.volumeL ?? 0}L`),
+        el('span', { class: 'mg-badges' }, el('small', { class: 'mg-spec' }, `${fmtKg(it.weightKg || 0)} · ${it.volumeL ?? 0}L${note && note !== '기한 지남' ? ` · (${note})` : ''}`),
           tags.map(t => el('span', { class: `mg-badge${WARN.has(t) ? ' is-low' : ''}` }, WARN.has(t) ? el('span', { 'aria-hidden': 'true' }, '! ') : null, TAG[t]))),
         it.tip && mode !== 'free' ? el('small', { class: 'mg-tip' }, it.tip) : null),
       where === 'home' ? el('span', { class: 'mg-arrow', 'aria-hidden': 'true' }, '→') : null);

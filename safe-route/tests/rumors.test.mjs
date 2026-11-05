@@ -34,7 +34,7 @@ test('evac_shortcut always names a road that is closed, for every seed', () => {
     assert.ok(c.closures.evac.includes(id), `seed ${s}: ${id}`);
     const [claim, manager] = posts(G, 'evac_shortcut');
     assert.ok(claim.text.includes(CLOSURES[id].label), claim.text);
-    assert.ok(manager.text.includes(CLOSURES[id].label), 'the site line names the same road');
+    assert.ok(manager.text.includes(CLOSURES[id].label.replace(/ 통제$/, '')), 'the site line names the same road');
   }
 });
 

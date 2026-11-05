@@ -2,9 +2,14 @@
 // Billboards are instanced quads expanded to face the camera in the vertex shader: one draw call per system.
 // Smoke and powder use Lambert shading, so they pick up the fire glow, the flashlight and the room lights.
 
-export function createFx(THREE, kit, { reduceMotion } = {}) {
+// renderer (optional): point sizes follow its drawing buffer (the tier's render scale), not window.devicePixelRatio.
+export function createFx(THREE, kit, { reduceMotion, renderer = null } = {}) {
   let RM = reduceMotion ?? (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const Q = { high: 1, medium: 0.7, low: 0.45 }[kit?.quality] ?? 1;
+  // Particle count factor of the tier (engine/quality.js), read as each system is made: a later tier change shows from
+  // the next fire or smoke on (rain follows at once through setDensity).
+  const fq = () => kit?.Q?.fx ?? 1;
+  const _px = new THREE.Vector2();
+  const pxScale = (cam) => (renderer ? renderer.getDrawingBufferSize(_px).y : innerHeight * Math.min(devicePixelRatio || 1, 2)) / (2 * Math.tan(cam.fov * Math.PI / 360));
   const local = new Map();
   const memo = (k, make) => (kit?.memo ? kit.memo('fx:' + k, make) : (local.has(k) || local.set(k, make()), local.get(k)));
   const rand = Math.random;
@@ -126,7 +131,7 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
   // ---- fire: flame tongues + base glow + embers + flickering warm light. opts: x,y,z, scale, radius, level, light (multiplier|false), shadow ----
   function fire(opts = {}) {
     const scale = opts.scale ?? 1, radius = (opts.radius ?? 0.28) * scale;
-    const group = makeGroup('fx-fire', opts);
+    const group = makeGroup('fx-fire', opts), Q = fq();
     const fmax = Math.max(1, Math.round((opts.count ?? 46) * Q)), emax = Math.max(1, Math.round(26 * Q));
     const flames = billboards(fmax, flameMat());
     const embers = billboards(emax, glowMat());
@@ -198,7 +203,7 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
   // ---- smoke: buoyant puffs that rise, hit the ceiling and spread into a layer that thickens downwards ----
   // opts: x,y,z (source), ceiling (local height of the ceiling above the source), spread (m), radius, color, count, density, bounds {x0,x1,z0,z1} (local)
   function smoke(opts = {}) {
-    const group = makeGroup('fx-smoke', opts);
+    const group = makeGroup('fx-smoke', opts), Q = fq();
     const max = Math.round((opts.count ?? 72) * Q);
     const sys = billboards(max, smokeMat());
     sys.mesh.renderOrder = 4;
@@ -255,7 +260,9 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
   const OUT_F = '#include <tonemapping_fragment>\n#include <colorspace_fragment>\n#include <fog_fragment>\n';
   function rain(scene, camera, opts = {}) {
     const group = new THREE.Group(); group.name = 'fx-rain'; group.visible = false;
-    const n = Math.round((opts.count ?? 9000) * Q), S = 36, H = 22;
+    // Built at full count; the tier's share is drawn (setDensity), so a tier change needs no rebuild.
+    let Q = fq();
+    const n = Math.round(opts.count ?? 9000), S = 36, H = 22;
     const seeds = new Float32Array(n * 8), zeros = new Float32Array(n * 6);
     for (let i = 0; i < n; i++) { const a = [rand(), rand(), rand()]; seeds.set([...a, 0, ...a, 1], i * 8); }
     const lg = new THREE.BufferGeometry();
@@ -282,7 +289,7 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
       fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying float vA;\n${FOG_F}
         void main() { gl_FragColor = vec4(uColor, vA * uOpacity * 0.42);\n${OUT_F} }`,
     }));
-    const m = Math.round(700 * Q), R = 16, sp = new Float32Array(m * 4);
+    const m = 700, R = 16, sp = new Float32Array(m * 4);
     for (let i = 0; i < m; i++) sp.set([rand(), rand(), rand(), rand()], i * 4);
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(m * 3), 3));
@@ -323,15 +330,17 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
       u.uOpacity.value = shown;
       if (cam) {
         cam.getWorldPosition(u.uCam.value);
-        if (cam.isPerspectiveCamera && typeof innerHeight === 'number') u.uScale.value = innerHeight * Math.min(devicePixelRatio || 1, 2) / (2 * Math.tan(cam.fov * Math.PI / 360));
+        if (cam.isPerspectiveCamera && (renderer || typeof innerHeight === 'number')) u.uScale.value = pxScale(cam);
       }
       const fc = scene?.fog?.color;
       if (fc) u.uColor.value.setRGB(fc.r * 0.85 + 0.12, fc.g * 0.85 + 0.13, fc.b * 0.85 + 0.15);
-      lg.setDrawRange(0, (rm ? Math.floor(n / 2) : n) * 2);
-      pg.setDrawRange(0, rm ? Math.floor(m / 2) : m);
+      const dn = Math.round(n * Q), dm = Math.round(m * Q);
+      lg.setDrawRange(0, (rm ? Math.floor(dn / 2) : dn) * 2);
+      pg.setDrawRange(0, rm ? Math.floor(dm / 2) : dm);
     }
     return {
       group, setOn(v) { on = !!v; }, get on() { return on; }, update,
+      setDensity(v) { Q = Math.min(1, Math.max(0.05, Number(v) || 0)); }, // share of the drops drawn (the tier's fx factor)
       dispose() { group.removeFromParent(); lg.dispose(); pg.dispose(); lines.material.dispose(); splashes.material.dispose(); },
     };
   }
@@ -339,7 +348,7 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
   // ---- dust: slow motes drifting in a box (basements, light shafts). opts: box {x0,x1,y0,y1,z0,z1}, count, color, opacity, size ----
   function dust(opts = {}) {
     const bx = { x0: -4, x1: 4, y0: 0.2, y1: 2.6, z0: -4, z1: 4, ...(opts.box || {}) };
-    const n = Math.round((opts.count ?? 260) * Q), pos = new Float32Array(n * 3), seed = new Float32Array(n * 4);
+    const Q = fq(), n = Math.round((opts.count ?? 260) * Q), pos = new Float32Array(n * 3), seed = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) {
       pos.set([bx.x0 + rand() * (bx.x1 - bx.x0), bx.y0 + rand() * (bx.y1 - bx.y0), bx.z0 + rand() * (bx.z1 - bx.z0)], i * 3);
       seed.set([rand(), rand(), rand(), rand()], i * 4);
@@ -373,7 +382,7 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
       update(dt, camera) {
         if (!on) return;
         uniforms.uTime.value += Math.min(dt || 0, 0.05) * ((opts.reduceMotion ?? RM) ? 0.3 : 1);
-        if (camera?.isPerspectiveCamera && typeof innerHeight === 'number') uniforms.uScale.value = innerHeight * Math.min(devicePixelRatio || 1, 2) / (2 * Math.tan(camera.fov * Math.PI / 360));
+        if (camera?.isPerspectiveCamera && (renderer || typeof innerHeight === 'number')) uniforms.uScale.value = pxScale(camera);
       },
       dispose() { group.removeFromParent(); g.dispose(); points.material.dispose(); },
     };
@@ -382,7 +391,7 @@ export function createFx(THREE, kit, { reduceMotion } = {}) {
   // ---- extinguisher spray: dry-chemical powder jet from the group's origin (the nozzle) toward aim(). ----
   // Particles live in world space, so the group can be parented to a hand. opts: count, floorY, speed
   function extinguisherSpray(opts = {}) {
-    const group = new THREE.Group(); group.name = 'fx-spray';
+    const group = new THREE.Group(); group.name = 'fx-spray'; const Q = fq();
     const max = Math.round((opts.count ?? 170) * Q);
     const sys = billboards(max, smokeMat());
     sys.mesh.matrixAutoUpdate = false; sys.mesh.matrixWorldAutoUpdate = false; // identity world matrix: world-space particles

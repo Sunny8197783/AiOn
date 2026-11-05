@@ -14,14 +14,15 @@ export const reachOf = (p) => p.reach ?? Math.max(p.r ?? REACH.min, REACH.min);
 
 // The point's own solid never hides it: one that holds or abuts it (within 0.25 m: an ATM point sits just in
 // front of the ATM), or the ones named by point.host (an id or a list of ids, e.g. the gate barrier it is on).
-// An abutting solid is only exempt when the line from the player meets it in its last 0.3 m (seen from the
-// front or side-on), so a sign or a gate rail does not show its prompt to someone standing behind it.
+// An abutting solid is only exempt when it is not between the point and the player (seen from the front or
+// side-on), so a sign or a gate rail does not show its prompt to someone standing behind it.
 function own(p, s, o, d, dist) {
   if (p.host != null && s.id != null && (Array.isArray(p.host) ? p.host.includes(s.id) : p.host === s.id)) return true;
   if (p.x >= s.x0 && p.x <= s.x1 && p.z >= s.z0 && p.z <= s.z1) return true;
   if (!(p.x >= s.x0 - 0.25 && p.x <= s.x1 + 0.25 && p.z >= s.z0 - 0.25 && p.z <= s.z1 + 0.25)) return false;
-  const t = segBox(o, d, s, 0);
-  return !(t <= 1) || (1 - t) * dist <= 0.3;
+  // From the point back toward the player: if that line crosses the solid, the player stands behind it.
+  const f = dist / (dist - 0.25);
+  return !(segBox({ x: p.x, y: o.y, z: p.z }, { x: -d.x * f, y: 0, z: -d.z * f }, s, 0) <= 1);
 }
 
 // Behind a wall: one solid (not the point's own) blocks the line to it both at 0.3 m and at 1.5 m (low furniture

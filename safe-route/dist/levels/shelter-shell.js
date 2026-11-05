@@ -186,6 +186,7 @@ export function buildShell(kit, T) {
   const ry = (z) => rIn + (z - rz0) / (rz1 - rz0) * rTop;
   for (const [x0, x1] of [[RAMP.x0 - 0.25, RAMP.x0], [RAMP.x1, RAMP.x1 + 0.25]]) { add(kit.slab(x1 - x0, 6.6, rz1 - ROOM.z1, M.wall, { x: (x0 + x1) / 2, z: (ROOM.z1 + rz1) / 2 })); solid(x0, x1, ROOM.z1, rz1); }
   slopeZ(RAMP.x0, RAMP.x1, rz0, 0, rz1, rTop, 0.3, M.groove);
+  add(kit.box(RAMP.x1 - RAMP.x0, 0.3, rz0 - ROOM.z1 + 0.02, M.groove, { x: (RAMP.x0 + RAMP.x1) / 2, y: -0.3, z: (ROOM.z1 + rz0) / 2 })); // threshold: room floor to ramp foot
   slopeZ(RAMP.x0 - 0.25, RAMP.x1 + 0.25, rz0, 2.75, rz1, rTop + 2.75, 0.3, M.ceil);
   for (const x of [RAMP.x0 + 0.012, RAMP.x1 - 0.012]) { const s = slopeZ(x - 0.01, x + 0.01, rz0, 0.55, rz1, rTop + 0.55, 0.5, M.hazard); s.castShadow = false; }
   add(kit.box(RAMP.x1 - RAMP.x0, 0.07, 0.4, M.hazard, { x: 11, z: 15.2 }));                            // speed bump
@@ -216,6 +217,7 @@ export function buildShell(kit, T) {
   const aw = (x0, x1, z0, z1, y1 = 5.2) => { add(kit.slab(x1 - x0, y1, z1 - z0, M.wall, { x: (x0 + x1) / 2, z: (z0 + z1) / 2 })); solid(x0, x1, z0, z1); };
   aw(ax0 - 0.25, ax0, az[4] - 0.25, ROOM.z0); aw(ax1, ax1 + 0.25, az[3], ROOM.z0); aw(ax0 - 0.25, ax1 + 0.25, az[4] - 0.25, az[4]);
   slopeZ(ax0, ax1, az[1], 0.75, az[0], 0, 0.3, M.rubber);
+  add(kit.box(ax1 - ax0, 0.3, ROOM.z0 - az[0] + 0.02, M.rubber, { x: (ax0 + ax1) / 2, y: -0.3, z: (ROOM.z0 + az[0]) / 2 })); // threshold
   add(kit.box(ax1 - ax0, 0.75, az[1] - az[2], M.rubber, { x: (ax0 + ax1) / 2, z: (az[1] + az[2]) / 2 }));
   slopeZ(ax0, ax1, az[3], 1.5, az[2], 0.75, 0.3, M.rubber);
   add(kit.box(ax1 - ax0, 1.5, az[3] - az[4], M.rubber, { x: (ax0 + ax1) / 2, z: (az[3] + az[4]) / 2 }));

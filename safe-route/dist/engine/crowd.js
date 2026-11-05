@@ -1,11 +1,12 @@
 // Crowds: seeded neighbourhood people (people.createPerson 'crowd' preset) moving along polylines with
 // simple separation steering, a keep-right lane on sidewalks, player avoidance and distance LOD. Members collide
-// with the level's solids (the same circle-vs-box push-out as the player, through the engine/space.js grid),
-// slide along them and side-step what they meet head-on; moving cars are left to the traffic. The player bumps
-// into them (engine/bodies.js).
-// createCrowd({ count, seed, people, quality|kit, heightAt, player, solids })
+// with the level's solids (the same circle-vs-box push-out as the player, through the engine/space.js grid, cars
+// included), slide along them and side-step what they meet head-on. The player bumps into them (engine/bodies.js).
+// createCrowd({ count, seed, people, quality|kit, heightAt, player, solids, holds })
 //   solids: the level's solids (an array or a function returning it); default ctx.solids, else the solids of the
 //   level the player is in.
+//   holds: [{ x0, x1, z0, z1, open }] (e.g. the carriageway at a signalled zebra; the level keeps `open` current):
+//   strollers wait at the edge of a zone that is not open and step in once it is; anyone already inside walks on.
 //   -> { group, update(dt, ctx?), setMode(mode, opts), setPaths(paths), setArea(rect), positions(out?), mode, members,
 //        active, dispose }
 // Modes and their opts (all optional unless noted):
@@ -21,7 +22,7 @@
 //           of them stand beside their spot; opts.y lifts sitters (mat thickness, default 0.03).
 //   idle    stand where they are (or a random placement): idle / phone / talk (talkers face a neighbour).
 //   none    hide everyone.
-// Shared opts: count (active members, capped by quality: high 40, medium 24, low 12), paths, area, heightAt,
+// Shared opts: count (active members, capped by the graphics tier, engine/quality.js crowdCap), paths, area, heightAt,
 //   props { name: probability } (e.g. { flashlight: 0.3 } at night), instant (snap into place; default true for
 //   queue / sit, else members keep their positions and walk to the new behaviour).
 // update(dt, ctx): ctx.camera / ctx.player are optional (the level's ctx works as is). Without them the viewer
@@ -32,12 +33,12 @@ import { createPerson as basePerson } from './people.js';
 import { collide } from './geom.js';
 import { gridOf, activeLevel } from './space.js';
 import { addBodies } from './bodies.js';
+import { profileOf, live, share } from './quality.js';
 
-const CAP = { high: 40, medium: 24, low: 12 };
 const MODES = ['stroll', 'brisk', 'queue', 'sit', 'idle', 'none'];
 const STAND = ['idle', 'idle', 'phone', 'talk'];
-const SEP = 0.62, AVOID = 1.05, LOD_ANIM = 45, LOD_SHADOW = 25, RESPAWN_HIDE = 20;
-const TAU = Math.PI * 2, BODY = 0.24, PASS = new Set(['movingCar']); // solids people never collide with
+const SEP = 0.62, AVOID = 1.05, RESPAWN_HIDE = 20; // shadow and animation LOD distances come from the live tier
+const TAU = Math.PI * 2, BODY = 0.24;
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerpAngle = (a, b, k) => a + ((((b - a + Math.PI) % TAU) + TAU) % TAU - Math.PI) * k;
 const okPt = (q) => Number.isFinite(q?.x) && Number.isFinite(q?.z);
@@ -72,9 +73,9 @@ function project(paths, x, z) {
   return best;
 }
 
-export function createCrowd({ count = 24, seed = 1, people = null, quality, kit, heightAt = null, player = null, solids = null } = {}) {
-  const q = quality ?? kit?.quality ?? 'high';
-  const cap = CAP[q] ?? CAP.high;
+export function createCrowd({ count = 24, seed = 1, people = null, quality, kit, heightAt = null, player = null, solids = null, holds = null } = {}) {
+  const P0 = profileOf(quality ?? kit?.quality ?? live.tier); // build-time tier: how many members, how detailed
+  const cap = P0.crowdCap;
   const make = typeof people?.createPerson === 'function' ? people.createPerson : basePerson;
   const r = rng(((seed * 2654435761) ^ 0x5bd1e995) >>> 0);
   const pick = (arr) => arr[(r() * arr.length) | 0];
@@ -87,21 +88,21 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
   const tmp = { x: 0, z: 0, tx: 0, tz: 1 };
 
   // ---- members (built up front so the level build absorbs the cost) ----
-  const n = Math.max(0, Math.min(count | 0, cap));
+  const n = Math.max(0, Math.min(share(count | 0, P0.crowdScale), cap));
   const agents = [];
   for (let i = 0; i < n; i++) {
     let p;
-    try { p = make({ preset: 'crowd', seed: seed * 1000 + i + 1 }); } catch (err) { console.error('[crowd] createPerson failed', err); continue; }
+    try { p = make({ preset: 'crowd', seed: seed * 1000 + i + 1, detail: P0.people }); } catch (err) { console.error('[crowd] createPerson failed', err); continue; }
     if (!p?.group) { console.error('[crowd] createPerson returned no group'); continue; }
-    if (p.mesh) p.mesh.onBeforeRender = hook;
     p.group.visible = false;
     group.add(p.group);
     const a = {
       p, i, x: 0, z: 0, vx: 0, vz: 0, yaw: 0, face: null, on: false, placed: false, state: 'stand', path: -1, s: 0, dir: 1,
       lane: 0, speed: 1.2, goal: null, timer: 0, stopT: 0, anim: '', standAnim: 'idle', moveAnim: 'walk', moving: false,
       acc: 0, sh: true, dy: 0, props: new Set(), jit: 0, slow: (p.spec?.stoop ?? 0) > 0.1 ? 0.72 : 1,
-      hurtT: 0, fleeT: 0, downT: 0, fx: 0, fz: 0, detour: 0, side: 1, nx: 0, nz: 0, calm: 9, stuck: 0,
+      hurtT: 0, fleeT: 0, downT: 0, fx: 0, fz: 0, detour: 0, side: 1, nx: 0, nz: 0, calm: 9, stuck: 0, seen: 0, wait: false,
     };
+    if (p.mesh) p.mesh.onBeforeRender = (renderer, scene, camera) => { hook(renderer, scene, camera); a.seen = frame; }; // drawn this frame
     agents.push(a);
     // Hit by the player (engine/actions.js): flinch, then run from (x, z); ko = knocked down for a while.
     p.onHit = (x, z, ko) => { a.hurtT = 0.45; a.fx = x; a.fz = z; if (ko) a.downT = 14; else a.fleeT = 7; };
@@ -136,7 +137,7 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     at(paths[a.path], a.s, tmp);
     const ahead = -Math.sin(a.yaw) * tmp.tx - Math.cos(a.yaw) * tmp.tz; // keep walking the way they face
     a.dir = brisk ? 1 : keep ? (ahead >= 0 ? 1 : -1) : (r() < 0.5 ? 1 : -1);
-    a.lane = brisk ? (r() - 0.5) * 1.4 : 0.25 + r() * 0.6;
+    a.lane = brisk ? (r() - 0.5) * 1.4 : 0.2 + r() * 0.4; // strollers keep to the right half of the walk
     if (!keep) { const [gx, gz] = laneGoal(a); placeAt(a, gx, gz, Math.atan2(-tmp.tx * a.dir, -tmp.tz * a.dir)); }
   }
   function slot(k) {
@@ -170,8 +171,10 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     return best ? Math.atan2(-(best.x - a.x), -(best.z - a.z)) : a.yaw;
   }
 
+  let capNow = live.P.crowdCap;
   function apply() {
-    const want = mode === 'none' ? 0 : Math.max(0, Math.min(M.count ?? agents.length, agents.length));
+    capNow = live.P.crowdCap; // a lower tier at run time shows fewer of the members built
+    const want = mode === 'none' ? 0 : Math.max(0, Math.min(M.count ?? agents.length, agents.length, capNow));
     active = want;
     const instant = M.instant ?? (mode === 'queue' || mode === 'sit');
     const list = [];
@@ -267,7 +270,7 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
   function resolve(a, gx, gz, v) {
     if (!grid) return;
     grid.query(a.x - 0.6, a.x + 0.6, a.z - 0.6, a.z + 0.6, qa);
-    qb.length = 0; for (const s of qa) if (!PASS.has(s.id) && !s.npc) qb.push(s);
+    qb.length = 0; for (const s of qa) if (!s.npc) qb.push(s); // cars too (traffic stops for people; a car that stood still is walked round)
     if (!qb.length) return;
     const [cx, cz] = collide(a.x, a.z, H(a.x, a.z), qb, BODY, 1.7);
     const nx = cx - a.x, nz = cz - a.z, l = Math.hypot(nx, nz);
@@ -282,6 +285,18 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
       if (again && a.path >= 0) a.lane = clamp(a.lane + (r() < 0.5 ? -0.5 : 0.5), -1.2, 1.2); // and another line along the path
       if (again && (a.stuck += 2) > 6 && mode === 'stroll' && a.path >= 0) { a.dir = -a.dir; a.stuck = 0; } // the way is shut: turn back
     }
+  }
+
+  // At a hold that is not open: true while the next stretch of the path enters the zone and the member is not in it yet.
+  const inZone = (z, x, y) => x > z.x0 && x < z.x1 && y > z.z0 && y < z.z1;
+  function held(a) {
+    if (!holds?.length) return false;
+    const P = paths[a.path], s1 = clamp(a.s + a.dir * 1.6, 0, P.len);
+    at(P, s1, tmp);
+    const dx = tmp.tx * a.dir, dz = tmp.tz * a.dir, nx = tmp.x - dz * a.lane, nz = tmp.z + dx * a.lane;
+    for (const z of holds) if (!z.open && inZone(z, nx, nz) && !inZone(z, a.x, a.z)) { at(P, a.s, tmp); return true; }
+    at(P, a.s, tmp);
+    return false;
   }
 
   // Steer toward (gx, gz) at speed v with separation and player avoidance. Returns the distance to the goal.
@@ -328,7 +343,9 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
       } else if (a.path >= 0) {
         if (mode === 'stroll' && (a.stopT -= dt) <= 0) { a.stopT = 10 + r() * 20; if (r() < 0.3) stop(a, 3 + r() * 6); }
         const [gx, gz] = laneGoal(a);
-        if (Math.hypot(gx - a.x, gz - a.z) < 1.4) a.s += a.dir * a.speed * dt * 1.15;
+        a.wait = mode === 'stroll' && held(a);
+        if (!a.wait && Math.hypot(gx - a.x, gz - a.z) < 1.4) a.s += a.dir * a.speed * dt * 1.15;
+        a.face = a.wait ? Math.atan2(-tmp.tx * a.dir, -tmp.tz * a.dir) : a.face;
         if (a.dir > 0 ? a.s >= paths[a.path].len : a.s <= 0) {
           const near = Math.hypot(gx - a.x, gz - a.z) < (mode === 'brisk' ? 1.0 : 1.6);
           if (near) endOfPath(a);
@@ -377,7 +394,9 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     frame++;
     if (ctx?.camera?.matrixWorld) { viewer.setFromMatrixPosition(ctx.camera.matrixWorld); hasViewer = true; }
     const pl = ctx?.player ?? player ?? (hasViewer ? viewer : null);
+    if (live.P.crowdCap !== capNow && mode !== 'none') apply();
     if (!active || !dt) return;
+    const LS = live.P.crowdShadowM, LA = live.P.crowdAnimM;
     const S = (typeof solids === 'function' ? solids() : solids) ?? ctx?.solids ?? activeLevel()?.solids;
     grid = Array.isArray(S) ? gridOf(S) : null;
     if (mode === 'queue') queueTick(dt);
@@ -387,10 +406,12 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
       if (a.state === 'gone') continue;
       pose(a, dt);
       const d2 = hasViewer ? (a.x - viewer.x) ** 2 + (a.z - viewer.z) ** 2 : 0;
-      const sh = d2 < LOD_SHADOW * LOD_SHADOW;
+      const sh = d2 < LS * LS;
       if (sh !== a.sh) { a.sh = sh; a.p.setShadow?.(sh); }
       a.acc += dt;
-      if (d2 < LOD_ANIM * LOD_ANIM || (frame + a.i) % 3 === 0) { a.p.update?.(a.acc); a.acc = 0; }
+      // Full-rate pose near the viewer; every 3rd frame further out, every 4th when it was not drawn last frame.
+      const near = d2 < LA * LA, drawn = a.seen >= frame - 1;
+      if (drawn ? near || (frame + a.i) % 3 === 0 : (frame + a.i) % 4 === 0) { a.p.update?.(a.acc); a.acc = 0; }
     }
   }
 
@@ -423,7 +444,8 @@ export function createCrowd({ count = 24, seed = 1, people = null, quality, kit,
     get active() { return active; },
     members,
     // Where the active, shown members are ([{ x, z }], `out` reused): for traffic that yields to people.
-    positions(out = []) { out.length = 0; for (const a of agents) if (a.on && a.state !== 'gone') out.push({ x: a.x, z: a.z }); return out; },
+    // Shown members' { x, z } (one object per member, reused: read them this frame).
+    positions(out = []) { out.length = 0; for (const a of agents) if (a.on && a.state !== 'gone') { const q = (a.pt ??= { x: 0, z: 0 }); q.x = a.x; q.z = a.z; out.push(q); } return out; },
     dispose() { unbody(); for (const a of agents) a.p.dispose?.(); group.removeFromParent(); },
   };
 }

@@ -247,6 +247,7 @@ export function buildStairs(B, g, dyn) {
   B.solid(5.1, 6.6, 1.02, 1.75, Y3, yOf(4)).noVault = true; // from the A-frame sign back past the tape
   const wetPt = B.point('stairsWet', '위층 계단 (물청소 중)', 5.85, Y3, 0.95, 'inspect', 1.4);
   wetPt.host = 'stairDoor3'; // the open fire-door leaf beside it never hides it
+  wetPt.reach = 1.2; // only right at the tape, so the 3F stairs prompt keeps the landing
   wetPt.desc = ['위층으로 가는 계단에 출입 금지 줄이 쳐 있다. "계단 물청소 중 · 미끄럼 주의".', '젖은 계단은 미끄럽다. 오늘은 위층으로 올라가지 않는다.'];
   B.exitSign(g, 5.0, 2.42, 0.12, 0, 'exit'); // above the 1F door, stair side
 }

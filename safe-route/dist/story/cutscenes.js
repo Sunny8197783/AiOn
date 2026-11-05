@@ -1,9 +1,14 @@
-// The story's cutscenes (story/cine.js shots): the opening over 연무동, time passing over the 한빛아파트
-// complex, the D-day strike, the blackout and the air-raid siren. Each stands in for a card that only told it.
-// Coordinates: town x = east, z = south, ground 0 (game/townmap.js); the 302호 floor is at y 5.75.
-import { FL } from '../levels/apartment-parts.js';
+// The story's cutscenes (story/cine.js shots): the opening over 연무동, the tour of the places that matter
+// (C0), time passing over the 한빛아파트 complex, the D-day strike, the blackout, the air-raid siren, 304호
+// 어르신 at the rail (C1) and the closing montage of what the early choices led to (C2). Each stands in for a
+// card that only told it. Coordinates: town x = east, z = south, ground 0 (game/townmap.js); the 302호 floor
+// is at y 5.75, the 3F corridor at 5.6.
+import { FL, F3 } from '../levels/apartment-parts.js';
 
 const NIGHT = new Set(['night', 'blackout']);
+// Reduced motion: each shot holds its last framing (no dolly, no zoom, no sway). Function cams are left alone.
+const still = (ctx, list) => list.map((s) => (!ctx.engine.reduceMotion || !s.cam || typeof s.cam === 'function' ? s
+  : { ...s, cam: { ...s.cam, p: [s.cam.p.at(-1)], t: [s.cam.t.at(-1)], fov: s.cam.fov && [s.cam.fov[1], s.cam.fov[1]], hand: 0 } }));
 
 // Where the player was, so a cutscene shot elsewhere can put them back.
 function here(ctx) {
@@ -100,4 +105,71 @@ export async function sirenScene(ctx) {
   ], { title: ['연무동', 'D-day 금요일 20:05'] });
   await back(ctx, h);
   return res;
+}
+
+// ---- C0, prep start: before the first plan, the places that matter in 연무동 (once: know.toured) ----
+// Night of D-2: the exposure lift keeps the buildings readable. Labels name places, they do not judge them.
+// Ends in town: the caller (story/prep.js) enters 302호 next, so there is no extra trip back.
+const TOUR = [
+  { cam: { p: [[54, 13, -3], [49, 12, -5]], t: [[36, 2, 15], [35, 2, 15]], fov: [50, 46] }, title: ['바로편의점', '단지 앞 · 작은 가게'] },
+  { cam: { p: [[2, 15, 3], [-8, 14, 1]], t: [[-16, 3, -30], [-17, 3, -30]], fov: [52, 48] }, title: ['연무마트', '생필품 · 장보기는 두 칸이 든다'] },
+  { cam: { p: [[-58, 15, -3], [-64, 14, -5]], t: [[-84, 3, -26], [-85, 3, -25]], fov: [52, 48] }, title: ['연무동 행정복지센터', '게시판 · 마당의 비상급수시설'] },
+  { cam: { p: [[-50, 20, 6], [-56, 18, 2]], t: [[-90, 2, 26], [-91, 2, 27]], fov: [52, 46] }, title: ['연무 생활문화센터', '지하에 대피소가 있다고 들었다'] },
+];
+export async function townTour(ctx) {
+  const { cine, G } = ctx;
+  const env = ctx.outdoorEnv || 'night';
+  if (ctx.engine.level?.id !== 'town') await ctx.goto('town', 'home', env); else ctx.engine.setEnv(env, { seconds: 0 });
+  const res = await cine.play(still(ctx, TOUR.map((t, i) => ({
+    dur: i === TOUR.length - 1 ? 5.2 : 4.3, fade: i === 0, exposure: 1.0, cam: { ...t.cam, hand: 0.1 },
+    at: [[0.2, () => cine.title(t.title)]],
+    lines: i === 0 ? [[0.8, '달력을 보기 전에, 정민은 동네를 한 바퀴 떠올렸다.', null, 3400]] : i === TOUR.length - 1 ? [[1.4, '어디에 무엇이 있는지 알면, 움직일 때 덜 헤맨다.', null, 3600]] : [],
+  }))));
+  G.know.toured = true;
+  return res;
+}
+
+// ---- C1, the alert on 3F: 304호 어르신 holding the rail by her door (story/elder.js asks right after) ----
+export async function elderScene(ctx) {
+  const { cine, engine } = ctx, was = engine.controlsEnabled;
+  const n = engine.level?.id === 'apartment' ? engine.level.npcs?.elder?.group : null;
+  const e = n?.visible ? n.position : { x: 15.45, y: F3, z: -0.4 }, y = e.y; // her spot, levels/apartment-corridor.js ELDER
+  // A phone torch's worth of light in the dark corridor; the cameras stand past 303's door, which opens outward.
+  const fill = { at: [e.x - 2.4, y + 2.2, -1.7], i: 1.6, color: '#e8ecff' };
+  try {
+    return await cine.play(still(ctx, [
+      { dur: 3.4, fill, cam: { p: [[e.x - 4.4, y + 1.6, -1.55], [e.x - 3.5, y + 1.56, -1.5]], t: [[e.x, y + 1.15, e.z - 0.05]], fov: [50, 46], hand: 0.04 },
+        lines: [[0.3, '304호 어르신이 계단 손잡이를 붙들고 서 있다.', null, 3800]] },
+      { dur: 2.8, fill, cam: { p: [[e.x - 1.9, y + 1.3, -1.55], [e.x - 1.65, y + 1.25, -1.5]], t: [[e.x - 0.1, y + 1.0, e.z + 0.1], [e.x - 0.05, y + 1.05, e.z + 0.1]], fov: [44, 40], hand: 0.03 } },
+    ]));
+  } finally { if (!was) engine.setControls(false); } // asked from inside a modal: keep the world still for the talk
+}
+
+// ---- C2, the ending: a crane over the town at dusk with up to three ripples, then one shot of where 정민 is ----
+// rows: game/ripples.js ripples(G); path: G.know.path. The level states it sets stay: the run is over after this.
+const CLOSE = {
+  bus: { states: { buses: 'on' }, cam: { p: [[-47, 6, -29], [-51, 5, -31]], t: [[-67, 1.6, -41]] }, title: ['행정복지센터 앞 임시 집결지', '버스가 출발한다'] },
+  missed: { states: { buses: 'off' }, cam: { p: [[-47, 6, -29], [-50, 5.5, -30]], t: [[-62, 1, -44]] }, title: ['임시 집결지', '버스가 떠난 뒤'] },
+  volunteer: { states: { waterPoint: 'on' }, cam: { p: [[-67, 5, -7], [-70, 4.5, -9]], t: [[-80, 1.2, -17]] }, title: ['비상급수시설', '자원봉사 조끼를 입고'] },
+  stay: { cam: { p: [[80, 2.5, 12], [79, 3.5, 14]], t: [[82, 9, 30], [82, 11, 30]] }, title: ['한빛아파트 103동', '남기로 한 집'] },
+  walk: { cam: { p: [[121, 3, -6], [122, 3.4, -7]], t: [[60, 8, 0], [58, 9, 1]] }, title: ['연무동 동쪽 끝', '통제선 너머 국도'] },
+  // 303's door hangs on its east jamb and opens into the corridor, so the camera looks in past its west side.
+  seoyeon: { level: 'apartment', spawn: 'corridor3F', env: 'interiorDark', states: { seoyeonDoor: 'open' }, cam: { p: [[7.95, F3 + 1.52, -1.75], [8.3, F3 + 1.5, -1.65]], t: [[9.5, F3 + 1.2, 0.5]] }, title: ['103동 3층 · 303호 앞', '지원 차량을 함께 기다린다'] },
+};
+export async function rippleMontage(ctx, rows = [], path = 'bus') {
+  const { cine } = ctx, end = CLOSE[path] ?? CLOSE.bus, picks = [].concat(rows ?? []).slice(0, 3);
+  const level = end.level ?? 'town';
+  let res = 'done';
+  if (picks.length) {
+    await ctx.goto('town', 'home', 'dusk');
+    const dur = 2 + picks.length * 4.6;
+    res = await cine.play(still(ctx, [{ dur, fade: true, exposure: 0.4, cam: { p: [[60, 70, 80], [20, 82, 50]], t: [[-10, 0, 0], [-30, 0, -10]], fov: [50, 46], hand: 0.2 },
+      lines: picks.map((r, i) => [1 + i * 4.6, `${r.cause.when} · ${r.cause.text}  →  ${r.effect.when} · ${r.effect.text}`, r.label, 4400]) }]), { title: ['그날의 선택들', '연무동, 돌아보며'] });
+  }
+  if (res !== 'done') return res;
+  if (ctx.engine.level?.id !== level) await ctx.goto(level, end.spawn ?? 'home', end.env ?? 'dusk');
+  else if (level === 'town') ctx.engine.setEnv('dusk', { seconds: 0 });
+  for (const [k, v] of Object.entries(end.states ?? {})) ctx.setLevelState(level, k, v);
+  return cine.play(still(ctx, [{ dur: 4.6, fade: !picks.length, exposure: level === 'town' ? 0.4 : 0.6, cam: { ...end.cam, fov: [46, 44], hand: 0.06 },
+    at: [[0.3, () => cine.title(end.title)]] }]));
 }

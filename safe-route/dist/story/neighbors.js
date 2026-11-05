@@ -90,14 +90,14 @@ export async function barter(ctx) {
 export async function knock(ctx) {
   const G = ctx.G;
   const water = ['water_500', 'water_2l'].find(id => count(G, id) > 0);
-  const pick = await ctx.ui.talk({ speaker: '현관 너머', role: `D+${G.day} ${hhmm(G.minute)}`, lines: ['똑똑. 문 너머에서 낮은 목소리가 들린다.', '"밤늦게 죄송해요. 2동 사는 사람인데요, 물을 조금만 얻을 수 있을까요? 아이가 열이 나서요."'],
+  const pick = await ctx.ui.talk({ speaker: '현관 너머', role: `D+${G.day} ${hhmm(G.minute)}`, lines: ['똑똑. 문 너머에서 낮은 목소리가 들린다.', '"밤늦게 죄송해요. 101동 사는 사람인데요, 물을 조금만 얻을 수 있을까요? 아이가 열이 나서요."'],
     choices: [{ id: 'give', label: '문을 조금 열고 물 한 병을 건넨다', disabled: !water, reason: '나눌 물이 없다' }, { id: 'info', label: '문 너머로 급수소 위치와 시간을 알려 준다' }, { id: 'none', label: '대답하지 않는다' }] });
   recordEvent(G, 'knock', { pick });
   if (pick === 'give') {
     consume(G, water, 1, from(G, water));
     G.karma = (G.karma ?? 0) + 1;
     recordEvent(G, 'help', { who: 'stranger', what: '밤에 문을 두드린 이웃에게 물 한 병을 건넸다' });
-    await ctx.ui.talk({ speaker: '현관 너머', role: '2동 주민', lines: ['"고마워요. 정말로요."', '발소리가 계단 쪽으로 멀어진다.'] });
+    await ctx.ui.talk({ speaker: '현관 너머', role: '101동 주민', lines: ['"고마워요. 정말로요."', '발소리가 계단 쪽으로 멀어진다.'] });
   } else if (pick === 'info') {
     recordEvent(G, 'help', { who: 'stranger', what: '밤에 문을 두드린 이웃에게 급수소 위치와 운영 시간을 알려 주었다' });
     await ctx.ui.talk({ speaker: '정민', role: '문 너머로', lines: ['"행정복지센터 마당에 비상급수시설이 있어요. 오전 9시 반부터 오후 5시까지예요. 물통을 가져가세요."', '"아, 몰랐어요. 내일 아침에 가 볼게요. 고마워요."'] });

@@ -1,5 +1,6 @@
-// Post chain: RenderPass → GTAO (high only, half-res) → UnrealBloom → Grade (eye adaptation, camera motion blur, sharpen, exposure,
-// saturation, filmic contrast, split toning, tint, vignette, grain, edge chroma, fade) → Output (ACES + sRGB) → SMAA.
+// Post chain: RenderPass → GTAO (high: half-res, ultra: full-res) → UnrealBloom → Grade (eye adaptation, camera motion blur,
+// sharpen, exposure, saturation, filmic contrast, split toning, tint, vignette, grain, edge chroma, fade) → Output (ACES + sRGB)
+// → SMAA. Which of them run is the tier's (engine/quality.js); '완전 낮음' keeps only the grade and the tone mapping.
 // The grade runs in linear HDR (the composer's targets are half-float) so it never clips before tone mapping.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -10,6 +11,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { profileOf } from './quality.js';
 
 const GradeShader = {
   uniforms: {
@@ -84,22 +86,25 @@ const DEFAULT_GRADE = { saturation: 1, contrast: 1, exposure: 0, vignette: 0.2, 
 const ease = (k) => k * k * (3 - 2 * k);
 
 export function createPost({ renderer, scene, camera, quality = 'high', reduceMotion = false }) {
-  const composer = new EffectComposer(renderer); // half-float targets keep HDR until the OutputPass
+  // Half-float targets keep HDR until the OutputPass. They carry depth textures, so GTAO reads the depth the scene
+  // render already wrote (normals rebuilt from it) instead of drawing the whole scene a second time into a G-buffer.
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(1, 1) });
+  target.texture.name = 'EffectComposer.rt1';
+  const composer = new EffectComposer(renderer, target); // rt2 is a clone with its own depth texture
   const renderPass = new RenderPass(scene, camera);
   const gtao = new GTAOPass(scene, camera, 2, 2, undefined, { radius: 0.6, distanceExponent: 1.6, thickness: 1.4, scale: 1.0, samples: 12 });
+  // Built with its own G-buffer target first (r180's setGBuffer reads normalRenderTarget even when given a depth
+  // texture), then pointed at the composer's depth; that unused target is never drawn into, so it never allocates.
+  gtao.setGBuffer(target.depthTexture);
   gtao.blendIntensity = 0.9;
-  // Half-res AO, and keep sky shells, beams and other depthWrite-less effects out of the AO G-buffer ...
+  let aoHalf = true, aoSamples = 12;
   const gtaoSize = gtao.setSize.bind(gtao);
-  gtao.setSize = (w, h) => gtaoSize(Math.max(1, w >> 1), Math.max(1, h >> 1));
-  const hideBase = gtao._overrideVisibility.bind(gtao);
-  gtao._overrideVisibility = () => {
-    hideBase();
-    scene.traverse((o) => {
-      if (!o.visible) return;
-      const m = o.material && !Array.isArray(o.material) ? o.material : null;
-      // ... and alpha-tested cards (leaves, fences): the AO G-buffer would see the whole quad and smudge around them
-      if (o.userData.noAO || (m && ((m.transparent && !m.depthWrite) || m.alphaTest > 0))) { o.visible = false; gtao._visibilityCache.push(o); }
-    });
+  gtao.setSize = (w, h) => gtaoSize(aoHalf ? Math.max(1, w >> 1) : w, aoHalf ? Math.max(1, h >> 1) : h);
+  const gtaoRender = gtao.render.bind(gtao);
+  gtao.render = (r, write, read, ...rest) => { // the composer swaps its two targets: read the depth of this frame's
+    const d = read.depthTexture, U2 = gtao.gtaoMaterial.uniforms;
+    if (d && U2.tDepth.value !== d) { gtao.depthTexture = d; U2.tDepth.value = gtao.pdMaterial.uniforms.tDepth.value = d; }
+    gtaoRender(r, write, read, ...rest);
   };
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.3, 0.5, 0.85);
   let bloomHalf = false;
@@ -141,7 +146,7 @@ export function createPost({ renderer, scene, camera, quality = 'high', reduceMo
   const lumRT = new THREE.WebGLRenderTarget(64, 64, rtOpt), adaptRT = [0, 1].map(() => new THREE.WebGLRenderTarget(1, 1, { ...rtOpt, type: THREE.FloatType }));
   const lumQ = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tSrc: { value: null } }, vertexShader: VS, fragmentShader: LUM_FS, depthTest: false, depthWrite: false }));
   const adaptQ = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { tLum: { value: lumRT.texture }, tPrev: { value: null }, uK: { value: 0 }, uFirst: { value: 1 } }, vertexShader: VS, fragmentShader: ADAPT_FS, depthTest: false, depthWrite: false }));
-  let adaptOn = quality !== 'low', ai = 0, adaptDt = 0;
+  let adaptOn = true, ai = 0, adaptDt = 0;
   const gradeRender = grade.render.bind(grade);
   grade.render = (r, write, read, ...rest) => {
     U.uAdapt.value = adaptOn ? 1 : 0;
@@ -157,8 +162,8 @@ export function createPost({ renderer, scene, camera, quality = 'high', reduceMo
     gradeRender(r, write, read, ...rest);
   };
   // Camera motion blur from the camera's turn since the last frame, as if the shutter were open for ~1/60 s
-  // (the same length at any frame rate). Off with reduced motion and on low quality.
-  let blurOn = quality !== 'low';
+  // (the same length at any frame rate). Off with reduced motion and on the tiers without it.
+  let blurOn = true, chromaOn = true;
   const prevQ = new THREE.Quaternion().copy(camera.quaternion), dq = new THREE.Quaternion(), qI = new THREE.Quaternion(), rot = new THREE.Matrix4();
   function motion(dt) {
     dq.copy(prevQ).invert().multiply(camera.quaternion); // current -> previous view, in view space
@@ -181,22 +186,26 @@ export function createPost({ renderer, scene, camera, quality = 'high', reduceMo
     U.uExposure.value = cur.exposure; U.uSat.value = cur.saturation; U.uContrast.value = cur.contrast;
     U.uTint.value.fromArray(cur.tint); U.uTintAmt.value = cur.tintAmount; U.uVignette.value = cur.vignette;
     U.uShadowTint.value.fromArray(cur.shadows); U.uHighTint.value.fromArray(cur.highlights); U.uSplit.value = cur.split;
-    U.uGrain.value = cur.grain * (RM ? 0.5 : 1); U.uChroma.value = RM ? 0 : 0.006; U.uFade.value = fade;
+    U.uGrain.value = cur.grain * (RM ? 0.5 : 1); U.uChroma.value = RM || !chromaOn ? 0 : 0.006; U.uFade.value = fade;
     if (!RM) U.uTime.value = (U.uTime.value + dt * 7.31) % 1000;
   }
 
+  const _s = new THREE.Vector2();
   function setQuality(q) {
-    gtao.enabled = q === 'high';
-    adaptOn = q !== 'low'; blurOn = q !== 'low'; U.uSharpen.value = q === 'low' ? 0 : 0.25;
-    smaa.enabled = q !== 'low';
-    bloomHalf = q === 'low';
-    const s = renderer.getDrawingBufferSize(new THREE.Vector2());
-    bloom.setSize(s.x, s.y);
+    const P = profileOf(q);
+    gtao.enabled = P.gtao > 0; aoHalf = P.gtao < 2;
+    const n = P.gtao >= 2 ? 16 : 12;
+    if (n !== aoSamples) { aoSamples = n; gtao.updateGtaoMaterial({ samples: n }); }
+    adaptOn = P.adapt; blurOn = P.blur; chromaOn = P.chroma; U.uSharpen.value = P.sharpen;
+    smaa.enabled = P.smaa;
+    bloom.enabled = !!P.bloom; bloomHalf = P.bloom === 1;
+    const s = renderer.getDrawingBufferSize(_s);
+    bloom.setSize(s.x, s.y); gtao.setSize(s.x, s.y);
   }
   function setSize(w, h) {
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(w, h);
-    const s = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const s = renderer.getDrawingBufferSize(_s);
     U.uRes.value.set(s.x, s.y);
   }
   function render(dt) {
