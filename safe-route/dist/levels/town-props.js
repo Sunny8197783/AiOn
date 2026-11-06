@@ -75,7 +75,11 @@ export function buildProps(kit, { avoid = [] } = {}) {
     }
   }
   for (let x = -38; x <= 40; x += 26) { addLight(x, -64.55, Math.PI); addLight(x + 13, 64.55, 0); }
+  // and the other side of 시장길 / 단지길, staggered (the zebra at x 0 and the corners stay clear)
+  for (const x of [-25, 27]) addLight(x, -55.45, 0);
+  for (const x of [-38, -12, 14, 40]) addLight(x, 55.45, Math.PI);
   for (const x of [76.5, 94.5]) addLight(x, 12.4, Math.PI); // 103동 lot: in the tree strip, heads over the first bays
+  addLight(54.55, 24.5, Math.PI / 2); // 단지 정문: the regular lamp there gave way to the z 14 zebra
   const poleGeo = mergeAll([
     new THREE.CylinderGeometry(0.075, 0.115, 8.6, 10).translate(0, 4.3, 0),
     new THREE.BoxGeometry(0.32, 0.55, 0.26).translate(0, 0.28, 0),
@@ -104,13 +108,14 @@ export function buildProps(kit, { avoid = [] } = {}) {
     const h = lights.map(headOf).reduce((b, q) => { const d = Math.hypot(q.x - x, q.z - z); return d < b.d ? { d, q } : b; }, { d: Infinity }).q;
     if (!h || keyHeads.has(`${h.x},${h.z}`)) continue;
     keyHeads.add(`${h.x},${h.z}`);
-    const L = new THREE.SpotLight(0xffd9a8, 240, 30, 1.15, 0.7, 2); L.castShadow = false; // ~3 lux under the head
+    const L = new THREE.SpotLight(0xffd9a8, 600, 30, 1.15, 0.7, 2); L.castShadow = false; // ~8 lux under the head
     L.position.set(h.x, Y + 8.7, h.z); L.target.position.set(h.x, 0, h.z);
-    kit.lit('street', L, 240); group.add(L, L.target);
+    kit.lit('street', L, 600); group.add(L, L.target);
   }
   // Soft light pools under the heads that have no real light: an ellipse along the road, centred a metre past the
   // head so the curb cuts only its faint tail (additive, follows the street group). The falloff is a gaussian in linear
-  // light (written as sRGB bytes), so the pool has no visible rim; its centre matches the ~3 lux of a real head.
+  // light (written as sRGB bytes), so the pool has no visible rim; its centre matches the ~8 lux of a real head.
+  // A second, smaller pool lies on the sidewalk behind the pole (the road pool sits under the 0.12 m curb there).
   const glowTex = kit.memo('town:glowTex', () => kit.texture(kit.canvas(128, 128, (g, w) => {
     const img = g.createImageData(w, w);
     for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) {
@@ -120,9 +125,11 @@ export function buildProps(kit, { avoid = [] } = {}) {
     }
     g.putImageData(img, 0, 0);
   }), { repeat: [1, 1] }));
-  const poolMat = kit.memo('town:pool', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdcae, emissiveMap: glowTex, emissiveIntensity: 0.12, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }), 0.12));
+  const poolMat = kit.memo('town:pool', () => kit.lit('street', new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffdcae, emissiveMap: glowTex, emissiveIntensity: 0.3, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4 }), 0.3));
   const pools = lights.filter(p => !keyHeads.has(`${headOf(p).x},${headOf(p).z}`)).map(p => ({ x: p.x - Math.sin(p.ry) * 3.4, y: 0.02, z: p.z - Math.cos(p.ry) * 3.4, ry: p.ry }));
-  group.add(kit.instanced(new THREE.PlaneGeometry(11, 6).rotateX(-Math.PI / 2), poolMat, pools, { cast: false, receive: false }));
+  group.add(kit.instanced(new THREE.PlaneGeometry(16, 9).rotateX(-Math.PI / 2), poolMat, pools, { cast: false, receive: false }));
+  const walks = lights.map(p => ({ x: p.x + Math.sin(p.ry) * 1.3, y: Y + 0.015, z: p.z + Math.cos(p.ry) * 1.3, ry: p.ry }));
+  group.add(kit.instanced(new THREE.PlaneGeometry(12, 5).rotateX(-Math.PI / 2), poolMat, walks, { cast: false, receive: false }));
 
   // ---- 전봇대 (concrete utility poles), sagging power and telecom lines, service drops ----
   const lines = [

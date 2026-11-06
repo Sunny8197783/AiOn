@@ -49,7 +49,9 @@ export const PRESETS = {
   night: { // city lit: sodium/LED glow on the horizon, few stars
     outdoor: true, env: 'sky', shadowBox: 70,
     sun: [270, -25], key: MOON, keyColor: '#9fb4e0', keyI: 0.28,
-    hemi: ['#1c2640', '#1a1612', 0.35], envI: 0.35,
+    // The lamps' light on walls, cars and people is this fill (there are no real lights per lamp): a lit street sits
+    // above the blackout's moon fill, warmer from below, so the night is readable without looking like dusk.
+    hemi: ['#26324e', '#3a2c1c', 1.8], envI: 0.6,
     fog: ['#232634', 0.0028], exposure: 1.25, bloom: [0.5, 0.4, 1.0],
     sky: { turbidity: 2, rayleigh: 1, mie: 0.005, mieG: 0.8, gain: 1.0 },
     night: { amount: 1, zenith: '#04070f', horizon: '#1a1c28', glow: 0.55, glowColor: '#ff9a55', stars: 0.15, moon: 1 },
