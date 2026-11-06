@@ -6,6 +6,18 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { normQ, PROFILES } from './quality.js';
 
 export const FONT = "'Pretendard','Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif";
+// Sets g.font to the largest size (from `size` down to `min`) at which text fits maxW, and returns it: one measure, a
+// proportional guess (text width scales with the size), then 1 px steps only if the guess still overflows. The old
+// 2 px step loops measured and re-parsed the font up to ~50 times a line; over the town's signs that was seconds.
+export function fitFont(g, text, maxW, size, min, weight) {
+  const set = (s) => { g.font = `${weight} ${s}px ${FONT}`; return s; };
+  set(size);
+  const w = g.measureText(text).width;
+  if (w <= maxW || size <= min) return size;
+  size = set(Math.max(min, Math.floor(size * maxW / w)));
+  while (size > min && g.measureText(text).width > maxW) size = set(size - 1);
+  return size;
+}
 
 export function rng(seed = 1) {
   let a = seed >>> 0;
@@ -273,9 +285,7 @@ export function createKit(renderer, { quality = 'high' } = {}) {
       const lh = (h * (1 - pad * 2)) / lines.length;
       g.fillStyle = fg; g.textAlign = align; g.textBaseline = 'middle';
       lines.forEach((line, i) => {
-        let size = sizes?.[i] ?? lh * 0.72;
-        g.font = `${weight} ${size}px ${FONT}`;
-        while (g.measureText(line).width > w * (1 - pad * 2) && size > 8) { size -= 2; g.font = `${weight} ${size}px ${FONT}`; }
+        fitFont(g, line, w * (1 - pad * 2), sizes?.[i] ?? lh * 0.72, 8, weight);
         g.fillText(line, align === 'left' ? w * pad : align === 'right' ? w * (1 - pad) : w / 2, h * pad + lh * (i + 0.5));
       });
     }), { repeat: [1, 1] }));

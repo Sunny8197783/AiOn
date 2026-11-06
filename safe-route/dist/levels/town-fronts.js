@@ -2,7 +2,7 @@
 // 'shops'), lit rooms behind the glass (levels/town-interior.js), awnings, canopies, 돌출간판, the convenience-store
 // terrace, cafe deck, mart carts, flags (태극기) and the three notice boards whose text follows `notices`.
 import * as THREE from 'three';
-import { FONT } from '../engine/kit.js';
+import { FONT, fitFont } from '../engine/kit.js';
 import { BUILDINGS, PLACES } from '../game/townmap.js';
 import { CURB } from './town-plan.js';
 import { board, sway } from './town-util.js';
@@ -51,8 +51,7 @@ function paintSign(g, i, w, h) {
     x0 = h * 1.15;
   }
   if (mark === 'line') { g.fillStyle = fg; g.fillRect(0, h * 0.86, w, h * 0.06); }
-  let size = h * 0.6; g.font = `800 ${size}px ${FONT}`;
-  while (g.measureText(text).width > w - x0 - w * 0.05 && size > 10) { size -= 2; g.font = `800 ${size}px ${FONT}`; }
+  fitFont(g, text, w - x0 - w * 0.05, h * 0.6, 10, 800);
   g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, (x0 + w * 0.95) / 2, h * 0.53);
 }
 function paintVSign(g, i, w, h) {

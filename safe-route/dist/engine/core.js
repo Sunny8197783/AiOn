@@ -39,7 +39,8 @@ function normalizeLevel(L, id) {
 
 // quality: a tier id (engine/quality.js TIERS; 'low' | 'medium' | 'high' as before) or 'auto' (detect one from the GPU,
 // cores, memory and screen). onQualityChange(tier, { auto: true, from }) fires when the frame-rate governor steps down.
-export function createEngine({ canvas, quality = 'auto', reduceMotion = false, levels = {}, onQualityChange = null } = {}) {
+// onWait(true | false): a level swap has been waiting on its shaders behind the black screen for over a second, or is done.
+export function createEngine({ canvas, quality = 'auto', reduceMotion = false, levels = {}, onQualityChange = null, onWait = null } = {}) {
   if (!canvas) throw new Error('[engine] createEngine needs a canvas');
   let RM = !!reduceMotion;
 
@@ -174,7 +175,14 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
   // Shader compiles in flight: renderer.compileAsync polls its materials until they are ready, and one disposed meanwhile
   // (a dropped build being prewarmed) throws there, so a dropped build is freed once those have settled.
   const compiles = new Set();
-  function compileAsync(...a) { const p = renderer.compileAsync(...a).finally(() => compiles.delete(p)); compiles.add(p); return p; }
+  // Program keys follow the bound target (tone mapping, output colour space). The scene draws into the composer's
+  // half-float buffer, not the screen, so a precompile binds that buffer too (compileAsync collects synchronously);
+  // keyed for the screen it compiled programs that were never drawn, and every real one compiled at its first draw.
+  function compileAsync(...a) {
+    const rt = renderer.getRenderTarget(); renderer.setRenderTarget(post.composer.readBuffer);
+    let p; try { p = renderer.compileAsync(...a); } finally { renderer.setRenderTarget(rt); }
+    p = p.finally(() => compiles.delete(p)); compiles.add(p); return p;
+  }
   function drop(L) { // a build left the cache: free it once nothing shows or compiles it
     if (liveL.get(L.id) === L) liveL.delete(L.id);
     Promise.allSettled([...compiles]).then(() => disposeLevel(L, persons, { kit, keep: keepRoots() }));
@@ -190,7 +198,8 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
     }
     return built.get(id);
   }
-  let queue = Promise.resolve(), busy = false, entering = null;
+  let queue = Promise.resolve(), busy = false, entering = null, veil = false; // veil: the scene is not drawn (see settle)
+  let scripted = false; // a camera override (cutscene, 3D picker) drives the camera
   const stale = new Set(); // built levels still shown at an older tier: dropped once the player leaves them
   // Fade out, swap level.group into the scene, place the player, run prepare(level) (level states, setEnv:
   // the level is already current), precompile shaders for that final setup, fade in.
@@ -201,7 +210,8 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
       try {
         await post.fadeTo(0, fadeS);
         let L;
-        try { L = await getLevel(levelId); }
+        // one retry: a cold first load can drop a module fetch; a failed build is not cached, so the retry refetches
+        try { L = await getLevel(levelId).catch(() => getLevel(levelId)); }
         catch (err) { console.error(`[engine] level "${levelId}" failed to load`, err); throw err; }
         if (L !== level) {
           if (wetList) { setWet(wetList, 0); wetList = null; }
@@ -217,8 +227,7 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
         controls.snap(); controls.update(0);
         if (prepare) { try { await prepare(L); } catch (err) { console.error(`[engine] prepare for level "${levelId}" failed (continuing)`, err); } }
         applyTier(L.group, quality); // shadow casters and shadowed lights for this tier, before the shaders compile
-        try { await Promise.race([compileAsync(scene, camera), new Promise((r) => setTimeout(r, 4000))]); }
-        catch (err) { console.warn('[engine] shader precompile failed (continuing)', err); }
+        await settle(L);
         prewarm();
         return L;
       } finally {
@@ -228,6 +237,30 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
     });
     queue = run;
     return run;
+  }
+  // With the screen black: draw nothing until the scene's programs are compiled. A draw with a program still compiling
+  // waits for it on the main thread (getProgramInfoLog), so drawing meanwhile froze the page for tens of seconds on
+  // D3D11 (UHD 620); undrawn, they compile in the GPU process while the page stays live. ANGLE still finishes a program
+  // at its first draw (and shadow depth programs are not precompiled at all), so a level build's first showing, or any
+  // new program, is then drawn once here, every object unculled, with the loading note up: that wait lands behind the
+  // black screen instead of in the first seconds of play or of a cutscene.
+  const drawn = new WeakSet(); // level builds already drawn once
+  async function settle(L) {
+    veil = true;
+    const progs = renderer.info.programs.length, slow = setTimeout(() => onWait?.(true), 1200);
+    try {
+      await Promise.race([compileAsync(scene, camera), new Promise((r) => setTimeout(r, 60000))]);
+      if (!drawn.has(L) || renderer.info.programs.length !== progs) { clearTimeout(slow); onWait?.(true); await painted(); drawAll(); drawn.add(L); }
+    }
+    catch (err) { console.warn('[engine] shader precompile failed (continuing)', err); }
+    finally { clearTimeout(slow); veil = false; onWait?.(false); }
+  }
+  const painted = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0))); // the DOM change is on screen
+  // One full frame (scene, shadow maps, post) with frustum culling off, so every visible object's programs are used once.
+  function drawAll() {
+    const culled = [];
+    scene.traverse((o) => { if (o.frustumCulled) { o.frustumCulled = false; culled.push(o); } });
+    try { post.render(0); } finally { for (const o of culled) o.frustumCulled = true; }
   }
 
   // Build and precompile the other levels while the player is busy elsewhere, so a door never waits on a
@@ -242,6 +275,9 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
       if (!id) { warming = false; return; }
       tried.add(id);
       idle(async () => {
+        // A build is one long main-thread task (1-3 s on a weak laptop) and its compiles queue ahead of the scene's: build
+        // only while the player cannot move (a dialog, a menu, the title screen), never in a cutscene or a swap.
+        if (scripted || busy || controls.enabled) { tried.delete(id); setTimeout(next, 1500); return; }
         building = true;
         try { const L = await getLevel(id); await compileAsync(L.group, camera, scene); }
         catch (err) { console.warn(`[engine] prewarm of "${id}" failed (it loads at the door instead)`, err); }
@@ -260,13 +296,24 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
     camera.aspect = w / h; camera.updateProjectionMatrix();
     post.setSize(w, h);
   }
-  // A tier change applies the runtime knobs at once (pixel ratio, post, shadows, crowd distances and caps, rain) and
-  // drops the other built levels, so they rebuild with this tier's build-time knobs (lights, people, textures) at the
-  // next door. The level the player is in (or is entering) keeps its build until the player leaves it.
-  function setQuality(q) {
+  // A tier change applies the runtime knobs (pixel ratio, post, shadows, crowd distances and caps, rain) behind a short
+  // black fade, then compiles and draws what they re-keyed (settle), so the recompile is not a freeze in view. A tier
+  // picked in the settings also drops the other built levels, so they rebuild with this tier's build-time knobs
+  // (lights, people, textures) at the next door; the level the player is in keeps its build until the player leaves
+  // it. The governor's own steps (auto) keep them: a rebuild is seconds at the next door or cutscene, what it fights.
+  function setQuality(q, { auto = false } = {}) {
     const t = normQ(q, null);
-    if (!t) { console.error(`[engine] unknown quality "${q}"`); return; }
-    const changed = t !== quality;
+    if (!t) { console.error(`[engine] unknown quality "${q}"`); return Promise.resolve(); }
+    if (t === quality) { applyQuality(t); return Promise.resolve(); }
+    const run = queue.catch(() => {}).then(async () => {
+      busy = true;
+      try { await post.fadeTo(0, RM ? 0 : 0.2); applyQuality(t); if (!auto) rebuildOthers(); if (level) await settle(level); }
+      finally { await post.fadeTo(1, RM ? 0 : 0.2); busy = false; gov.hold(4); }
+    });
+    queue = run;
+    return run;
+  }
+  function applyQuality(t) {
     quality = t; setLive(t); kit.setQuality(t);
     renderer.setPixelRatio(pixelRatio());
     sky.setQuality(t); post.setQuality(t); controls.setQuality(t);
@@ -275,7 +322,6 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
     const ks = keyScale(envName);
     if (envName && ks !== keyTo) { keyFrom = keyTo = ks; stepEnv(0); }
     syncHeld();
-    if (changed) { rebuildOthers(); gov.hold(4); }
     resize();
   }
   function rebuildOthers() {
@@ -298,15 +344,19 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
   let timeScale = 1; // slow motion (cutscenes); 1 = real time
   let t = 0, last = performance.now();
   // Frame-rate governor (gov, created at the top): below 30 fps for 4 s of real time steps down one tier, then waits
-  // 6 s before judging again; never below the lowest tier, never while a level loads or the tab is hidden.
+  // 6 s before judging again; never below the lowest tier, never while a level loads, the tab is hidden or a cutscene
+  // (a scripted camera) plays, and not for 2 s after a frame that made new shader programs (a compile is not the game
+  // running slow; judged as one, it stepped down mid-cutscene and the step recompiled everything).
   const gopt = { busy: false, floor: false }; // reused every frame
+  let progN = 0;
   function measure(raw) {
-    gopt.busy = busy || building || globalThis.document?.visibilityState === 'hidden'; gopt.floor = rankQ(quality) === 0;
+    const n = renderer.info.programs.length; if (n !== progN) { progN = n; gov.hold(2); }
+    gopt.busy = busy || building || scripted || globalThis.document?.visibilityState === 'hidden'; gopt.floor = rankQ(quality) === 0;
     if (!gov.sample(raw, gopt)) return;
     const from = quality, q = lowerQ(quality);
     console.warn(`[engine] fps ${gov.fps.toFixed(1)} < 30 for 4 s; quality ${from} -> ${q}`);
-    setQuality(q);
-    try { onQualityChange?.(q, { auto: true, from }); } catch (err) { console.error('[engine] onQualityChange failed', err); }
+    setQuality(q, { auto: true }).then(() => onQualityChange?.(q, { auto: true, from }))
+      .catch((err) => console.error('[engine] onQualityChange failed', err));
   }
   const fctx = { camera, player: controls.player, env: 'day', power: true };
   function frame(now) {
@@ -320,7 +370,7 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
     if (rainFx) { try { rainFx.update(dt, camera); } catch (err) { logOnce('rain update failed', err); } }
     if (frameDirty) { frameList = [...frameFns]; frameDirty = false; }
     for (const fn of frameList) if (frameFns.has(fn)) { try { fn(dt, t); } catch (err) { logOnce('onFrame listener failed', err); } }
-    post.render(dt);
+    if (!veil) post.render(dt);
     measure(raw);
   }
   setEnv('day', { seconds: 0 });
@@ -362,7 +412,7 @@ export function createEngine({ canvas, quality = 'auto', reduceMotion = false, l
     setGrade: (grade, seconds = 1) => post.setGrade(grade, seconds),
     setView: (v) => controls.setView(v),
     setControls: (on) => controls.setEnabled(on),
-    setCameraOverride: (fn) => controls.setOverride(fn),
+    setCameraOverride: (fn) => { scripted = typeof fn === 'function'; controls.setOverride(fn); },
     onInteract: (fn) => controls.onInteract(fn),
     onNearest: (fn) => controls.onNearest(fn),
     onKey: (fn) => controls.onKey(fn),

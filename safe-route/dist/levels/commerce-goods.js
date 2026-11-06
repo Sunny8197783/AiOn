@@ -4,7 +4,7 @@
 // Products are InstancedMeshes that share one atlas; a per-instance aCell attribute picks the label.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { FONT, rng } from '../engine/kit.js';
+import { FONT, fitFont, rng } from '../engine/kit.js';
 
 const GRID = 8;
 // name: [style, label bg, text, accent/cap, title, sub, liquid]. Brands are fictional.
@@ -69,10 +69,7 @@ export const PRODUCTS = {
   curtain: ['box', 0.28, 0.3, 0.07, ['curtain']], // blackout curtain (items.js blackout_curtain), folded flat in its pack
 };
 
-function fitText(g, text, size, weight, maxW) {
-  let s = size; g.font = `${weight} ${s}px ${FONT}`;
-  while (g.measureText(text).width > maxW && s > 7) { s -= 1; g.font = `${weight} ${s}px ${FONT}`; }
-}
+const fitText = (g, text, size, weight, maxW) => fitFont(g, text, maxW, size, 7, weight);
 function drawLabel(g, c, [style, bg, fg, ac, title, sub, liquid = '#cfe8f2']) {
   const txt = (t, x, y, size, color, weight = 800, maxW = c * 0.82, stroke) => {
     if (!t) return; fitText(g, t, size, weight, maxW); g.textAlign = 'center'; g.textBaseline = 'middle';

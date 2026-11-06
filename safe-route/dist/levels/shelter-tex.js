@@ -1,6 +1,6 @@
 // Canvas textures for the basement car-park shelter: green epoxy floor, pillar zone labels, painted floor
 // markings, exit signs (피난구·통로 유도등), anti-slip ramp concrete, tactile paving, notice sheets, roster, banner.
-import { FONT } from '../engine/kit.js';
+import { FONT, fitFont } from '../engine/kit.js';
 
 export const ZONES = [
   { letter: 'A', color: '#2f8f5b' },  // north pillar row
@@ -182,8 +182,7 @@ export function shelterTextures(kit) {
       let ty = head ? 80 : 34;
       for (const line of body) {
         if (typeof line === 'string') {
-          let size = 26; g.font = `600 ${size}px ${FONT}`;
-          while (g.measureText(line).width > w - 44 && size > 14) { size -= 2; g.font = `600 ${size}px ${FONT}`; }
+          const size = fitFont(g, line, w - 44, 26, 14, 600);
           g.fillText(line, 22, ty); ty += size + 14;
         } else { scribble(g, r, 22, ty + 10, line, 'rgba(60,64,72,0.45)', 3); ty += 28; }
       }
@@ -220,7 +219,7 @@ export function shelterTextures(kit) {
       g.fillStyle = '#fff'; g.beginPath(); g.arc(95, 100, 38, 0, 7); g.fill(); g.fillStyle = '#f39200'; g.beginPath(); g.arc(95, 100, 26, 0, 7); g.fill();
       g.fillStyle = '#1d4fa0'; g.beginPath(); g.moveTo(95, 82); g.lineTo(112, 112); g.lineTo(78, 112); g.closePath(); g.fill();
       g.fillStyle = '#16233a'; g.font = `900 104px ${FONT}`; g.textAlign = 'left'; g.textBaseline = 'middle';
-      let size = 104; while (g.measureText(text).width > 1300 && size > 40) { size -= 4; g.font = `900 ${size}px ${FONT}`; }
+      fitFont(g, text, 1300, 104, 40, 900);
       g.fillText(text, 190, 118);
     }), { repeat: [1, 1] }));
   }

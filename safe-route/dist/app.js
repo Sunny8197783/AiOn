@@ -99,10 +99,16 @@ if (DEBUG) {
 }
 
 const audio = createAudio();
+let booting = true; // boot() is preloading the town behind the page's loading screen
 const engine = createEngine({ canvas: document.getElementById('world'), quality: settings.quality, reduceMotion: settings.reduceMotion, levels: LEVELS,
   onQualityChange: (q, o) => { // the frame-rate governor stepped down one tier: keep it, and say so once, calmly
     settings.quality = q; store.set(SETTINGS_KEY, JSON.stringify(settings));
     if (o?.auto) hud.toast(`화면이 자주 멈춰서 그래픽을 '${TIER_LABELS[q]?.[0] ?? q}'(으)로 낮췄어요. 설정에서 다시 바꿀 수 있어요.`, { label: 'self', ms: 6000 });
+  },
+  onWait: (on) => { // a level swap waits on its shaders behind the black screen: say so, so it does not look frozen
+    if (booting) return; // the boot's own loading screen is up
+    document.getElementById('loading').hidden = !on;
+    if (on) document.getElementById('loading-text').textContent = '장면을 준비하는 중…';
   } });
 settings.quality = engine.quality; // 'auto' resolved to the detected tier
 const hud = createHud(document.getElementById('ui'));
@@ -412,6 +418,13 @@ async function run(start, resumeKey) {
 }
 
 async function boot() {
+  // The town is built, compiled and drawn once behind the loading screen, as the opening shows it: every new run starts
+  // there, and on a weak GPU its first build and shader compile took tens of seconds after 새로 시작, with the screen
+  // stuck. The title screen is opaque, so the town waits under it; a failure here only moves the load to the opening.
+  engine.setControls(false); // resetRun turns them back on when a run starts
+  try { await engine.enter('town', 'office', { prepare: () => engine.setEnv('afternoon', { seconds: 0 }) }); }
+  catch (err) { console.error('[boot] town preload failed (it loads at the opening instead)', err); }
+  booting = false;
   document.getElementById('loading').hidden = true;
   for (;;) {
     const saved = safeParse(store.get(SAVE_KEY));
