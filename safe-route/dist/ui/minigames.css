@@ -238,3 +238,14 @@ html.grab3d-open .hud, html.grab3d-open .lock-hint { visibility: hidden; }
 .gallery-list b, .gallery-list small { display: block; } .gallery-list small { color: var(--muted); font-size: .84rem; }
 .g-no { font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; text-align: right; } .g-unseen .g-no { color: var(--muted); }
 .g-trace { margin: .4em 0 0; padding-left: 1.1em; color: var(--text-dim); font-size: .9rem; }
+
+/* Challenges and records (ui/records.js) and the ending's challenge section */
+.rank-list { list-style: none; margin: 0; padding: 0 .5em 0 0; display: grid; gap: 6px; }
+.rank-list > li { display: grid; grid-template-columns: 4.6em 1fr auto; gap: .2em .8em; align-items: baseline; padding: .5em .8em; border-radius: 10px; background: rgba(255, 255, 255, .04); }
+.rank-list b { color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rank-list small { color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.doc-run li.fresh span { font-weight: 700; color: #8a4f00; }
+.doc-run li.next { color: var(--ink-dim); }
+.share-box { display: block; width: 100%; box-sizing: border-box; margin: 0; padding: .8em 1em; border: 0; border-top: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; resize: none; }
+.share-box[hidden] { display: none; }
+@media (max-width: 560px) { .rank-list > li { grid-template-columns: 4.6em 1fr; } .rank-list small { grid-column: 2; } }

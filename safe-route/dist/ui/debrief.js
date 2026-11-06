@@ -1,8 +1,9 @@
 // Soft-fail card, chapter summary card and the printable "생존 기록" ending document.
 import { el, modal, icon, btn, uiSound } from './dom.js';
 import { PREP } from '../game/ripples.js';
-import { DEEDS } from '../game/deeds.js';
+import { DEEDS, CH } from '../game/deeds.js';
 import { fact } from '../game/facts.js';
+import { CHALLENGES, fmtMs } from '../game/challenges.js';
 
 // Payoffs arrive with Korean labels already (game/debrief.js); a bare prep id still gets its name.
 const prepName = (id) => PREP[id] || id || '준비';
@@ -60,9 +61,23 @@ export function chapterCard({ chapter = '', title = '', lines: ls = [], payoffs 
   return m.done;
 }
 
-// ending(record: { fate, helped, unused, unchecked, people, ripples, practice }, sources) -> Promise<'restart'|'menu'>
+// This run's challenges (new ones marked), two to try next, time and rank; nothing when the records were not saved.
+function runSection(run) {
+  if (!run?.news) return null;
+  const { stats, news } = run, done = new Set(news.done), fresh = new Set(news.fresh);
+  return el('section', { class: 'doc-section doc-run' },
+    el('h3', {}, icon('check'), `도전 과제 ${done.size}/${CHALLENGES.length}`),
+    el('ul', {},
+      CHALLENGES.filter((c) => done.has(c.id)).map((c) => el('li', { class: fresh.has(c.id) ? 'fresh' : '' }, el('b', {}, c.title), el('span', {}, fresh.has(c.id) ? '새로 달성' : '달성'))),
+      CHALLENGES.filter((c) => !done.has(c.id)).slice(0, 2).map((c) => el('li', { class: 'next' }, el('b', {}, `다음 도전 · ${c.title}`), el('span', {}, c.hint)))),
+    stats.complete
+      ? el('p', {}, `기록 ${fmtMs(stats.ms)} · 다시 하기 ${stats.retries}번${news.rank ? ` · 내 기록 ${news.rank}위` : ''}${news.bests.length ? ` · 최고 기록 경신: ${news.bests.map((id) => CH[id]).join(', ')}` : ''}`)
+      : el('p', { class: 'muted' }, '이어하기로 마친 판은 전체 시간과 순위가 남지 않습니다.'));
+}
+
+// ending(record: { fate, helped, unused, unchecked, people, ripples, practice, run, share }, sources) -> Promise<'restart'|'menu'>
 export function ending(record = {}, sources = []) {
-  const { fate = null, helped = [], unused = [], unchecked = [], people = [], ripples = [], practice = null } = record || {};
+  const { fate = null, helped = [], unused = [], unchecked = [], people = [], ripples = [], practice = null, run = null, share = '' } = record || {};
   const chain = lines(ripples).slice(0, MAX_RIPPLES), rest = lines(helped).filter((h) => !chain.some((r) => sameMoment(r, h)));
   const src = practice?.sourceId ? lines(sources).find((s) => s.id === practice.sourceId) : null;
   const section = (ic, title, items, render, empty) => el('section', { class: 'doc-section' },
@@ -87,6 +102,7 @@ export function ending(record = {}, sources = []) {
     fate ? el('section', { class: 'doc-section doc-fate' }, lines(fate.lines).map((t) => el('p', {}, t))) : null,
     fateSection('trace', 'map', '이 결말로 이끈 선택', fate?.trace, (t) => el('li', {}, traceItem(t))),
     fateSection('fate-people', 'people', '그 뒤의 사람들', fate?.people, (p) => el('li', { class: p.who === 'stranger' ? 'stranger' : p.present ? '' : 'away' }, p.name ? el('b', {}, p.name) : null, el('span', {}, p.line))),
+    runSection(run),
     fateSection('', 'site', '연무동', fate?.town, (t) => el('li', {}, el('span', {}, t))),
     chain.length ? section('clock', '나비효과 · 작은 선택이 남긴 것', chain, (r) => [el('b', {}, r.label), el('span', {}, rippleText(r))], '') : null,
     chain.length && !rest.length ? null : section('spark', chain.length ? '그 밖에 도움이 된 준비' : '도움이 된 준비', rest, (h) => [el('b', {}, prepName(h.prep)), el('span', {}, h.moment || '')], '이번에는 미리 해 둔 준비가 큰 역할을 하지 못했습니다. 다음에는 하나만 먼저 해 보세요.'),
@@ -100,8 +116,13 @@ export function ending(record = {}, sources = []) {
       src ? el('p', { class: 'practice-src' }, '출처: ', src.url ? el('a', { href: src.url, target: '_blank', rel: 'noopener noreferrer' }, `${src.publisher} · ${src.title}`) : `${src.publisher} · ${src.title}`,
         src.checkedAt ? ` (확인 ${src.checkedAt})` : '') : null) : null,
     el('p', { class: 'doc-fiction' }, '이 기록은 가상의 이야기에서 나온 것입니다. 실제 상황에서는 재난방송·재난문자·지자체 안내를 따르세요.'));
-  const content = el('div', { class: 'ending-wrap' }, doc,
+  const shareBox = el('textarea', { class: 'share-box', readonly: true, rows: '4', hidden: true, 'aria-label': '친구에게 보낼 결과' }, share);
+  const content = el('div', { class: 'ending-wrap' }, doc, shareBox,
     el('footer', { class: 'card-actions ending-actions' },
+      share ? btn('결과 복사', { ghost: true, iconName: 'spark', onclick: (e) => { const label = e.currentTarget.querySelector('span');
+        // in-app browsers and plain http refuse the clipboard: show the text to copy by hand instead
+        (navigator.clipboard?.writeText(share) ?? Promise.reject()).then(() => { label.textContent = '복사했습니다'; },
+          () => { shareBox.hidden = false; shareBox.select(); label.textContent = '아래 글을 복사해 주세요'; }); } }) : null,
       btn('인쇄하기', { ghost: true, iconName: 'print', onclick: () => print() }),
       btn('메인 메뉴', { ghost: true, iconName: 'exit', onclick: go('menu') }),
       btn('처음부터 다시', { primary: true, iconName: 'retry', 'data-autofocus': true, onclick: go('restart') })));

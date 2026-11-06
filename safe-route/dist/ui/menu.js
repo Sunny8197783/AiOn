@@ -1,6 +1,7 @@
 // Landing screen, pause menu, settings and the about/sources page.
 import { el, modal, icon, btn, uiSound, reduceMotion } from './dom.js';
 import { TIERS, TIER_LABELS } from '../engine/quality.js';
+import { CHALLENGES } from '../game/challenges.js';
 
 export const CHAPTERS = [
   ['프롤로그', '평소와 다른 화요일', 'D-3 화 17:30 · 한결물류 사무실', '확인된 사실, 추정, 소문을 나눕니다.'],
@@ -13,8 +14,9 @@ export const CHAPTERS = [
 ];
 
 // ---------- landing ----------
-// landing({ hasSave, endings }) -> Promise<'new'|'continue'|'settings'|'about'|'gallery'>; endings = how many of 11 were seen
-export function landing({ hasSave = false, endings = 0 } = {}) {
+// landing({ hasSave, endings, challenges }) -> Promise<'new'|'continue'|'settings'|'about'|'gallery'|'records'>;
+// endings = how many of 11 were seen, challenges = how many challenges were ever done
+export function landing({ hasSave = false, endings = 0, challenges = 0 } = {}) {
   const canvas = el('canvas', { class: 'landing-art', 'aria-hidden': 'true' });
   const choose = (id) => () => { uiSound('confirm'); m.close(id); };
   const content = el('div', { class: 'landing-wrap' },
@@ -33,6 +35,7 @@ export function landing({ hasSave = false, endings = 0 } = {}) {
         el('div', { class: 'landing-actions' },
           btn('새로 시작', { primary: true, iconName: 'play', className: 'big', 'data-autofocus': hasSave ? null : true, onclick: choose('new') }),
           hasSave ? btn('이어하기', { iconName: 'retry', className: 'big', 'data-autofocus': true, onclick: choose('continue') }) : null,
+          btn(`도전 과제 ${challenges}/${CHALLENGES.length}`, { ghost: true, iconName: 'check', onclick: choose('records') }),
           endings > 0 ? btn(`엔딩 기록 ${endings}/11`, { ghost: true, iconName: 'book', onclick: choose('gallery') }) : null,
           btn('설정', { ghost: true, iconName: 'sliders', onclick: choose('settings') }),
           btn('출처와 만든 사람', { ghost: true, iconName: 'book', onclick: choose('about') }))),

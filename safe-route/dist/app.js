@@ -11,6 +11,7 @@ import { createHud } from './ui/hud.js';
 import { talk, card, timeSkip } from './ui/dialog.js';
 import { landing, pause, settings as settingsMenu, about } from './ui/menu.js';
 import { gallery } from './ui/gallery.js';
+import { records } from './ui/records.js';
 import { failCard, chapterCard, ending as endingCard } from './ui/debrief.js';
 import { phone, emergencyAlert } from './ui/phone.js';
 import { notebook, inventory } from './ui/notebook.js';
@@ -20,8 +21,9 @@ import { extinguisher } from './ui/extinguisher.js';
 import { docs } from './ui/docs.js';
 import { routemap } from './ui/routemap.js';
 import { createAudio } from './audio.js';
-import { createGame, save, load, checkpoint, restore, bagLoad, bagCells, usable, check, drainCharge } from './game/state.js';
-import { pickEnding, readGallery, addToGallery, galleryView } from './game/endings.js';
+import { createGame, save, load, checkpoint, restore, bagLoad, bagCells, usable, check, drainCharge, recordEvent } from './game/state.js';
+import { TIMED, readRecords, finishRun } from './game/challenges.js';
+import { galleryView } from './game/endings.js';
 import { seenRumors } from './game/rumors.js';
 import { failDebrief } from './game/debrief.js';
 import { SOURCES } from './game/facts.js';
@@ -37,7 +39,7 @@ import { endure } from './story/endure.js';
 import { crossroads, evacuation, ending } from './story/evac.js';
 
 const CHAPTERS = [['prologue', prologue], ['prep', prep], ['dday', dday], ['endure', endure], ['crossroads', crossroads], ['evac', evacuation], ['ending', ending]];
-const SAVE_KEY = 'gyeongbo.save.v2', SETTINGS_KEY = 'gyeongbo.settings.v1', GALLERY_KEY = 'gyeongbo.endings.v1';
+const SAVE_KEY = 'gyeongbo.save.v2', SETTINGS_KEY = 'gyeongbo.settings.v1', GALLERY_KEY = 'gyeongbo.endings.v1', RECORDS_KEY = 'gyeongbo.records.v1';
 const LEVELS = Object.fromEntries([['town', 'Town'], ['apartment', 'Apartment'], ['mart', 'Mart'], ['store', 'Store'], ['office', 'Office'], ['shelter', 'Shelter']]
   .map(([id, name]) => [id, async (kit, people, fx) => (await import(`./levels/${id}.js`))[`build${name}`](kit, people, fx)]));
 
@@ -387,19 +389,24 @@ engine.onFrame((dt) => {
   try { buddy.update?.(dt); } catch { /* model stand-in */ }
 });
 
+// ponytail: chapter times are wall clock minus the pause menu; a hidden tab still counts.
+let pausedMs = 0;
 async function openPause() {
+  const p0 = performance.now();
   const pick = await ctx.modal(() => pause());
+  pausedMs += performance.now() - p0;
   if (pick === 'settings') { Object.assign(settings, await ctx.modal(() => settingsMenu({ ...settings }))); applySettings(); }
   else if (pick === 'save') { if (G?.checkpoint) saveNow(); ctx.toast('마지막 체크포인트를 저장했습니다.'); }
   else if (pick === 'menu') location.reload();
 }
 
-// The ending gallery remembers which endings this browser has reached and the deeds that led there.
+// The ending gallery remembers which endings this browser has reached and the deeds that led there; the records
+// keep challenges, best chapter times and the top runs. What this run added goes into G for the ending document.
 // story/evac.js ending() calls it once the closing scene has played, before the document.
 ctx.recordRun = () => {
   try {
-    const fate = pickEnding(G), today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD, local date
-    store.set(GALLERY_KEY, JSON.stringify(addToGallery(readGallery(store.get(GALLERY_KEY)), fate.id, fate.trace.map((t) => t.id), today)));
+    const { gal, rec, news } = finishRun(G, store.get(GALLERY_KEY), store.get(RECORDS_KEY), new Date().toLocaleDateString('sv-SE')); // YYYY-MM-DD, local
+    store.set(GALLERY_KEY, JSON.stringify(gal)); store.set(RECORDS_KEY, JSON.stringify(rec)); recordEvent(G, 'run_recorded', news);
   } catch (err) { console.error('[gallery] not saved', err); }
 };
 
@@ -409,10 +416,18 @@ async function run(start, resumeKey) {
     progress.index = i;
     ctx.resume = resumeKey ?? null;
     hud.setObjective(null);
+    const partial = !!resumeKey, t0 = performance.now(); // a chapter continued mid-way has no full time
+    let retries = 0;
+    pausedMs = 0;
     if (!resumeKey) persist.checkpoint(id);
     resumeKey = null;
     for (;;) {
-      try { const r = await fn(ctx); if (id === 'ending') return r; break; }
+      try {
+        const r = await fn(ctx);
+        if (TIMED.includes(id)) recordEvent(G, 'chapter_time', { id, ms: Math.round(performance.now() - t0 - pausedMs), retries, ...(partial ? { partial } : {}) });
+        if (id === 'ending') return r;
+        break;
+      }
       catch (err) {
         if (!(err instanceof Fail)) throw err;
         if (err.type === 'dead') echo.death(err.detail?.why);
@@ -420,6 +435,7 @@ async function run(start, resumeKey) {
         const d = failDebrief(G, err.type, err.detail);
         const pick = await failCard({ ...d, sources: (d.sourceIds || []).map(s => SOURCES.find(x => x.id === s)).filter(Boolean) });
         if (pick !== 'retry') { engine.setControls(true); return 'menu'; }
+        retries++;
         const key = G.checkpoint.key;
         restore(G);
         resetRun(ctx.snap); // runtime fields the snapshot does not list (seoyeonAsk, lightSource) go too (F5)
@@ -441,9 +457,11 @@ async function boot() {
   for (;;) {
     const saved = safeParse(store.get(SAVE_KEY));
     const seen = galleryView(store.get(GALLERY_KEY));
-    const pick = await landing({ hasSave: !!saved.G, endings: seen.filter((e) => e.seen).length });
+    const rec = readRecords(store.get(RECORDS_KEY));
+    const pick = await landing({ hasSave: !!saved.G, endings: seen.filter((e) => e.seen).length, challenges: Object.keys(rec.done).length });
     audio.unlock();
     if (pick === 'gallery') { await gallery(seen); continue; }
+    if (pick === 'records') { await records(rec); continue; }
     if (pick === 'settings') { Object.assign(settings, await settingsMenu({ ...settings })); applySettings(); continue; }
     if (pick === 'about') { await about(SOURCES); continue; }
     let start = 0, resume = null;

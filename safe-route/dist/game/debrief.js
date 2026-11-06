@@ -8,6 +8,7 @@ import { EXT_STEPS } from './drills.js';
 import { PREP, ripples } from './ripples.js';
 import { planLine } from './ledger.js';
 import { DEEDS, deeds } from './deeds.js';
+import { runStats, shareText } from './challenges.js';
 
 export { PREP };
 // 'help' / 'trade' who ids. elder and stranger have no G.rel entry (state.js PEOPLE); trader is the barter.
@@ -234,5 +235,8 @@ export function endingRecord(G) {
     if (row) row.what += ` · ${what}`; else people.push({ who, what });
   }
   const f = fact(PRACTICE.find(([k]) => !G.know[k])?.[1] ?? 'shelter_know');
-  return { fate: pickEnding(G), helped, unused, unchecked, people, ripples: ripples(G), practice: { text: f.text, sourceId: f.sourceId } };
+  // run_recorded: what app.js recordRun added to this browser's records (challenges, bests, rank) before the document.
+  const fate = pickEnding(G), stats = runStats(G), news = G.events.findLast((e) => e.type === 'run_recorded')?.details ?? null;
+  return { fate, helped, unused, unchecked, people, ripples: ripples(G), practice: { text: f.text, sourceId: f.sourceId },
+    run: news && { stats, news }, share: shareText(fate, news, stats) };
 }
