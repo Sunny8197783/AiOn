@@ -12,6 +12,7 @@ import { talk, card, timeSkip } from './ui/dialog.js';
 import { landing, pause, settings as settingsMenu, about } from './ui/menu.js';
 import { gallery } from './ui/gallery.js';
 import { records } from './ui/records.js';
+import { lounge, loungeName } from './ui/lounge.js';
 import { failCard, chapterCard, ending as endingCard } from './ui/debrief.js';
 import { phone, emergencyAlert } from './ui/phone.js';
 import { notebook, inventory } from './ui/notebook.js';
@@ -394,11 +395,15 @@ let pausedMs = 0;
 async function openPause() {
   const p0 = performance.now();
   const pick = await ctx.modal(() => pause());
+  if (pick === 'lounge') await ctx.modal(() => openLounge());
   pausedMs += performance.now() - p0;
   if (pick === 'settings') { Object.assign(settings, await ctx.modal(() => settingsMenu({ ...settings }))); applySettings(); }
   else if (pick === 'save') { if (G?.checkpoint) saveNow(); ctx.toast('마지막 체크포인트를 저장했습니다.'); }
   else if (pick === 'menu') location.reload();
 }
+
+// The best run is what "내 최고 기록 알리기" posts.
+const openLounge = () => lounge({ name: loungeName(store), best: readRecords(store.get(RECORDS_KEY)).runs[0] ?? null });
 
 // The ending gallery remembers which endings this browser has reached and the deeds that led there; the records
 // keep challenges, best chapter times and the top runs. What this run added goes into G for the ending document.
@@ -462,6 +467,7 @@ async function boot() {
     audio.unlock();
     if (pick === 'gallery') { await gallery(seen); continue; }
     if (pick === 'records') { await records(rec); continue; }
+    if (pick === 'lounge') { await openLounge(); continue; }
     if (pick === 'settings') { Object.assign(settings, await settingsMenu({ ...settings })); applySettings(); continue; }
     if (pick === 'about') { await about(SOURCES); continue; }
     let start = 0, resume = null;

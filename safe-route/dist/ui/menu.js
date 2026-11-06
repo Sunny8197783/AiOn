@@ -14,7 +14,7 @@ export const CHAPTERS = [
 ];
 
 // ---------- landing ----------
-// landing({ hasSave, endings, challenges }) -> Promise<'new'|'continue'|'settings'|'about'|'gallery'|'records'>;
+// landing({ hasSave, endings, challenges }) -> Promise<'new'|'continue'|'settings'|'about'|'gallery'|'records'|'lounge'>;
 // endings = how many of 11 were seen, challenges = how many challenges were ever done
 export function landing({ hasSave = false, endings = 0, challenges = 0 } = {}) {
   const canvas = el('canvas', { class: 'landing-art', 'aria-hidden': 'true' });
@@ -36,6 +36,7 @@ export function landing({ hasSave = false, endings = 0, challenges = 0 } = {}) {
           btn('새로 시작', { primary: true, iconName: 'play', className: 'big', 'data-autofocus': hasSave ? null : true, onclick: choose('new') }),
           hasSave ? btn('이어하기', { iconName: 'retry', className: 'big', 'data-autofocus': true, onclick: choose('continue') }) : null,
           btn(`도전 과제 ${challenges}/${CHALLENGES.length}`, { ghost: true, iconName: 'check', onclick: choose('records') }),
+          btn('대피소 라운지', { ghost: true, iconName: 'people', onclick: choose('lounge') }),
           endings > 0 ? btn(`엔딩 기록 ${endings}/11`, { ghost: true, iconName: 'book', onclick: choose('gallery') }) : null,
           btn('설정', { ghost: true, iconName: 'sliders', onclick: choose('settings') }),
           btn('출처와 만든 사람', { ghost: true, iconName: 'book', onclick: choose('about') }))),
@@ -181,7 +182,7 @@ function skyline(canvas) {
 }
 
 // ---------- pause ----------
-// pause() -> Promise<'resume'|'settings'|'save'|'menu'>
+// pause() -> Promise<'resume'|'settings'|'save'|'lounge'|'menu'>
 export function pause() {
   const go = (id) => () => { uiSound('confirm'); m.close(id); };
   const confirmBox = el('div', { class: 'pause-confirm', hidden: true, role: 'group', 'aria-label': '메인 메뉴로 나가기 확인' },
@@ -195,6 +196,7 @@ export function pause() {
       btn('계속하기', { primary: true, iconName: 'play', 'data-autofocus': true, onclick: go('resume') }),
       btn('설정', { iconName: 'sliders', onclick: go('settings') }),
       btn('체크포인트 저장', { iconName: 'save', onclick: go('save') }),
+      btn('대피소 라운지', { iconName: 'people', onclick: go('lounge') }),
       menuBtn),
     confirmBox,
     el('dl', { class: 'key-list', 'aria-label': '조작키' }, ...[['WASD · 방향키', '이동'], ['Shift', '달리기 (기력)'], ['Space', '점프'], ['마우스 (클릭 후) · Alt+방향키', '둘러보기'], ['E · Enter', '살피기 · 대화'], ['F', '손전등 · 휴대폰 불빛'], ['P', '휴대폰 · FM 라디오'], ['Tab', '수첩'], ['I', '소지품'], ['M', '지도'], ['V', '1인칭 / 3인칭'], ['H', '조작법'], ['Esc', '이 메뉴']]

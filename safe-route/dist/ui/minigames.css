@@ -249,3 +249,15 @@ html.grab3d-open .hud, html.grab3d-open .lock-hint { visibility: hidden; }
 .share-box { display: block; width: 100%; box-sizing: border-box; margin: 0; padding: .8em 1em; border: 0; border-top: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; resize: none; }
 .share-box[hidden] { display: none; }
 @media (max-width: 560px) { .rank-list > li { grid-template-columns: 4.6em 1fr; } .rank-list small { grid-column: 2; } }
+
+/* Shelter lounge (ui/lounge.js) */
+.lounge-feed { list-style: none; margin: .4em 0; padding: 0 .5em 0 0; display: grid; gap: 6px; align-content: start; flex: none; height: max(120px, min(30vh, 300px)); overflow: auto; }
+.lounge-feed:empty::before { content: '아직 대화가 없습니다. 먼저 인사해 보세요.'; color: var(--muted); padding: .6em; }
+.lounge-feed > li { display: grid; grid-template-columns: auto 1fr auto; gap: .2em .7em; align-items: baseline; padding: .45em .7em; border-radius: 10px; background: rgba(255, 255, 255, .04); }
+.lounge-feed > li.mine { background: rgba(242, 179, 61, .12); }
+.lounge-feed > li.run span { color: var(--accent); font-weight: 700; }
+.lounge-feed b { font-size: .86rem; color: var(--text-dim); white-space: nowrap; }
+.lounge-feed small { color: var(--muted); font-size: .78rem; }
+.lounge-phrases { display: flex; flex-wrap: wrap; gap: 6px; margin: .4em 0; }
+.lounge-phrases .btn { font-size: .88rem; padding: .45em .8em; }
+@media (max-width: 560px) { .lounge-feed > li { grid-template-columns: 1fr auto; } .lounge-feed span { grid-column: 1 / -1; } }
