@@ -99,6 +99,7 @@ async function evening(ctx) {
   if (G.know.curtain) ctx.payoff('curtain', G.know.curtainSealed ? '테이프로 가장자리를 막은 암막 커튼 덕분에 불빛이 밖으로 새지 않았다' : '암막 커튼을 쳐서 집 안 불빛이 밖으로 덜 새어 나갔다');
 
   const done = new Set();
+  let first = true;
   while (!done.has('radio') && !done.has('phone')) {
     const choices = [
       { id: 'radio', label: '라디오를 켠다', disabled: !has(G, 'radio'), reason: '라디오가 없다' },
@@ -108,10 +109,12 @@ async function evening(ctx) {
     ];
     if (has(G, 'candles') && !G.know.candleLit) choices.push({ id: 'candle', label: '양초를 켠다' });
     const pick = await ctx.say('정전', ['무엇부터 할까?'], choices, '19:41');
+    const wasFirst = first; first = false;
     done.add(pick);
     if (pick === 'radio') {
       const heard = await ctx.modal(() => radioScene(ctx, 'blackout'));
       if (heard && G.know.radioChecked) ctx.payoff('radio', '맞춰 둔 주파수로 정전 안내를 바로 들었다');
+      if (heard && wasFirst) ctx.remember('blackout_radio');
       if (!heard) done.delete('radio');
     } else if (pick === 'phone') {
       drainBattery(G, 3);
@@ -123,7 +126,14 @@ async function evening(ctx) {
     } else if (pick === 'window') {
       await ctx.say('창밖', ['연무동 전체가 어둡다. 건너편 동 창문에 휴대폰 불빛이 몇 개 흔들린다.'], null, '정전');
     } else if (pick === 'hall') {
-      await ctx.say('3층 복도', ['비상구 표시등만 초록색으로 켜져 있다. 304호 어르신이 문을 열고 내다본다.', '"정전인가 봐요. 나는 초 하나 켜 놨어요."'], null, '정전');
+      ctx.remember('hall_checked');
+      const tip = await ctx.say('3층 복도', ['비상구 표시등만 초록색으로 켜져 있다. 304호 어르신이 문을 열고 내다본다.', '"정전인가 봐요. 나는 초 하나 켜 놨어요."'],
+        [{ id: 'tip', label: '"어르신, 자리 비우실 땐 촛불 꼭 꺼 주세요"' }, { id: 'in', label: '그냥 들어간다' }], '정전');
+      if (tip === 'tip') {
+        await ctx.say('304호 어르신', ['그래요, 그래요. 깜빡 잊을 수도 있으니 말해 주니 좋네.'], null, '3층 복도');
+        ctx.toast(fact('candle_rules').text, 'official', 6000);
+        ctx.remember('elder_candle_tip');
+      }
     } else if (pick === 'candle') {
       G.know.candleLit = true; use(G, 'candles');
       ctx.setLevelState('apartment', 'candles', 'lit');
@@ -221,6 +231,7 @@ async function alert(ctx) {
         if (G.rel.manager.contact) {
           await ctx.ui.talk({ speaker: '박영수 소장', role: '1층 현관', lines: [`정민 씨! 생활문화센터로 가요. 연무로 가운데는 통제한대요. ${detour}로 돌아가요!`] });
           G.know.closureHeard = true; ctx.note(`박 소장: 연무로 중앙 구간 통제, ${detour}로 우회`, 'neighbor');
+          ctx.remember('manager_detour');
         } else await ctx.ui.talk({ speaker: '관리사무소장', role: '1층 현관', lines: ['생활문화센터 대피소로 가세요! 길 막힌 데 있으니 안내 잘 보시고요!'] });
       },
       ...Object.fromEntries(Object.keys(CLOSURES).map(id => [`closure_${id}`, async () => {
@@ -298,6 +309,8 @@ async function shelter(ctx) {
       if (card) ctx.payoff('docs', '비상연락카드를 보고 명부를 바로 적었다'); else drainBattery(G, 2);
       await ctx.ui.talk({ speaker: '대피소 관리자', role: '접수대', lines: [fact('shelter_rules').text, fact('shelter_rumor').text] });
       signed = true;
+      const help = await ctx.ui.talk({ speaker: '접수대', role: '뒤에 선 사람', lines: ['뒤의 할아버지가 안경을 두고 와 명부를 못 쓰신다.'], choices: [{ id: 'ask', label: '"대신 적어 드릴까요?" 먼저 여쭌다' }, { id: 'go', label: '그냥 간다' }] });
+      if (help === 'ask') { await ctx.ui.talk({ speaker: '할아버지', role: '접수대', lines: ['아이고, 그래 주면 고맙지. 내가 불러 줄 테니 적어 줘요.'] }); ctx.pass(2); ctx.remember('register_helped'); }
       ctx.objective('대피소 안에서', '자리를 잡습니다.', [{ text: '명부 쓰기 (접수대)', done: true }, { text: '자리 잡기', done: false }]);
     },
     shelterRadio: async () => { await ctx.ui.talk({ speaker: '공용 라디오', role: '재난방송 (가상)', lines: BROADCASTS.shelter }); },
@@ -306,7 +319,12 @@ async function shelter(ctx) {
   } });
   const got = unpackAtShelter(G);
   if (got) { ctx.refresh(); ctx.payoff('bag', got); }
-  if (!G.know.bagOn) { ctx.stat('thirst', 6); ctx.toast('맨손으로 나와 마실 물이 없다. 옆 사람이 물 한 모금을 나눠 주었다.', 'neighbor'); }
+  const water = G.know.bagOn && ['water_500', 'water_2l'].find((id) => G.items[id]?.bag > 0);
+  if (water) {
+    const pick = await ctx.say('옆자리', ['옆자리 아이 입술이 말라 있다.'], [{ id: 'give', label: '물 한 병을 나눈다' }, { id: 'keep', label: '그냥 둔다' }], '대피소');
+    if (pick === 'give') { consume(G, water, 1, 'bag'); ctx.remember('shelter_water_given'); ctx.toast('아이 엄마가 고개를 숙여 고맙다고 했다.', 'neighbor'); }
+  }
+  if (!G.know.bagOn) { ctx.stat('thirst', 6); ctx.toast('맨손으로 나와 마실 물이 없다. 옆 사람이 물 한 모금을 나눠 주었다.', 'neighbor'); ctx.remember('shelter_water_received'); }
 }
 
 async function afterAlert(ctx) {
@@ -338,11 +356,11 @@ async function afterAlert(ctx) {
   const pick = await ctx.say('오서연', ['엘리베이터가 안 되네요. 3층이니까 계단으로 천천히 갈게요.'], [{ id: 'ask', label: '"어떻게 도와드릴까요?"' }, { id: 'carry', label: '보행기를 들어 드릴게요' }, { id: 'go', label: '먼저 올라갈게요' }], '1층 계단 앞');
   if (pick === 'ask') {
     await ctx.say('오서연', ['보행기를 접어서 제 옆에서 들어 주세요. 저는 난간 잡고 천천히 갈게요. 떨어져서 먼저 가지만 않으면 돼요.'], null, '1층 계단 앞');
-    ctx.stat('fatigue', 6); G.rel.seoyeon.trust += 2; recordEvent(G, 'help', { who: 'seoyeon', what: '어떻게 도울지 먼저 묻고, 계단에서 보행기를 옆에서 들어 주었다' });
+    ctx.stat('fatigue', 6); G.rel.seoyeon.trust += 2; recordEvent(G, 'help', { who: 'seoyeon', kind: 'ask', what: '어떻게 도울지 먼저 묻고, 계단에서 보행기를 옆에서 들어 주었다' });
     ctx.toast(fact('people_ask').text, 'official', 6000);
   } else if (pick === 'carry') {
     await ctx.say('오서연', ['아, 잠깐만요. 보행기는 제 옆에 있어야 해서요. 접어서 바로 옆에서 들어 주시면 좋겠어요.'], null, '1층 계단 앞');
-    ctx.stat('fatigue', 6); G.rel.seoyeon.trust += 1; recordEvent(G, 'help', { who: 'seoyeon', what: '계단에서 보행기를 옆에서 들어 주었다' });
+    ctx.stat('fatigue', 6); G.rel.seoyeon.trust += 1; recordEvent(G, 'help', { who: 'seoyeon', kind: 'carry', what: '계단에서 보행기를 옆에서 들어 주었다' });
   } else {
     await ctx.say('오서연', ['네, 천천히 갈게요. 소장님이 계단 비춰 주신대요.'], null, '1층 계단 앞');
   }

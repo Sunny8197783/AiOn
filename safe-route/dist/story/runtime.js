@@ -4,6 +4,7 @@ import { recordEvent, note, advance, adjust, fmtClock, speedMul, bagLoad, load }
 import { BAG_LIMIT } from '../game/items.js';
 import { cite } from '../game/facts.js';
 import { causeOf } from '../game/ripples.js';
+import { remember, newDeeds, cueText } from '../game/deeds.js';
 import { isCommon, common } from './world.js';
 
 export class Fail extends Error {
@@ -62,6 +63,7 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
   };
   let power = true;
   let acc = 0;
+  let lastSeq = 0; // the remembered-action cue toasts deeds recorded after this event seq
   const applied = {}; // levelId -> keys this page has set on the live (cached) level object
   // An on['*'] handler returns this when it handled the point but the roam goes on.
   ctx.handled = Symbol('handled');
@@ -84,8 +86,16 @@ export function createRuntime({ engine, hud, ui, audio, getG, setG, persist, set
     engine.player.speedMul = (ctx.speedOverride ?? speedMul(G)) * (ctx.profileSpeed ?? 1);
     engine.player.staminaUse = 1 + (G.know.bagOn ? load.weightKg / BAG_LIMIT.weightKg : 0);
     hud.setTension(Math.max(0, (G.stats.tension - 40) / 60));
+    const seq = G.events.at(-1)?.seq ?? 0;
+    if (seq > lastSeq) {
+      const id = settings.memoryCue !== false && newDeeds(G, lastSeq).find((d) => cueText(d.id))?.id;
+      if (id) ctx.toast(cueText(id), 'neighbor', 3600);
+      lastSeq = seq;
+    }
   }
   ctx.refresh = refresh;
+  ctx.cueSync = () => { lastSeq = ctx.G.events.at(-1)?.seq ?? 0; };
+  ctx.remember = (id, details) => remember(ctx.G, id, details);
 
   ctx.setLevelState = (levelId, key, value) => {
     (ctx.levelStates[levelId] ||= {})[key] = value;

@@ -7,6 +7,7 @@ import { pickEnding } from './endings.js';
 import { EXT_STEPS } from './drills.js';
 import { PREP, ripples } from './ripples.js';
 import { planLine } from './ledger.js';
+import { DEEDS, deeds } from './deeds.js';
 
 export { PREP };
 // 'help' / 'trade' who ids. elder and stranger have no G.rel entry (state.js PEOPLE); trader is the barter.
@@ -173,6 +174,10 @@ export function chapterSummary(G, chapter) {
   }
   for (const t of new Set(of('help').map(e => `${PEOPLE[e.details.who] ?? e.details.who}: ${e.details.what}`))) lines.push(t);
   for (const e of of('trade')) lines.push(`물물교환(${PEOPLE[e.details.from] ?? e.details.from}): ${cartText(e.details.give)} → ${cartText(e.details.get)}`);
+  // Up to three deeds someone will remember, as "who — short" (the cue subject without its 은/는; just the short when it names them).
+  const kept = deeds(G).filter(d => d.chapter === chapter && DEEDS[d.id].cue).slice(0, 3);
+  const memo = ({ cue, short }) => { const who = cue.replace(/[은는]$/, ''); return short.includes(who) ? short : `${who} — ${short}`; };
+  if (kept.length) lines.push(`기억된 일: ${kept.map(d => memo(DEEDS[d.id])).join(' · ')}`);
   for (const e of of('ledger')) if (e.details.plan) lines.push(planLine(e.details.plan));
   const dead = of('battery_dead').map(e => itemName(e.details.id));
   if (dead.length) lines.push(`건전지가 다 닳은 것: ${[...new Set(dead)].join(', ')}`);

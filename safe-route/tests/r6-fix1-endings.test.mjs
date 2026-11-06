@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGame, recordEvent } from '../dist/game/state.js';
 import { pickEnding, waterLitres, STOCK_OK } from '../dist/game/endings.js';
+import { deeds } from '../dist/game/deeds.js';
 import { simulateDays, applyLedger } from '../dist/game/ledger.js';
 
 const game = (path, items = {}) => {
@@ -24,14 +25,16 @@ test('stock is judged in litres: four 500 mL bottles are 2 L, not "enough for th
   assert.ok(!l.some((x) => /열흘/.test(x)), 'path-neutral: missed says "사흘 뒤"');
 });
 
-test('kindness received (by: other) does not unlock the shared-kitchen line', () => {
+// The shared kitchen is ending 7 (commons) now, opened by the deed ledger (tests/endings.test.mjs).
+test('kindness received (by: other) is no deed of 정민 and does not unlock the shared kitchen', () => {
   const G = game('stay');
   recordEvent(G, 'help', { who: 'manager', what: '박 소장과 함께 남아 건물을 지키기로 했다' });
   recordEvent(G, 'help', { who: 'clerk', what: '쪽지와 현금 통', by: 'other' });
   recordEvent(G, 'help', { who: 'seoyeon', what: '보조배터리', by: 'other' });
+  assert.deepEqual(deeds(G), []);
   assert.ok(!pickEnding(G).lines.some((l) => /공동 부엌/.test(l)));
   recordEvent(G, 'help', { who: 'elder', what: '부축했다' });
-  assert.ok(pickEnding(G).lines.some((l) => /공동 부엌/.test(l)));
+  assert.deepEqual(deeds(G).map((d) => d.id), ['elder_alert_knock']);
 });
 
 test('walk: a collapse is not followed by "버틸 수 있었다", and the leg is told once', () => {
@@ -49,8 +52,8 @@ test('walk: a collapse is not followed by "버틸 수 있었다", and the leg is
 });
 
 test('elder line fits paths that leave 연무동', () => {
-  for (const [path, re] of [['bus', /안부/], ['stay', /손을 꼭/]]) {
+  for (const [path, re] of [['bus', /안부/], ['stay', /302호 몫/]]) {
     const G = game(path); recordEvent(G, 'help', { who: 'elder', what: '부축했다' });
-    assert.ok(pickEnding(G).lines.some((l) => re.test(l)), path);
+    assert.ok(pickEnding(G).people.some((p) => p.who === 'elder' && re.test(p.line)), path);
   }
 });

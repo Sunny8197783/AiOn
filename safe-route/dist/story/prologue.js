@@ -88,7 +88,11 @@ export async function prologue(ctx) {
         talked = true;
         ctx.objective('퇴근하기', '사무실 출입문으로 나갑니다.', [{ text: '대시보드 확인', done: true }, { text: '팀장과 이야기', done: true }, { text: '퇴근', done: false }]);
       },
-      window: async () => { await ctx.ui.talk({ speaker: '창밖', role: '물류센터 마당', lines: ['출차를 기다리던 트럭들이 그대로 서 있다. 상자들이 마당에 쌓여 간다.'] }); },
+      window: async () => {
+        const pick = await ctx.ui.talk({ speaker: '창밖', role: '물류센터 마당', lines: ['출차를 기다리던 트럭들이 그대로 서 있다. 상자들이 마당에 쌓여 간다.'],
+          choices: [{ id: 'text', label: '출차 못 한 김 기사님께 "무슨 일 있으면 연락 주세요" 문자를 보낸다' }, { id: 'look', label: '그냥 본다' }] });
+        if (pick === 'text') ctx.remember('driver_text');
+      },
       officeExit: async () => {
         if (!talked) return void ctx.toast('아직 할 일이 남았습니다.');
         return 'leave';

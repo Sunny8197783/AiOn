@@ -10,6 +10,7 @@ import { opening, timelapse } from './story/cutscenes.js';
 import { createHud } from './ui/hud.js';
 import { talk, card, timeSkip } from './ui/dialog.js';
 import { landing, pause, settings as settingsMenu, about } from './ui/menu.js';
+import { gallery } from './ui/gallery.js';
 import { failCard, chapterCard, ending as endingCard } from './ui/debrief.js';
 import { phone, emergencyAlert } from './ui/phone.js';
 import { notebook, inventory } from './ui/notebook.js';
@@ -20,6 +21,7 @@ import { docs } from './ui/docs.js';
 import { routemap } from './ui/routemap.js';
 import { createAudio } from './audio.js';
 import { createGame, save, load, checkpoint, restore, bagLoad, bagCells, usable, check, drainCharge } from './game/state.js';
+import { pickEnding, readGallery, addToGallery, galleryView } from './game/endings.js';
 import { seenRumors } from './game/rumors.js';
 import { failDebrief } from './game/debrief.js';
 import { SOURCES } from './game/facts.js';
@@ -35,7 +37,7 @@ import { endure } from './story/endure.js';
 import { crossroads, evacuation, ending } from './story/evac.js';
 
 const CHAPTERS = [['prologue', prologue], ['prep', prep], ['dday', dday], ['endure', endure], ['crossroads', crossroads], ['evac', evacuation], ['ending', ending]];
-const SAVE_KEY = 'gyeongbo.save.v2', SETTINGS_KEY = 'gyeongbo.settings.v1';
+const SAVE_KEY = 'gyeongbo.save.v2', SETTINGS_KEY = 'gyeongbo.settings.v1', GALLERY_KEY = 'gyeongbo.endings.v1';
 const LEVELS = Object.fromEntries([['town', 'Town'], ['apartment', 'Apartment'], ['mart', 'Mart'], ['store', 'Store'], ['office', 'Office'], ['shelter', 'Shelter']]
   .map(([id, name]) => [id, async (kit, people, fx) => (await import(`./levels/${id}.js`))[`build${name}`](kit, people, fx)]));
 
@@ -48,7 +50,7 @@ const store = {
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const savedSettings = safeParse(store.get(SETTINGS_KEY));
 const settings = { quality: 'auto', volume: 0.7, mute: false, captions: true, reduceMotion: reduced, textScale: 1, view: 'third',
-  sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', ...savedSettings };
+  sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', memoryCue: true, ...savedSettings };
 // Graphics tier: a saved 'low' | 'medium' | 'high' keeps its meaning; nothing (or anything unknown) is detected once
 // (createEngine 'auto') and remembered with qualityAuto, until the player picks a tier in the settings.
 Object.assign(settings, (({ quality, auto }) => ({ quality, qualityAuto: auto }))(savedQuality(savedSettings)));
@@ -248,6 +250,7 @@ function resetTransient() {
   actions.drop(); danger.reset(); ctx.deathCause = null; applySettings();
 }
 function resetRun(snap) {
+  ctx.cueSync(); // first: the HUD refresh below would toast deeds past an old cue mark
   for (const k of ['lightSource', 'seoyeonAsk', 'trail', 'snap']) delete ctx[k];
   Object.assign(ctx, { levelStates: {}, power: true, outdoorEnv: 'day', indoorEnv: 'interior', rate: 0 });
   if (snap) { ctx.snap = readSnap(snap); Object.assign(ctx, readSnap(ctx.snap)); }
@@ -391,6 +394,15 @@ async function openPause() {
   else if (pick === 'menu') location.reload();
 }
 
+// The ending gallery remembers which endings this browser has reached and the deeds that led there.
+// story/evac.js ending() calls it once the closing scene has played, before the document.
+ctx.recordRun = () => {
+  try {
+    const fate = pickEnding(G), today = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD, local date
+    store.set(GALLERY_KEY, JSON.stringify(addToGallery(readGallery(store.get(GALLERY_KEY)), fate.id, fate.trace.map((t) => t.id), today)));
+  } catch (err) { console.error('[gallery] not saved', err); }
+};
+
 async function run(start, resumeKey) {
   for (let i = start; i < CHAPTERS.length; i++) {
     const [id, fn] = CHAPTERS[i];
@@ -428,8 +440,10 @@ async function boot() {
   document.getElementById('loading').hidden = true;
   for (;;) {
     const saved = safeParse(store.get(SAVE_KEY));
-    const pick = await landing({ hasSave: !!saved.G });
+    const seen = galleryView(store.get(GALLERY_KEY));
+    const pick = await landing({ hasSave: !!saved.G, endings: seen.filter((e) => e.seen).length });
     audio.unlock();
+    if (pick === 'gallery') { await gallery(seen); continue; }
     if (pick === 'settings') { Object.assign(settings, await settingsMenu({ ...settings })); applySettings(); continue; }
     if (pick === 'about') { await about(SOURCES); continue; }
     let start = 0, resume = null;

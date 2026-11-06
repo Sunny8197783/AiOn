@@ -138,6 +138,7 @@ export function buildCorridor(B, g, dyn, H) {
   H.seoyeonSpot = { x: 9.475, y: Y, z: 0.62, yaw: 0 };
   B.point('seoyeonDoor', '303호', 9.475, Y, -0.65, 'door').host = 'door303';
   B.point('homeDoor', '302호 (집)', -1.275, Y, -0.6, 'door').host = 'door302';
+  H.elderPoint = B.point('elderDoor', '304호', 16.475, Y, -0.65, 'door');
 
   // Wall handrail by 304 (wood on two brackets), the one 어르신 holds.
   const RAIL = { x0: 14.85, x1: 15.95, y: Y + 0.86, z: -0.16 };

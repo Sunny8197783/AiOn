@@ -166,6 +166,8 @@ export async function buildApartment(kit, people, fx) {
     else if (key === 'stock') { if (!value || typeof value !== 'object') { console.error('[apartment] stock needs { itemId: count }', value); return; } }
     else if (!STATES[key].includes(value)) { console.error(`[apartment] bad value for ${key}:`, value, 'allowed:', STATES[key]); return; }
     S[key] = value; apply[key](value);
+    // The 304 door point steps aside while 어르신 stands there (her own point) or the corridor burns (E goes to the fire).
+    H.elderPoint.enabled = S.elder304 !== 'on' && S.hallFire !== 'small' && S.hallFire !== 'large';
   }
   for (const [k, v] of Object.entries(S)) apply[k](v);
 

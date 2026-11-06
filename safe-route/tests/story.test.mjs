@@ -7,6 +7,7 @@ import { carryStep, smokeStep, CARRY, SMOKE } from '../dist/story/strain.js';
 import { followTarget, elderSafeEarly } from '../dist/story/elder.js';
 import { storeRumor, barter, knock, offerFor } from '../dist/story/neighbors.js';
 import { createGame, recordEvent } from '../dist/game/state.js';
+import { remember, deeds } from '../dist/game/deeds.js';
 
 function fakeEngine() {
   const frames = new Set(), inter = new Set(), built = {};
@@ -135,7 +136,7 @@ function sceneCtx(G, answers) {
   return { said, toasts, ctx: {
     G, engine: { level: { id: 'store' } }, audio: { radio() {} },
     ui: { talk: async (o) => { said.push(o); if (!o.choices) return; const id = answers.shift(); const c = o.choices.find(x => x.id === id); assert.ok(c, `choice ${id} offered`); assert.ok(!c.disabled, `choice ${id} enabled`); return id; } },
-    note() {}, toast: (t) => toasts.push(t), caption: async () => {}, refresh() {}, pass() {},
+    note() {}, toast: (t) => toasts.push(t), caption: async () => {}, refresh() {}, pass() {}, remember: (id, d) => remember(G, id, d),
   } };
 }
 const n = (G, id) => (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0);
@@ -179,14 +180,16 @@ test('shelter rumour is judged by source and sorted into the info ladder (M5)', 
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const G = createGame({ seed: 9 });
   G.chapter = 'endure';
-  const a = sceneCtx(G, ['rumor', 'check']);
+  const a = sceneCtx(G, ['rumor', 'check', 'tell']);
   await storeRumor(a.ctx);
   assert.equal(G.skill.info.at(-1).result, 'sorted');
   assert.ok(G.events.some(e => e.type === 'rumor_checked'));
+  assert.deepEqual(deeds(G).map(d => [d.id, d.details.after]), [['rumor_checked', undefined], ['rumor_corrected', 'check']]);
   const H = createGame({ seed: 9 });
-  const b = sceneCtx(H, ['official', 'spread']);
+  const b = sceneCtx(H, ['official', 'spread', 'fix']);
   await storeRumor(b.ctx);
   assert.equal(H.skill.info.at(-1).result, 'misled');
   assert.ok(H.events.some(e => e.type === 'rumor_spread') && H.events.some(e => e.type === 'rumor_believed'));
   assert.equal(H.know.misled ?? null, null, 'corrected the same evening');
+  assert.deepEqual(deeds(H).map(d => [d.id, d.details.after]), [['rumor_spread', undefined], ['rumor_corrected', 'spread']], 'told the neighbour again');
 });

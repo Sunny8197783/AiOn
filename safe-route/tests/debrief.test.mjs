@@ -6,6 +6,7 @@ import { simulateDays, applyLedger } from '../dist/game/ledger.js';
 import { createGame, recordEvent, buy, pack, check, consume, note, spendSlot, adjust, trade, drainCharge } from '../dist/game/state.js';
 import { recordEncounter, evalExtinguisher, evalBag } from '../dist/game/drills.js';
 import { CATALOG, BAG_LIMIT } from '../dist/game/items.js';
+import { remember } from '../dist/game/deeds.js';
 import { SOURCES, FACTS, fact } from '../dist/game/facts.js';
 
 const prices = Object.fromEntries(Object.entries(CATALOG).map(([id, c]) => [id, c.price]));
@@ -266,4 +267,25 @@ test('endingRecord: one people row per person, new neighbours named, ripples, cu
   assert.ok(!endingRecord(G).unused.some(u => u.item === '암막 커튼'), 'hung: used');
   G.chapter = 'prep'; recordEvent(G, 'tub_filled', {}); G.day = 1; recordEvent(G, 'payoff', { prep: 'tub', moment: '세수했다' });
   assert.equal(endingRecord(G).ripples.length, 1);
+});
+
+test('chapterSummary names up to three remembered deeds of that chapter', () => {
+  const G = createGame({ seed: 1 });
+  G.chapter = 'dday';
+  recordEvent(G, 'help', { who: 'seoyeon', kind: 'ask', what: '어떻게 도울지 먼저 묻고, 계단에서 보행기를 옆에서 들어 주었다' });
+  remember(G, 'hall_checked'); // no cue
+  recordEvent(G, 'elder_choice', { pick: 'help' }); // story/elder.js: the 304 dilemma
+  for (const id of ['manager_detour', 'register_helped']) remember(G, id);
+  const s = chapterSummary(G, 'dday').lines;
+  assert.equal(s.find(l => l.startsWith('기억된 일')), '기억된 일: 서연 — 계단에서 먼저 물었다 · 304호 어르신 — 경보 때 함께 계단을 내려갔다 · 박 소장 — 관리사무소에 들러 연락을 정했다');
+  assert.ok(!chapterSummary(G, 'prep').lines.some(l => l.startsWith('기억된 일')));
+});
+
+test('endingRecord carries the full fate', () => {
+  const G = createGame({ seed: 1 });
+  G.know.path = 'stay';
+  recordEvent(G, 'path', { path: 'stay' });
+  const { fate } = endingRecord(G);
+  for (const k of ['id', 'no', 'title', 'place', 'kind', 'path', 'lines', 'people', 'town', 'trace', 'missed']) assert.ok(k in fate, k);
+  assert.equal(fate.id, 'stay');
 });

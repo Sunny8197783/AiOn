@@ -1,6 +1,6 @@
 // 4장 남을까 떠날까 (D+6) and 5장 공식 대피 (D+12). Both choices in 4장 are valid under different
 // conditions; the fire in 4장 is the third encounter, where stepping back is the success.
-import { recordEvent, adjust, hhmm, bagLoad, inPocket } from '../game/state.js';
+import { recordEvent, adjust, hhmm, bagLoad, inPocket, consume } from '../game/state.js';
 import { ladderStage, recordEncounter, evalBag, evalExtinguisher, BAG_GOALS } from '../game/drills.js';
 import { chapterSummary, endingRecord } from '../game/debrief.js';
 import { CLOSURES } from '../game/townmap.js';
@@ -16,6 +16,10 @@ import { ripples } from '../game/ripples.js';
 import { rippleMontage } from './cutscenes.js';
 
 const stock = (G, ids) => ids.reduce((s, id) => s + (G.items[id]?.home ?? 0) + (G.items[id]?.bag ?? 0), 0);
+const WATER = ['water_2l', 'water_500'], FOOD = ['canned', 'rice_instant', 'bars', 'ramen'];
+const home = (G, ids) => ids.reduce((s, id) => s + (G.items[id]?.home ?? 0), 0);
+// Takes up to n units out of home, in list order.
+function moveOut(G, ids, n) { for (const id of ids) { const k = Math.min(n, G.items[id]?.home ?? 0); if (k) { consume(G, id, k); n -= k; } } }
 
 export async function crossroads(ctx) {
   const G = ctx.G;
@@ -36,6 +40,12 @@ export async function crossroads(ctx) {
       const memo = posts(G, 'camp_food').find(p => p.key === 'seoyeon');
       await ctx.say(memo.from, ['현관문 틈에 서연이 끼워 둔 메모가 있다.', memo.text, '희망하는 주민은 생활문화센터 임시 거처로 옮길 수 있다고 한다. 권고이고, 명령은 아니라고 했다.'], null, memo.meta);
     }
+    const reply = await ctx.card({ kind: 'notice', title: '303호 문 앞 메모판', meta: 'D+6 아침 · 서연의 손글씨',
+      body: ['라디오(아침 7시): 생활문화센터 임시 거처, 희망하면 옮길 수 있음 (권고)', '전기 복구 시점: 아직 미정', '급수소: ?'],
+      actions: [{ id: 'add', label: '급수 시간과 들은 곳을 덧붙여 적는다', primary: true }, { id: 'read', label: '읽기만 한다' }] });
+    if (reply === 'add') { ctx.pass(3); ctx.remember('seoyeon_note_reply'); }
+    const yoon = await ctx.say('윤 팀장', ['연무센터가 구호물자 분류 거점이 됐어. 손 보탤 수 있으면 연락 줘.'], [{ id: 'yes', label: '가능한 날 나가겠습니다' }, { id: 'no', label: '지금은 어렵습니다' }], '문자');
+    if (yoon === 'yes') ctx.remember('yoon_reply');
     const water = waterLitres(G), food = stock(G, ['rice_instant', 'canned', 'bars', 'ramen']);
     const heardLine = misled(G) === 'camp_food' ? '마음에 걸리는 말: "임시 거처 급식이 끊겼다" (SNS 퍼온 글 · 확인하지 않음)'
       : G.events.some(e => e.type === 'rumor_checked' && e.details.id === 'camp_food') ? '확인한 것: 임시 거처는 급수·급식을 지원한다 (공식 안내)' : null;
@@ -110,6 +120,9 @@ async function stayAndSmoke(ctx) {
   ctx.setLevelState('apartment', 'smoke', 0);
   ctx.setLevelState('apartment', 'haze', 'follow');
   await ctx.say('박영수 소장', ['5층 세대 주방에서 난 불이었대요. 소방대가 껐고 다친 사람은 없대요.'], null, '방송');
+  const rounds = await ctx.say('박영수 소장', ['302호, 아직 안 잤으면… 빈 집 문단속 같이 돌아요? 떠난 집이 많아서요.'], [{ id: 'go', label: '같이 돈다' }, { id: 'rest', label: '오늘은 쉬겠습니다' }], '복도');
+  if (rounds === 'go') { ctx.stat('fatigue', 8); ctx.pass(40); ctx.remember('rounds_with_manager'); }
+  else await ctx.say('박영수 소장', ['그래요, 푹 쉬어요. 놀랐을 텐데.'], null, '복도');
 }
 
 // Move: temporary stay in the shelter; someone cooks with a burner and the boxes catch.
@@ -137,6 +150,12 @@ async function moveAndFire(ctx) {
   if (ev.result === 'escalated') ctx.fail('fire', { scene: 'shelter' });
   await factCard(ctx, '물러서는 것도 성공입니다', ['fire_big', 'fire_shout', 'fire_119']);
   ctx.payoff('judgement', '천장까지 닿은 불 앞에서 물러나 알리고 대피했다');
+  const report = await ctx.say('대피소 관리자', ['소방대가 왔어요. 처음 본 분 계세요? 어떻게 된 건지 말씀해 주세요.'],
+    [{ id: 'precise', label: '"19시 반쯤 주차장 구석, 버너에서 상자로 옮겨 붙었어요. 다친 사람은 못 봤어요."' }, { id: 'vague', label: '"저쪽에서 불났어요, 큰일 날 뻔했어요!"' }], '대피소');
+  if (report === 'precise') ctx.remember('fire_report');
+  await ctx.say('대피소 관리자', [report === 'precise' ? '시간이랑 자리를 정확히 말해 주시니 확인이 빠르네요. 고맙습니다.' : '네, 다들 놀라셨죠. 소방대가 확인하고 있어요.'], null, '대피소');
+  const sort = await ctx.say('대피소 관리자', ['참, 물류 일 하셨다고요? 구호품 상자 정리 좀 도와주실 수 있어요? 어디에 뭐가 있는지 엉망이라서요.'], [{ id: 'help', label: '돕는다' }, { id: 'rest', label: '오늘은 쉬겠습니다' }], '대피소');
+  if (sort === 'help') { ctx.stat('fatigue', 8); ctx.pass(40); ctx.remember('sort_supplies'); }
 }
 
 export async function evacuation(ctx) {
@@ -191,7 +210,7 @@ export async function depart(ctx) {
   let checking = claim.act === 'check', checked = false;
   let followed = G.events.some(e => e.type === 'rumor_followed' && e.details?.id === 'evac_shortcut');
   if (checking && await ctx.modal(() => radioScene(ctx, 'evac'))) { checked = true; G.know.evacClosuresKnown = true; verify(G, 'evac_shortcut'); ctx.toast(`라디오: 오늘 통제 구간에 ${shortcut}도 들어 있다. 풀렸다는 글은 사실이 아니었다.`, 'official', 5200); }
-  let noted = false, said = false;
+  let noted = false, said = false, handed = false;
   // The last choice is yours: the bus is one way out, not the answer. Each path ends the story differently.
   const show = () => ctx.objective('오늘 어떻게 할까', [
     misled(G) === 'evac_shortcut' ? (followed ? `${shortcut} 쪽은 막혀 있었다. 안내 요원이 있는 큰길로 돌아가자.` : `단체방 글대로라면 ${shortcut} 쪽이 집결지까지 지름길이다.`) : null,
@@ -240,9 +259,9 @@ export async function depart(ctx) {
       const pick = said
         ? await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['정민 씨, 아직 안 가셨어요? 버스 시간 괜찮아요?'], choices: [{ id: 'go', label: '이제 갈게요. 집결지에서 만나요' }, { id: 'wait', label: '같이 기다렸다가 지원 차량으로 같이 가요' }] })
         : await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['저는 지원 차량이 3시에 와요. 집결지에서 다시 만나요.', '같이 기다려 줄 필요는 없어요. 정민 씨는 버스 시간 맞춰 가세요.'], choices: [{ id: 'go', label: '집결지에서 만나요' }, { id: 'card', label: '제 연락처 카드 사진 찍어 두세요' }, { id: 'wait', label: '같이 기다렸다가 지원 차량으로 같이 가요' }] });
-      if (pick === 'card' && !said) recordEvent(G, 'help', { who: 'seoyeon', what: '떠나기 전 서로의 연락처를 다시 확인했다' });
+      if (pick === 'card' && !said) recordEvent(G, 'help', { who: 'seoyeon', kind: 'card', what: '떠나기 전 서로의 연락처를 다시 확인했다' });
       said = true;
-      if (pick === 'wait') { recordEvent(G, 'help', { who: 'seoyeon', what: '지원 차량이 올 때까지 곁을 지켰다' }); return 'seoyeon'; }
+      if (pick === 'wait') { recordEvent(G, 'help', { who: 'seoyeon', kind: 'wait', what: '지원 차량이 올 때까지 곁을 지켰다' }); return 'seoyeon'; }
     },
     managerWindow: async () => {
       const site = posts(G, 'evac_shortcut').find(p => p.key === 'manager');
@@ -250,6 +269,11 @@ export async function depart(ctx) {
       if (!checked) { checked = true; verify(G, 'evac_shortcut'); show(); }
       // Only staying is something 정민 does for the building; the manager's own work is not 정민's help (F7).
       if (pick === 'stay') { recordEvent(G, 'help', { who: 'manager', what: '박 소장과 함께 남아 건물을 지키기로 했다' }); return 'stay'; }
+      if (!handed && home(G, WATER) >= 2 && home(G, FOOD) >= 2) {
+        handed = true; // offered once, only from what stays at home (not the bag)
+        const give = await ctx.ui.talk({ speaker: '박영수 소장', role: '관리사무소', lines: ['집에 남는 물이나 먹을 거 있으면, 남는 분들 몫으로 맡겨 줘도 돼요.'], choices: [{ id: 'give', label: '남는 물과 통조림을 관리사무소에 맡길게요' }, { id: 'no', label: '다음에요' }] });
+        if (give === 'give') { moveOut(G, WATER, 2); moveOut(G, FOOD, 2); ctx.pass(5); ctx.remember('stock_to_manager'); }
+      }
     },
     center: async () => {
       const pick = await ctx.ui.talk({ speaker: '행정복지센터', role: '자원봉사 접수', lines: ['급수 안내하고 거동 불편한 분들께 물 나를 사람이 모자라요.', '남아서 도와주실 수 있어요? 버스는 놓치게 될 거예요.'], choices: [{ id: 'yes', label: '남아서 돕겠습니다' }, { id: 'no', label: '죄송해요, 버스를 타야 해요' }] });
@@ -269,6 +293,8 @@ export async function depart(ctx) {
   if (path !== 'bus') return void await ctx.caption({ missed: missedCaption(ctx), stay: '가방을 내려놓았다. 오늘부터 이 건물이 내 자리다.', seoyeon: '서연의 문 앞에 가방을 내려놓고 앉았다. 지원 차량은 늦어지고 있었다.',
     volunteer: '조끼를 받아 입었다. 급수대 앞 줄이 길다.', walk: '도시의 끝, 통제선을 지나 국도로 들어섰다. 뒤에서 또 포성이 울렸다.' }[path], null, 4000);
   recordEvent(G, 'arrived_assembly', { minute: G.minute });
+  const lift = await ctx.say('집결지', ['리프트 앞 어르신 짐이 무겁다.'], [{ id: 'ask', label: '"들어 드릴까요?" 먼저 여쭌다' }, { id: 'line', label: '줄을 선다' }], '임시 집결지');
+  if (lift === 'ask') { await ctx.say('어르신', ['고마워요. 그 가방만 버스 안까지 올려 줘요. 나머진 내가 들게.'], null, '버스 리프트 앞'); ctx.stat('fatigue', 4); ctx.pass(3); ctx.remember('bus_helped'); }
   if (G.know.routeChecked && !followed) ctx.payoff('route', '동네 길을 미리 알아 둔 덕분에 통제 구간을 돌아 집결지에 닿았다');
   const card = (G.items.contact_card?.bag ?? 0) + (G.items.doc_copies?.bag ?? 0) > 0;
   const deep = card && !inPocket(G, 'contact_card') && !inPocket(G, 'doc_copies'); // game rule (M8): the pocket comes out at once
@@ -296,5 +322,6 @@ export async function ending(ctx) {
   recordEvent(G, 'ending', { load: bagLoad(G).weightKg });
   // C2: what the early choices led to, over the town at dusk, then where 정민 is now. Never blocks the ending.
   try { await rippleMontage(ctx, ripples(G), G.know.path); } catch (err) { console.error('[cine] ripple montage failed; the story goes on', err); }
+  ctx.recordRun?.(); // the ending gallery (and the records) count the run once its closing scene has played
   return ctx.modal(() => ctx.ui.ending(endingRecord(G), SOURCES));
 }

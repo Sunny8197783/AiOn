@@ -25,6 +25,7 @@ const DESC = {
   'apartment:stairs1F': ['계단실. 층마다 비상조명등이 있다.'], 'apartment:stairs3F': ['계단실. 4층 쪽은 물청소 중이라 막혀 있다.'],
   'apartment:extinguisher': ['복도 옥내소화전 옆 분말소화기. 안전핀 → 노즐 → 손잡이 → 쓸듯이.'],
   'apartment:seoyeonDoor': ['303호. 오서연 씨 집이다.'],
+  'apartment:elderDoor': ['304호. 문 옆에 신발장이 있다.'],
   'apartment:homeDoor': ['302호, 우리 집.'],
   'town:center': ['연무동 행정복지센터. 민원실 유리문 안쪽으로 번호표 기계가 보인다.'],
   'town:cafe': (c) => (c.power ? ['카페 쉼표. 커피 냄새가 난다.'] : ['카페 쉼표. 문이 잠겨 있고 "정전으로 임시 휴업" 종이가 붙어 있다.']),

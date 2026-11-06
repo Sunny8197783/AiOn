@@ -65,6 +65,7 @@ export async function endure(ctx) {
 async function morning(ctx) {
   const G = ctx.G;
   const done = { fridge: false, drink: false, info: false };
+  let offered = false;
   const show = () => ctx.objective('정전 이틀째 아침', '냉장고를 정리하고, 물을 마시고, 오늘의 안내를 확인합니다. 다 했으면 달력에서 하루를 시작합니다.', [
     { text: '냉장고 정리', done: done.fridge }, { text: '물 마시기 (베란다 수납장)', done: done.drink }, { text: '안내 확인 (라디오·이웃·1층 게시판)', done: done.info }]);
   show();
@@ -106,12 +107,17 @@ async function morning(ctx) {
       ctx.seoyeonAsk = pick;
       G.know.waterPoint = true; done.info = true;
       ctx.note('서연: 행정복지센터 마당 비상급수 09:30부터', 'neighbor');
-      if (pick === 'no') await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['괜찮아요. 소장님께 여쭤볼게요.'] });
+      if (pick === 'no') { await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['괜찮아요. 소장님께 여쭤볼게요.'] }); ctx.remember('water_declined'); }
       show();
     },
     lobbyNotice: async () => {
       await ctx.ui.card({ kind: 'notice', title: '관리사무소 안내', meta: 'D+1 07:30 · 박영수 소장', body: ['단수가 계속되고 있습니다.', '행정복지센터 마당 비상급수시설 운영: 09:30 ~ 17:00 (물통 지참)', '엘리베이터 운행 중지. 계단에서는 손전등을 쓰세요.'], actions: [{ id: 'ok', label: '확인', primary: true }] });
       G.know.waterPoint = true; done.info = true; ctx.note('관리사무소: 비상급수 09:30~17:00, 물통 지참', 'official'); show();
+      if (offered) return;
+      offered = true;
+      const pick = await ctx.ui.talk({ speaker: '1층 게시판', role: '빈자리', lines: ['안내문 아래에 빈자리가 있다.'],
+        choices: [{ id: 'add', label: '한 줄 덧붙인다: "302호 · 급수소 다녀옵니다. 필요한 분은 문에 쪽지"' }, { id: 'no', label: '그냥 둔다' }] });
+      if (pick === 'add') { ctx.pass(3); ctx.remember('board_offer'); ctx.toast('펜으로 적고 테이프로 붙였다.', 'self'); }
     },
     homePlanner: async () => (done.info ? 'done' : void ctx.toast('먼저 오늘의 안내를 확인하자.')),
   } });
@@ -133,6 +139,11 @@ async function waterTrip(ctx) {
   await ctx.roam({ rate: 2, tick: bodyCheck(ctx), on: { water: async () => 'queue' } });
   await factCard(ctx, '비상급수시설', ['water_point', 'water_sphere', 'water_hands']);
   ctx.pass(25);
+  const elder = await ctx.say('급수대', ['304호 어르신이 물통을 들기 힘들어 보인다.'], [{ id: 'ask', label: '"도와드릴까요?" 먼저 묻는다' }, { id: 'go', label: '그냥 간다' }], '행정복지센터 마당');
+  if (elder === 'ask') {
+    await ctx.say('304호 어르신', ['아이고, 그래 줄래요? 계단 앞까지만 들어 주면 돼요. 거기서부턴 내가 쉬엄쉬엄 갈게.'], null, '급수대');
+    ctx.stat('fatigue', 6); ctx.remember('queue_carry_elder');
+  }
   let carry;
   if (jugs) { use(G, 'water_jug'); carry = 10; ctx.payoff('water_jug', '접이식 물통으로 급수소 물을 받아 왔다'); }
   else { carry = 4; ctx.toast('물통이 없어 빈 생수병 두 개에 4리터만 받았다.', 'site'); }
@@ -169,8 +180,8 @@ async function waterTrip(ctx) {
     G.items.powerbank = { home: 0, bag: 0, bought: 0, checked: false, used: 0, ...(G.items.powerbank || {}) };
     G.items.powerbank.home += 1; G.items.powerbank.checked = true;
     G.rel.seoyeon.trust += 2;
-    recordEvent(G, 'help', { who: 'seoyeon', what: '급수소에서 물 한 통을 받아 3층까지 날라 주었다' });
-    recordEvent(G, 'help', { who: 'seoyeon', what: '서연이 충전된 보조배터리를 나눠 주었다', by: 'other' }); // received, not given
+    recordEvent(G, 'help', { who: 'seoyeon', kind: 'water', what: '급수소에서 물 한 통을 받아 3층까지 날라 주었다' });
+    recordEvent(G, 'help', { who: 'seoyeon', kind: 'powerbank', what: '서연이 충전된 보조배터리를 나눠 주었다', by: 'other' }); // received, not given
   }
   await ctx.goto('apartment', 'home');
   G.minute = Math.max(G.minute, 13 * 60);
@@ -223,9 +234,17 @@ async function storeEvening(ctx) {
       ctx.toast('6,900원어치를 챙기고 5만 원을 통에 넣었다. 거스름돈은 받을 수 없었다.', 'self', 4200);
       ctx.payoff('cash', '카드가 안 되는 편의점에서 현금으로 건전지와 물을 샀다');
     }
-  } else await ctx.ui.talk({ speaker: '정민', role: '지갑', lines: ['현금이 없다. 카드뿐이다. 카드로는 아무것도 살 수 없다.'] });
+  } else {
+    const pick = await ctx.ui.talk({ speaker: '정민', role: '지갑', lines: ['현금이 없다. 카드뿐이다. 카드로는 아무것도 살 수 없다.', '선반에 건전지 한 팩과 작은 생수 몇 병이 남아 있다.'],
+      choices: [{ id: 'iou', label: '건전지 한 팩만 챙기고 쪽지에 302호와 금액을 적는다' }, { id: 'take', label: '그냥 가져간다' }, { id: 'no', label: '그냥 둔다' }] });
+    const add = (id, n) => { (G.items[id] ??= { home: 0, bag: 0, bought: 0, checked: false, used: 0 }).home += n; };
+    if (pick === 'iou') { add('batteries_aa', 1); ctx.remember('store_iou'); }
+    if (pick === 'take') { add('batteries_aa', 1); add('water_500', 2); ctx.remember('store_took'); }
+  }
   await storeRumor(ctx); // story/neighbors.js: judge the claim by its source, then spread or check
   await barter(ctx);
+  const shutter = await ctx.ui.talk({ speaker: '바로편의점', role: '나가는 길', lines: ['가게 셔터가 반쯤 열린 채다.'], choices: [{ id: 'shut', label: '셔터를 내리고 쪽지를 남긴다: "셔터 내려 뒀어요 — 302호"' }, { id: 'go', label: '그냥 간다' }] });
+  if (shutter === 'shut') { ctx.pass(5); ctx.remember('store_shuttered'); }
   recordEvent(G, 'help', { who: 'clerk', what: '가게를 닫으며 쪽지와 현금 통을 남겨 이웃이 필요한 물건을 가져가게 했다', by: 'other' }); // 이수아's kindness
   G.know.clerkLeft = true;
 }
@@ -308,8 +327,11 @@ async function dayThree(ctx) {
   if (G.stats.tension > 55) await factCard(ctx, '긴장이 높을 때', ['mind_breath', 'mind_call'], '마음 돌보기');
   const pick = await ctx.say('오서연', ['어젯밤 괜찮으셨어요? 저 라디오 들은 거 메모해 뒀어요. 전기 복구 시점은 아직 정해지지 않았대요.', '앞으로 저녁마다 들은 걸 정리해서 문 앞에 붙여 둘게요. 필요하면 보세요.'],
     [{ id: 'thanks', label: '고마워요. 저는 급수소 소식을 전해 드릴게요' }, { id: 'ok', label: '네, 볼게요' }], '303호 앞');
-  if (pick === 'thanks') { G.rel.seoyeon.trust += 1; recordEvent(G, 'help', { who: 'seoyeon', what: '라디오 메모와 급수소 소식을 서로 나누기로 했다' }); }
+  if (pick === 'thanks') { G.rel.seoyeon.trust += 1; recordEvent(G, 'help', { who: 'seoyeon', kind: 'memo', what: '라디오 메모와 급수소 소식을 서로 나누기로 했다' }); }
   ctx.note('서연 메모: 전기 복구 시점 미정 (라디오)', 'neighbor');
+  const visit = await ctx.say('304호 어르신', [G.events.some((e) => e.type === 'fire_shout') ? '어젯밤엔 고마웠어요. 그 소리 듣고 바로 나왔지.' : '어젯밤엔 다들 놀랐지요. 나는 괜찮아요.'],
+    [{ id: 'visit', label: '들러서 안부를 묻는다' }, { id: 'later', label: '다음에 들른다' }], '304호 앞');
+  if (visit === 'visit') { ctx.pass(10); ctx.remember('elder_visit'); }
   adjust(G, 'fatigue', -20); adjust(G, 'tension', -10);
   ctx.refresh();
 }

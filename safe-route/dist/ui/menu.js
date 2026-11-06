@@ -13,8 +13,8 @@ export const CHAPTERS = [
 ];
 
 // ---------- landing ----------
-// landing({ hasSave }) -> Promise<'new'|'continue'|'settings'|'about'>
-export function landing({ hasSave = false } = {}) {
+// landing({ hasSave, endings }) -> Promise<'new'|'continue'|'settings'|'about'|'gallery'>; endings = how many of 11 were seen
+export function landing({ hasSave = false, endings = 0 } = {}) {
   const canvas = el('canvas', { class: 'landing-art', 'aria-hidden': 'true' });
   const choose = (id) => () => { uiSound('confirm'); m.close(id); };
   const content = el('div', { class: 'landing-wrap' },
@@ -33,6 +33,7 @@ export function landing({ hasSave = false } = {}) {
         el('div', { class: 'landing-actions' },
           btn('새로 시작', { primary: true, iconName: 'play', className: 'big', 'data-autofocus': hasSave ? null : true, onclick: choose('new') }),
           hasSave ? btn('이어하기', { iconName: 'retry', className: 'big', 'data-autofocus': true, onclick: choose('continue') }) : null,
+          endings > 0 ? btn(`엔딩 기록 ${endings}/11`, { ghost: true, iconName: 'book', onclick: choose('gallery') }) : null,
           btn('설정', { ghost: true, iconName: 'sliders', onclick: choose('settings') }),
           btn('출처와 만든 사람', { ghost: true, iconName: 'book', onclick: choose('about') }))),
       el('section', { class: 'landing-chapters', 'aria-label': '장 구성' },
@@ -202,10 +203,10 @@ export function pause() {
 
 // ---------- settings ----------
 // settings(current) -> Promise<{ quality, volume, mute, captions, reduceMotion, textScale, view, sensitivity, minimap,
-//   volAmbience, volEffects, volUi, profile }>
+//   volAmbience, volEffects, volUi, profile, memoryCue }>
 export function settings(current = {}) {
   const cur = { quality: 'medium', volume: 0.7, mute: false, captions: true, reduceMotion: false, textScale: 1, view: 'third',
-    sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', ...current };
+    sensitivity: 1, minimap: true, volAmbience: 1, volEffects: 1, volUi: 1, profile: 'none', memoryCue: true, ...current };
   const root = document.documentElement, scale0 = root.style.getPropertyValue('--text-scale');
   // cols: a fixed number per row (the five graphics tiers sit 3 + 2 instead of 4 + one stretched)
   const radios = (name, legend, options, value, note, cols = 0) => el('fieldset', { class: 'set-group' }, el('legend', {}, legend),
@@ -246,7 +247,8 @@ export function settings(current = {}) {
           toggle('mute', '소리 끄기', '사이렌과 경보음도 꺼집니다. 자막은 계속 나옵니다.', cur.mute)),
         el('fieldset', { class: 'set-group' }, el('legend', {}, '접근성'),
           toggle('captions', '자막 표시', '사이렌·방송·소리를 글로도 보여 줍니다.', cur.captions),
-          toggle('reduceMotion', '움직임 줄이기', '화면 흔들림, 머리 흔들림, 깜빡임과 전환 효과를 줄입니다.', cur.reduceMotion)))),
+          toggle('reduceMotion', '움직임 줄이기', '화면 흔들림, 머리 흔들림, 깜빡임과 전환 효과를 줄입니다.', cur.reduceMotion),
+          toggle('memoryCue', '기억 알림', '누군가 내 행동을 기억할 때 짧게 알려 줍니다.', cur.memoryCue !== false)))),
     el('div', { class: 'set-actions' }, btn('취소', { ghost: true, onclick: () => cancel() }), el('button', { type: 'submit', class: 'btn primary' }, icon('check'), el('span', {}, '적용'))));
   form.addEventListener('change', (e) => { if (e.target.name === 'textScale') root.style.setProperty('--text-scale', e.target.value); });
   form.addEventListener('submit', (e) => {
@@ -256,7 +258,7 @@ export function settings(current = {}) {
     const quality = f.get('quality') || cur.quality;
     m.close({ ...cur, quality, qualityAuto: quality === cur.quality && !!cur.qualityAuto, view: f.get('view') || cur.view, textScale: Number(f.get('textScale')) || 1,
       volume: Number(vol.value) / 100, mute: f.has('mute'), captions: f.has('captions'), reduceMotion: f.has('reduceMotion'),
-      sensitivity: Number(f.get('sensitivity')) / 100 || 1, minimap: f.has('minimap'), profile: f.get('profile') || 'none',
+      sensitivity: Number(f.get('sensitivity')) / 100 || 1, minimap: f.has('minimap'), memoryCue: f.has('memoryCue'), profile: f.get('profile') || 'none',
       volAmbience: Number(f.get('volAmbience')) / 100, volEffects: Number(f.get('volEffects')) / 100, volUi: Number(f.get('volUi')) / 100 });
   });
   const content = el('div', { class: 'settings-panel' }, el('p', { class: 'eyebrow' }, icon('sliders'), '설정'), el('h2', {}, '보기·소리·조작·접근성'), form);

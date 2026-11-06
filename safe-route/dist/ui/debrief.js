@@ -1,6 +1,8 @@
 // Soft-fail card, chapter summary card and the printable "생존 기록" ending document.
 import { el, modal, icon, btn, uiSound } from './dom.js';
 import { PREP } from '../game/ripples.js';
+import { DEEDS } from '../game/deeds.js';
+import { fact } from '../game/facts.js';
 
 // Payoffs arrive with Korean labels already (game/debrief.js); a bare prep id still gets its name.
 const prepName = (id) => PREP[id] || id || '준비';
@@ -68,17 +70,30 @@ export function ending(record = {}, sources = []) {
     lines(items).length ? el('ul', {}, lines(items).map((x) => el('li', {}, render(x)))) : el('p', { class: 'muted' }, empty));
   const t0 = performance.now();
   const go = (id) => () => { if (performance.now() - t0 > 400) { uiSound('confirm'); m.close(id); } };
+  const srcLink = (id) => { const s = lines(sources).find((x) => x.id === id); return s ? (s.url ? el('a', { href: s.url, target: '_blank', rel: 'noopener noreferrer' }, `${s.publisher} · ${s.title}`) : `${s.publisher} · ${s.title}`) : null; };
+  // Each trace step: what you did, when, and the official line behind it (deeds without facts show none).
+  const traceItem = (t) => {
+    const f = DEEDS[t.id]?.facts?.[0];
+    return [el('b', {}, t.when || ''), el('span', {}, t.text), f ? el('small', {}, fact(f).text, ' — ', lines(t.sourceIds).map(srcLink).filter(Boolean).flatMap((a, i) => (i ? [' · ', a] : [a]))) : null];
+  };
+  const fateSection = (cls, ic, title, items, render) => (lines(items).length ? el('section', { class: 'doc-section' }, el('h3', {}, icon(ic), title),
+    el('ul', { class: cls }, lines(items).map((x) => render(x)))) : null);
   const doc = el('article', { class: 'ending-doc' },
     el('header', { class: 'doc-head' },
       el('p', { class: 'doc-kicker' }, '연무동 · 한빛아파트 103동 302호 · 정민'),
-      el('h2', {}, fate ? `엔딩 · ${fate.title}` : '생존 기록'),
+      el('h2', {}, fate ? `엔딩 ${fate.no ?? ''} · ${fate.title}` : '생존 기록'),
+      fate?.place ? el('p', { class: 'doc-kicker' }, fate.place) : null,
       el('p', { class: 'doc-sub' }, '전쟁 직전의 준비가 전쟁 이후의 선택지를 어떻게 바꾸었는지 돌아봅니다.')),
     fate ? el('section', { class: 'doc-section doc-fate' }, lines(fate.lines).map((t) => el('p', {}, t))) : null,
+    fateSection('trace', 'map', '이 결말로 이끈 선택', fate?.trace, (t) => el('li', {}, traceItem(t))),
+    fateSection('fate-people', 'people', '그 뒤의 사람들', fate?.people, (p) => el('li', { class: p.who === 'stranger' ? 'stranger' : p.present ? '' : 'away' }, p.name ? el('b', {}, p.name) : null, el('span', {}, p.line))),
+    fateSection('', 'site', '연무동', fate?.town, (t) => el('li', {}, el('span', {}, t))),
     chain.length ? section('clock', '나비효과 · 작은 선택이 남긴 것', chain, (r) => [el('b', {}, r.label), el('span', {}, rippleText(r))], '') : null,
     chain.length && !rest.length ? null : section('spark', chain.length ? '그 밖에 도움이 된 준비' : '도움이 된 준비', rest, (h) => [el('b', {}, prepName(h.prep)), el('span', {}, h.moment || '')], '이번에는 미리 해 둔 준비가 큰 역할을 하지 못했습니다. 다음에는 하나만 먼저 해 보세요.'),
     section('box', '쓰지 못한 물건과 그 이유', unused, (u) => [el('b', {}, u.item), el('span', {}, u.why || '')], '가진 물건을 모두 쓸 수 있었습니다.'),
     section('rumor', '확인하지 못한 정보', unchecked, (t) => el('span', {}, t), '필요한 정보를 대부분 확인했습니다.'),
-    section('people', '함께 버틴 사람들', people, (p) => [el('b', {}, p.who), el('span', {}, p.what || '')], '이번에는 혼자 버텼습니다. 이웃과의 연락 한 가지가 선택지를 넓힙니다.'),
+    fate?.people?.length ? null : section('people', '함께 버틴 사람들', people, (p) => [el('b', {}, p.who), el('span', {}, p.what || '')], '이번에는 혼자 버텼습니다. 이웃과의 연락 한 가지가 선택지를 넓힙니다.'),
+    fateSection('', 'arrow', '다른 길이 있었다면', fate?.missed, (x) => el('li', {}, el('b', {}, x.title), el('span', {}, x.hint, x.tip ? el('small', {}, ` (${x.tip})`) : null))),
     practice?.text ? el('section', { class: 'doc-section doc-practice' },
       el('h3', {}, icon('official'), '실제 생활에서 확인해 볼 한 가지'),
       el('p', { class: 'practice-text' }, practice.text),

@@ -34,12 +34,17 @@ export async function storeRumor(ctx) {
     await ctx.ui.talk({ speaker: site.from, role: `${site.meta}`, lines: [site.text, '단톡방에 도는 글은 저도 봤어요. 그래서 직접 가 본 거예요.'] });
     G.know.misled = null;
     ctx.note('박 소장: 생활문화센터 출입구 A 열려 있음 (직접 다녀옴)', 'site');
+    const fix = await ctx.ui.talk({ speaker: '정민', role: '바로편의점 앞', lines: ['아까 102동 주민에게 폐쇄됐다고 맞장구친 게 마음에 걸린다.'],
+      choices: [{ id: 'fix', label: '102동 주민에게 아니라고 다시 알린다' }, { id: 'no', label: '그냥 둔다' }] });
+    if (fix === 'fix') { ctx.pass(15); ctx.remember('rumor_corrected', { after: 'spread' }); ctx.toast('"아, 그래요? 나도 옆집에 말해 둘게요."', 'neighbor'); }
   } else {
     const shown = verify(G, 'shelter_closed');
     const heard = usable(G, 'radio') ? await radioScene(ctx, 'rumor') : null;
     const official = shown.find(p => p.label === 'official');
     await ctx.ui.talk({ speaker: heard ? '재난방송' : '행정복지센터 게시판(주민의 휴대폰 사진)', role: '공식 안내', lines: [`${official.text} (가상 안내)`] });
     ctx.note('생활문화센터 대피소 정상 운영 (공식 안내로 확인)', 'official');
+    const tell = await ctx.ui.talk({ speaker: '102동 주민', role: '바로편의점 앞', lines: ['…뭐래요? 확인됐어요?'], choices: [{ id: 'tell', label: '102동 주민에게 확인한 내용을 알려 준다' }, { id: 'no', label: '그냥 간다' }] });
+    if (tell === 'tell') { await ctx.ui.talk({ speaker: '102동 주민', role: '바로편의점 앞', lines: ['아, 정상 운영이에요? 다행이다. 저도 다른 데 퍼뜨릴 뻔했네요.'] }); ctx.remember('rumor_corrected', { after: 'check' }); }
   }
   await factCard(ctx, '소문을 만났을 때', ['info_rumor', 'shelter_rumor', 'info_harm']);
 }

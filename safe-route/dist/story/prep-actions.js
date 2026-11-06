@@ -75,7 +75,7 @@ export async function doMart(ctx, slot) {
   ctx.setLevelState('mart', 'soldOut', Object.keys(MART_SECTIONS).filter(s => MART_SECTIONS[s].items.every(i => soldOut.includes(i))));
   await goOut(ctx, '연무마트에 가기', '단지 정문으로 나가 연무로 건너편 연무마트로 갑니다.');
   ctx.objective('장보기', '진열대에서 고르고 계산대에서 계산합니다. 필요한 만큼, 들고 올 수 있는 만큼.', [{ text: '진열대 둘러보기', done: false }, { text: '계산하기', done: false }]);
-  let carried = 0, boughtAny = false, hoard = false;
+  let carried = 0, boughtAny = false, hoard = false, water = 0;
   const info = [{ text: '생수 1인 6병 한정', label: 'site' }];
   if (G.rel.clerk?.contact) info.push({ text: '수아: "건전지는 오늘 오전에 더 들어온다고 했어요. 확실하진 않아요."', label: 'neighbor' });
   const section = (sec) => async () => {
@@ -88,7 +88,7 @@ export async function doMart(ctx, slot) {
     if (Object.values(cart).some(q => q > 8)) hoard = true;
     const prices = Object.fromEntries(Object.keys(cart).map(id => [id, CATALOG[id].price]));
     try { buy(G, cart, prices); } catch (e) { return void ctx.toast(e.message || '살 수 없습니다.', 'site'); }
-    boughtAny = true;
+    boughtAny = true; water += cart.water_2l ?? 0;
     carried += Object.entries(cart).reduce((s, [id, q]) => s + CATALOG[id].weightKg * q, 0);
     ctx.event('bought', { cart, slot });
   };
@@ -103,6 +103,10 @@ export async function doMart(ctx, slot) {
       if (hoard) {
         await ctx.ui.talk({ speaker: '계산원', role: '연무마트', lines: ['오늘 많이들 사 가셔서요… 다른 분들 몫도 남겨 주시면 감사하겠습니다.'] });
         ctx.event('hoard', {}); ctx.toast(fact('home_nohoard').text, 'official', 6000);
+      }
+      if (water >= 4 && (G.items.water_2l?.home ?? 0) > 0) {
+        const pick = await ctx.ui.talk({ speaker: '계산대', role: '연무마트', lines: ['뒤에 선 할머니 바구니에 생수가 없다.'], choices: [{ id: 'share', label: '생수 한 병을 나눠 드린다' }, { id: 'no', label: '그냥 계산한다' }] });
+        if (pick === 'share') { consume(G, 'water_2l', 1); ctx.remember('mart_share'); ctx.toast('"아이고, 고마워요. 오늘은 벌써 다 나갔다길래…"', 'neighbor'); }
       }
       await ctx.ui.talk({ speaker: '계산 완료', role: `남은 돈 ${G.money.toLocaleString()}원`, lines: [`산 물건 무게 약 ${carried.toFixed(1)}kg. ${carried > 12 ? '한 번에 들고 가기 버겁다.' : '들고 갈 만하다.'}`] });
       return 'done';
@@ -243,7 +247,8 @@ export async function doDocs(ctx) {
 export async function doNeighbors(ctx) {
   const { G } = ctx;
   const met = { seoyeon: false, manager: false, clerk: false };
-  const steps = () => [{ text: '303호 서연', done: met.seoyeon }, { text: '관리사무소 박 소장 (1층)', done: met.manager }, { text: '바로편의점 수아', done: met.clerk }];
+  let elder = false; // optional: not part of met, so it never holds up finishing
+  const steps = () => [{ text: '303호 서연', done: met.seoyeon }, { text: '관리사무소 박 소장 (1층)', done: met.manager }, { text: '바로편의점 수아', done: met.clerk }, { text: '304호 어르신 (선택)', done: elder }];
   const show = () => ctx.objective('이웃과 비상 연락 정하기', '세 사람을 만나 이야기합니다. 다 만나면 집으로 돌아옵니다.', steps());
   show();
   await ctx.roam({ on: {
@@ -251,6 +256,11 @@ export async function doNeighbors(ctx) {
     homeDoor: async () => { await ctx.goto('apartment', 'homeEntry'); if (Object.values(met).every(Boolean)) return 'done'; },
     elevator: async () => { await ctx.goto('apartment', ctx.engine.player.y > 1 ? 'lobby' : 'corridor3F'); },
     seoyeonDoor: async () => { if (met.seoyeon) return void ctx.toast('"내일 봬요."', 'neighbor'); await talkSeoyeon(ctx); met.seoyeon = true; show(); },
+    elderDoor: async () => {
+      if (elder) return void ctx.toast('문 너머로 라디오 소리가 작게 들린다.', 'site');
+      await ctx.ui.talk({ speaker: '304호 어르신', role: '304호', lines: ['누구신가? …아, 옆옆집 302호 총각이구먼. 이사 오고 인사는 처음이네.', '나야 혼자 사니까 별일 없으면 그냥 집에 있어요. 귀가 좀 어두워서 초인종은 잘 못 들어. 문을 두드려 줘요.'] });
+      elder = true; ctx.remember('elder_met'); show();
+    },
     managerWindow: async () => { if (met.manager) return void ctx.toast('박 소장은 전화 통화 중이다.'); await talkManager(ctx); met.manager = true; show(); },
     storeCounter: async () => { if (met.clerk) return void ctx.toast('"또 오세요."', 'neighbor'); await talkClerk(ctx); met.clerk = true; show(); },
     homePlanner: async () => {
@@ -269,6 +279,7 @@ async function talkSeoyeon(ctx) {
   const pick = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['비상시에 서로 어떻게 연락할까요? 문자가 제일 편해요.', '혹시 대피소 출입구 상황을 알게 되면, 확인한 것과 못 한 것을 나눠서 보내 줄래요? 저한테 맞는 입구는 제가 다시 볼게요.'],
     choices: [{ id: 'sms', label: '문자로 연락해요' }, { id: 'both', label: '문자도 하고, 문에 쪽지도 남길게요' }] });
   G.rel.seoyeon.contact = pick === 'both' ? 'both' : 'sms';
+  if (pick === 'both') ctx.remember('promise_note');
   G.rel.seoyeon.trust += 1;
   if (!has(G, 'batteries_aa')) {
     const b = await ctx.ui.talk({ speaker: '오서연', role: '303호', lines: ['건전지 있으세요? 저 두 팩 사 놨는데 한 팩 나눠 드릴까요?'], choices: [{ id: 'yes', label: '고마워요, 받을게요' }, { id: 'no', label: '괜찮아요' }] });
@@ -290,7 +301,9 @@ async function talkManager(ctx) {
 async function talkClerk(ctx) {
   const { G } = ctx;
   await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['어서 오세요. 건전지요? 오늘 거의 다 나갔어요. 내일 오전에 더 들어온다고는 했는데, 확실하진 않아요.', '생수는 마트가 더 싸요. 1인 6병 한정이래요.', '정전되면 카드 단말기가 안 될 수도 있대요. 현금 조금 있으면 좋을 거예요. 저도 들은 얘기지만요.'] });
-  await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['무슨 일 있으면 가게로 오세요. 근데 저도 언제까지 일할지는 몰라요. 본가가 지방이라서요.'] });
+  const pick = await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['무슨 일 있으면 가게로 오세요. 근데 저도 언제까지 일할지는 몰라요. 본가가 지방이라서요.'],
+    choices: [{ id: 'watch', label: '가게 비우시면 셔터라도 봐 드릴게요' }, { id: 'bye', label: '조심히 다녀오세요' }] });
+  if (pick === 'watch') { ctx.remember('promise_store'); await ctx.ui.talk({ speaker: '이수아', role: '바로편의점', lines: ['정말요? 그럼 마음이 좀 놓이네요. 고마워요.'] }); }
   G.rel.clerk.contact = 'store'; G.rel.clerk.trust += 1;
   ctx.note('수아: 건전지 내일 오전 입고 예정(확실하지 않음). 정전 시 현금만 받을 수도 있음.', 'neighbor', 'store');
 }
